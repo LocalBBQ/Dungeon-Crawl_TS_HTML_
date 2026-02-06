@@ -1,0 +1,110 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: #000;
+    overflow: hidden;
+    color: #fff;
+}
+
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#gameCanvas {
+    background: #1a1a1a;
+    border: 2px solid #8b0000;
+    box-shadow: 0 0 20px rgba(139, 0, 0, 0.5);
+    cursor: crosshair;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    padding: 20px;
+}
+
+#stats {
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #8b0000;
+    padding: 15px;
+    width: 250px;
+    border-radius: 5px;
+}
+
+.stat-bar {
+    margin-bottom: 10px;
+}
+
+.stat-bar label {
+    display: inline-block;
+    width: 60px;
+    font-weight: bold;
+    color: #ffd700;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.bar-container {
+    display: inline-block;
+    width: 120px;
+    height: 20px;
+    background: #333;
+    border: 1px solid #666;
+    position: relative;
+    overflow: hidden;
+}
+
+.bar {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.bar.health {
+    background: linear-gradient(to bottom, #ff4444, #cc0000);
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+}
+
+.bar.stamina {
+    background: linear-gradient(to bottom, #4444ff, #0000cc);
+    box-shadow: 0 0 10px rgba(68, 68, 255, 0.5);
+}
+
+.stat-bar span {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 12px;
+    color: #fff;
+}
+
+#controls {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #8b0000;
+    padding: 15px;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+#controls p {
+    margin: 5px 0;
+}
+
+#controls strong {
+    color: #ffd700;
+}
+
