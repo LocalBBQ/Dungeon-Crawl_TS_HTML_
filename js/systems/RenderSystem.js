@@ -140,16 +140,7 @@ class RenderSystem {
         const spriteSheet = sprite.getSpriteSheet(spriteManager, animation);
         const animSpriteSheetKey = animation ? animation.getCurrentSpriteSheetKey() : null;
         
-        // #region agent log
-        if (entity.id === 'player') {
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:141',message:'Sprite sheet lookup',data:{entityId:entity.id,currentAnimation:animation?.currentAnimation,hasSprite:!!sprite,hasAnimation:!!animation,hasSpriteSheet:!!spriteSheet,hasImage:!!(spriteSheet&&spriteSheet.image),defaultKey:sprite.defaultSpriteSheetKey,animKey:animSpriteSheetKey,frameWidth:spriteSheet?.frameWidth,frameHeight:spriteSheet?.frameHeight,rows:spriteSheet?.rows,cols:spriteSheet?.cols,imageWidth:spriteSheet?.image?.width,imageHeight:spriteSheet?.image?.height,useDirection:animation?.animations?.[animation?.currentAnimation]?.useDirection},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
-        }
-        // #endregion
-        
         if (!spriteSheet || !spriteSheet.image) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:143',message:'Sprite sheet not found - falling back',data:{entityId:entity.id,hasRenderable:!!entity.getComponent(Renderable)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'})}).catch(()=>{});
-            // #endregion
             // Fallback to renderable if sprite not loaded
             const renderable = entity.getComponent(Renderable);
             if (renderable) {
@@ -170,16 +161,8 @@ class RenderSystem {
             // Use animation to determine frame
             const anim = animation.animations[animation.currentAnimation];
             if (anim && anim.frames) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:173',message:'Before getCurrentFrameIndex',data:{entityId:entity.id,currentAnimation:animation.currentAnimation,currentFrame:animation.currentFrame,elapsedTime:animation.elapsedTime,isPlaying:animation.isPlaying},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'G'})}).catch(()=>{});
-                // #endregion
-                
                 // Get current frame index from animation
                 const frameIndex = animation.getCurrentFrameIndex();
-                
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:180',message:'After getCurrentFrameIndex',data:{entityId:entity.id,currentAnimation:animation.currentAnimation,currentFrame:animation.currentFrame,frameIndex,frameIndexValid:frameIndex>=0&&frameIndex<anim.frames.length,frameIndexOutOfBounds:frameIndex>=anim.frames.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'G'})}).catch(()=>{});
-                // #endregion
                 
                 // Convert frame index to row and column based on sprite sheet layout
                 // Check if this animation uses direction-based row selection (e.g., Walk.png with 8 directions)
@@ -188,29 +171,16 @@ class RenderSystem {
                     const direction = SpriteUtils.angleTo8Direction(movement.facingAngle);
                     row = direction;
                     col = frameIndex; // frameIndex is already 0-12 for walk animation
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:183',message:'Direction-based frame selection',data:{entityId:entity.id,currentAnimation:animation.currentAnimation,useDirection:true,frameIndex,direction,row,col,facingAngle:movement.facingAngle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                    // #endregion
                 } else if (spriteSheet && spriteSheet.rows > 1) {
                     // Multi-row sprite sheet: calculate row and col from frame index
                     // For non-directional animations, frames are laid out left-to-right, top-to-bottom
                     row = Math.floor(frameIndex / spriteSheet.cols);
                     col = frameIndex % spriteSheet.cols;
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:189',message:'Multi-row frame selection',data:{entityId:entity.id,currentAnimation:animation.currentAnimation,useDirection:false,frameIndex,row,col,spriteSheetRows:spriteSheet.rows,spriteSheetCols:spriteSheet.cols},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                    // #endregion
                 } else {
                     // Single-row sprite sheet: row is always 0, col is frame index
                     row = 0;
                     col = frameIndex;
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:195',message:'Single-row frame selection',data:{entityId:entity.id,currentAnimation:animation.currentAnimation,useDirection:false,frameIndex,row,col},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                    // #endregion
                 }
-                
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:168',message:'Frame selection from animation',data:{entityId:entity.id,currentAnimation:animation.currentAnimation,currentFrame:animation.currentFrame,frameIndex,col,row,spriteSheetRows:spriteSheet?.rows,spriteSheetCols:spriteSheet?.cols,framesArrayLength:anim.frames.length,rowOutOfBounds:row>=spriteSheet?.rows,colOutOfBounds:col>=spriteSheet?.cols},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'G'})}).catch(()=>{});
-                // #endregion
                 
                 // Debug log for first frame
                 if (entity.id === 'player' && frameIndex === 0) {
@@ -242,24 +212,14 @@ class RenderSystem {
         // Get frame coordinates from sprite sheet
         const frameCoords = SpriteUtils.getFrameCoords(spriteSheet, row, col);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:209',message:'Frame coords calculation',data:{entityId:entity.id,row,col,hasFrameCoords:!!frameCoords,sourceX:frameCoords?.sourceX,sourceY:frameCoords?.sourceY,sourceWidth:frameCoords?.sourceWidth,sourceHeight:frameCoords?.sourceHeight,frameWidth:spriteSheet.frameWidth,frameHeight:spriteSheet.frameHeight,imageWidth:spriteSheet.image.width,imageHeight:spriteSheet.image.height,widthMatchesImage:frameCoords?.sourceWidth>=spriteSheet.image.width},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        
         if (!frameCoords) {
             console.warn('No frame coordinates found for sprite sheet');
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:212',message:'Frame coords null - returning',data:{entityId:entity.id,row,col},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
-            // #endregion
             return;
         }
 
         // Verify frame coordinates are valid
         if (frameCoords.sourceWidth <= 0 || frameCoords.sourceHeight <= 0) {
             console.warn('Invalid frame dimensions:', frameCoords);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:217',message:'Invalid frame dimensions - returning',data:{entityId:entity.id,sourceWidth:frameCoords.sourceWidth,sourceHeight:frameCoords.sourceHeight},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
-            // #endregion
             return;
         }
         
@@ -318,25 +278,14 @@ class RenderSystem {
                 frameHeight: spriteSheet.frameHeight,
                 row, col
             });
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:266',message:'Frame width matches entire image - BLOCKED',data:{entityId:entity.id,sourceWidth:frameCoords.sourceWidth,sourceHeight:frameCoords.sourceHeight,imageWidth:spriteSheet.image.width,imageHeight:spriteSheet.image.height,row,col},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
-            // #endregion
             return; // Don't draw if frame width matches entire image width
         }
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:279',message:'About to call drawImage',data:{entityId:entity.id,row,col,sourceX:frameCoords.sourceX,sourceY:frameCoords.sourceY,sourceWidth:frameCoords.sourceWidth,sourceHeight:frameCoords.sourceHeight,imageWidth:spriteSheet.image.width,imageHeight:spriteSheet.image.height,drawWidth,drawHeight,frameWidth:spriteSheet.frameWidth,frameHeight:spriteSheet.frameHeight},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'F'})}).catch(()=>{});
-        // #endregion
         
         // Ensure all source coordinates are integers (required by drawImage)
         const sx = Math.floor(frameCoords.sourceX);
         const sy = Math.floor(frameCoords.sourceY);
         const sWidth = Math.floor(frameCoords.sourceWidth);
         const sHeight = Math.floor(frameCoords.sourceHeight);
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:304',message:'drawImage call with integer coords',data:{entityId:entity.id,row,col,sx,sy,sWidth,sHeight,imageWidth:spriteSheet.image.width,imageHeight:spriteSheet.image.height,drawWidth,drawHeight,frameWidth:spriteSheet.frameWidth,frameHeight:spriteSheet.frameHeight,widthMatchesImage:sWidth>=spriteSheet.image.width,willDrawAllFrames:sWidth>=spriteSheet.image.width},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         
         this.ctx.drawImage(
             spriteSheet.image,
@@ -349,12 +298,6 @@ class RenderSystem {
             drawWidth,                // Destination width
             drawHeight                // Destination height
         );
-        
-        // #region agent log
-        if (entity.id === 'player') {
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RenderSystem.js:317',message:'drawImage completed',data:{entityId:entity.id,row,col,sx,sy,sWidth,sHeight,imageWidth:spriteSheet.image.width},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        }
-        // #endregion
         
         // Restore image smoothing setting
         this.ctx.imageSmoothingEnabled = oldImageSmoothing;

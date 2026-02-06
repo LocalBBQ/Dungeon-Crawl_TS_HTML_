@@ -33,11 +33,6 @@ const Utils = {
                y1 + h1 > y2;
     },
 
-    // Check if point is in circle
-    pointInCircle(px, py, cx, cy, radius) {
-        return this.distance(px, py, cx, cy) < radius;
-    },
-
     // Random number between min and max
     random(min, max) {
         return Math.random() * (max - min) + min;

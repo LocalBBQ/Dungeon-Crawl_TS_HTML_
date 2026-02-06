@@ -95,7 +95,6 @@ class Game {
             melee2: 'Melee2.png',
             meleeSpin: 'MeleeSpin.png',
             block: 'ShieldBlockStart.png',
-            blockMid: 'ShieldBlockMid.png',
             roll: 'Rolling.png',
             takeDamage: 'TakeDamage.png'
         };
@@ -109,15 +108,9 @@ class Game {
                 
                 // Walk.png has 8 rows × 13 columns (8 directions, 13 frames each)
                 if (animName === 'walk') {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Game.js:111',message:'Loading walk with explicit dimensions',data:{animName,fileName,spritePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                    // #endregion
                     const walkImg = await spriteManager.loadSprite(spritePath);
                     const walkFrameWidth = walkImg.width / 13;  // 13 columns
                     const walkFrameHeight = walkImg.height / 8; // 8 rows
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Game.js:115',message:'Walk image dimensions',data:{animName,imageWidth:walkImg.width,imageHeight:walkImg.height,calculatedFrameWidth:walkFrameWidth,calculatedFrameHeight:walkFrameHeight},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                    // #endregion
                     sheet = await spriteManager.loadSpriteSheet(
                         spritePath,
                         walkFrameWidth,
@@ -126,14 +119,8 @@ class Game {
                         13  // cols
                     );
                     key = `${spritePath}_${walkFrameWidth}_${walkFrameHeight}_8_13`;
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Game.js:123',message:'Walk sheet loaded explicitly',data:{animName,key,rows:sheet.rows,cols:sheet.cols,frameWidth:sheet.frameWidth,frameHeight:sheet.frameHeight},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                    // #endregion
                     console.log(`Loaded ${animName} sprite sheet: ${sheet.rows} rows × ${sheet.cols} cols = ${sheet.totalFrames} frames`);
                 } else {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Game.js:125',message:'Loading with auto-detect',data:{animName,fileName,spritePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                    // #endregion
                     // Other animations use horizontal sprite sheets (auto-detect)
                     sheet = await spriteManager.loadHorizontalSpriteSheet(spritePath);
                     key = `${spritePath}_horizontal`;
@@ -251,18 +238,12 @@ class Game {
         
         if (knightSheets.walk) {
             const walkSheet = spriteManager.getSpriteSheet(knightSheets.walk);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Game.js:252',message:'Configuring walk animation',data:{walkKey:knightSheets.walk,hasWalkSheet:!!walkSheet,walkSheetRows:walkSheet?.rows,walkSheetCols:walkSheet?.cols,walkSheetFrameWidth:walkSheet?.frameWidth,walkSheetFrameHeight:walkSheet?.frameHeight},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
             if (walkSheet) {
                 // Walk animation has 8 rows (directions) × 13 columns (frames per direction)
                 // Create frames array for a single direction (13 frames: 0-12)
                 // The row will be selected based on movement direction in RenderSystem
                 const framesPerDirection = walkSheet.cols; // 13 frames per direction
                 const walkFrames = Array.from({length: framesPerDirection}, (_, i) => i);
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Game.js:259',message:'Walk frames array created',data:{framesPerDirection,walkFramesLength:walkFrames.length,walkFrames:walkFrames.slice(0,15)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                // #endregion
                 animationConfig.animations.walk = {
                     spriteSheetKey: knightSheets.walk,
                     frames: walkFrames, // 0-12, will be used as column index
@@ -629,11 +610,6 @@ class Game {
                     movement.setVelocity(moveX, moveY);
                 }
             }
-        });
-        
-        // Handle camera zoom
-        this.systems.eventBus.on('input:keydown', (key) => {
-            // Can add zoom controls here if needed
         });
     }
 

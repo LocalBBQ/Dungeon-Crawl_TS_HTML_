@@ -10,16 +10,16 @@ class Enemy {
         const types = {
             goblin: {
                 maxHealth: 30,
-                speed: 40, // pixels per second (slowed down)
+                speed: 40, // pixels per second 
                 attackRange: 40,
                 attackDamage: 5,
                 detectionRange: 200,
                 color: '#44aa44',
-                attackCooldown: 1.0 // seconds (was 60 frames)
+                attackCooldown: 1.0 // seconds 
             },
             skeleton: {
                 maxHealth: 50,
-                speed: 30, // pixels per second (slowed down)
+                speed: 30, // pixels per second 
                 attackRange: 50,
                 attackDamage: 8,
                 detectionRange: 250,

@@ -463,26 +463,5 @@ class EnemyManager {
     getCurrentLevel() {
         return this.currentLevel;
     }
-
-    // Find an enemy at the given world position (for click detection)
-    getEnemyAtPosition(worldX, worldY) {
-        for (const enemy of this.enemies) {
-            const enemyTransform = enemy.getComponent(Transform);
-            const enemyHealth = enemy.getComponent(Health);
-            
-            if (!enemyTransform || !enemyHealth || enemyHealth.isDead) continue;
-            
-            // Check if click is within enemy bounds
-            const left = enemyTransform.left;
-            const right = enemyTransform.right;
-            const top = enemyTransform.top;
-            const bottom = enemyTransform.bottom;
-            
-            if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
-                return enemy;
-            }
-        }
-        return null;
-    }
 }
 
