@@ -9,15 +9,15 @@ const GameConfig = {
     weapons: {
         sword: {
             name: 'sword',
-            baseRange: 100,
+            baseRange: 80,
             baseDamage: 15,
             baseArcDegrees: 60,
             cooldown: 0.3,
             comboWindow: 1.5,
             stages: [
-                { name: 'swipe', arcDegrees: 108, duration: 100, staminaCost: 10, rangeMultiplier: 1.0, damageMultiplier: 1.2, animationKey: 'melee' },
-                { name: 'stab', arcDegrees: 30, duration: 100, staminaCost: 12, rangeMultiplier: 1.2, damageMultiplier: 1.0, animationKey: 'melee2', dashSpeed: 500, dashDuration: 0.2 },
-                { name: 'spin', arcDegrees: 360, duration: 200, staminaCost: 15, rangeMultiplier: 0.9, damageMultiplier: 1.5, animationKey: 'meleeSpin', dashSpeed: 450, dashDuration: 0.4 }
+                { name: 'swipe', arcDegrees: 90, duration: 320, staminaCost: 10, rangeMultiplier: 1.0, damageMultiplier: 1.2, animationKey: 'melee' },
+                { name: 'stab', arcDegrees: 24, duration: 350, staminaCost: 12, rangeMultiplier: 1.2, damageMultiplier: 1.0, animationKey: 'melee2', dashSpeed: 500, dashDuration: 0.25 },
+                { name: 'spin', arcDegrees: 360, duration: 520, staminaCost: 15, rangeMultiplier: 0.9, damageMultiplier: 1.5, animationKey: 'meleeSpin', dashSpeed: 450, dashDuration: 0.45 }
             ]
         }
     },
@@ -31,7 +31,7 @@ const GameConfig = {
         maxHealth: 100,
         maxStamina: 50,
         staminaRegen: 5, // stamina per second (scaled by deltaTime)
-        attackRange: 100,
+        attackRange: 80,
         attackDamage: 15,
         attackArcDegrees: 60,
         attackCooldown: 0.3, // seconds - faster for combos (was 0.5)

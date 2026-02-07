@@ -25,7 +25,7 @@ class Combat {
         
         // Blocking properties (player only)
         this.isBlocking = false;
-        this.blockDamageReduction = 0.7; // Reduce damage by 70% when blocking
+        this.blockDamageReduction = 1.0; // 100% damage reduction when blocking
         this.blockStaminaCost = 5; // Stamina cost to start blocking (one-time)
         this.blockArc = Math.PI * 0.75; // 135 degrees - can block attacks from front
     }

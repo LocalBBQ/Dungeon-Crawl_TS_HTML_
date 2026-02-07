@@ -9,7 +9,7 @@ class PlayerAttack {
         this.attackTimer = 0;
         this.attackDuration = 0;
         this.attackBuffer = 0;
-        this.attackBufferDuration = 0.2; // 200ms
+        this.attackBufferDuration = 0; // no delay after attack completes — can chain next attack immediately
     }
     
     setWeapon(weapon) {
