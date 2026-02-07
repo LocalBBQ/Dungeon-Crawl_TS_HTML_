@@ -77,6 +77,7 @@ class Game {
             ))
             .register('enemies', new EnemyManager())
             .register('damageNumbers', new DamageNumberManager())
+            .register('projectiles', new ProjectileManager())
             .register('render', new RenderSystem(this.canvas, this.ctx));
         
         // Initialize render system with systems reference
@@ -439,6 +440,43 @@ class Game {
             }
         });
         
+        // Handle projectile shooting (R key)
+        this.systems.eventBus.on('input:keydown', (key) => {
+            if (key === 'r' || key === 'R') {
+                const transform = player.getComponent(Transform);
+                const movement = player.getComponent(Movement);
+                const stamina = player.getComponent(Stamina);
+                const projectileManager = this.systems.get('projectiles');
+                
+                if (transform && movement && stamina && projectileManager) {
+                    const projectileConfig = GameConfig.player.projectile;
+                    
+                    // Check cooldown and stamina
+                    if (this.playerProjectileCooldown <= 0 && stamina.currentStamina >= projectileConfig.staminaCost) {
+                        // Get target direction (cursor position)
+                        const worldPos = cameraSystem.screenToWorld(inputSystem.mouseX, inputSystem.mouseY);
+                        const angle = Utils.angleTo(transform.x, transform.y, worldPos.x, worldPos.y);
+                        
+                        // Create projectile
+                        projectileManager.createProjectile(
+                            transform.x,
+                            transform.y,
+                            angle,
+                            projectileConfig.speed,
+                            projectileConfig.damage,
+                            projectileConfig.range,
+                            player,
+                            'player'
+                        );
+                        
+                        // Consume stamina and set cooldown
+                        stamina.currentStamina -= projectileConfig.staminaCost;
+                        this.playerProjectileCooldown = projectileConfig.cooldown;
+                    }
+                }
+            }
+        });
+        
         // Handle attack (Space key - attacks in facing direction)
         this.systems.eventBus.on('input:keydown', (key) => {
             if (key === ' ') {
@@ -632,6 +670,11 @@ class Game {
             cameraSystem.setZoom(newZoom, inputSystem.mouseX, inputSystem.mouseY, this.canvas.width, this.canvas.height);
         }
 
+        // Update player projectile cooldown
+        if (this.playerProjectileCooldown > 0) {
+            this.playerProjectileCooldown = Math.max(0, this.playerProjectileCooldown - deltaTime);
+        }
+
         // Update all systems
         this.systems.update(deltaTime);
         
@@ -639,6 +682,12 @@ class Game {
         const damageNumberManager = this.systems.get('damageNumbers');
         if (damageNumberManager) {
             damageNumberManager.update(deltaTime);
+        }
+        
+        // Update projectiles
+        const projectileManager = this.systems.get('projectiles');
+        if (projectileManager) {
+            projectileManager.update(deltaTime, this.systems);
         }
         
         // Update all entities
@@ -710,6 +759,12 @@ class Game {
                 console.warn('No entities to render');
             }
             renderSystem.renderEntities(entities, cameraSystem);
+            
+            // Render projectiles (after entities, before damage numbers)
+            const projectileManager = this.systems.get('projectiles');
+            if (projectileManager) {
+                projectileManager.render(this.ctx, cameraSystem);
+            }
             
             // Render damage numbers (after entities so they appear on top)
             const damageNumberManager = this.systems.get('damageNumbers');

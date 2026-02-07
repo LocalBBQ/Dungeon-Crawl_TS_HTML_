@@ -17,6 +17,13 @@ class AI {
         this.lungeChargeTimer = 0;
         this.lungeTargetX = 0;
         this.lungeTargetY = 0;
+        this.lungeCooldown = 0; // Cooldown for lunge attacks (separate from normal attack cooldown)
+        this.lungeCooldownDuration = 3.0; // 3 seconds cooldown
+        this.lungeCount = 0; // Track number of lunges performed
+        this.maxLunges = 2; // Number of lunges allowed before cooldown
+        
+        // Projectile attack properties
+        this.projectileCooldown = 0;
         
         // Patrol behavior
         this.patrolConfig = patrolConfig; // { startX, startY, endX, endY, distance }
@@ -48,16 +55,36 @@ class AI {
             return;
         }
 
+        // Update lunge cooldown
+        if (this.lungeCooldown > 0) {
+            this.lungeCooldown = Math.max(0, this.lungeCooldown - deltaTime);
+            // Reset lunge count when cooldown expires
+            if (this.lungeCooldown === 0 && this.lungeCount > 0) {
+                this.lungeCount = 0;
+            }
+        }
+        
+        // Update projectile cooldown
+        if (this.projectileCooldown > 0) {
+            this.projectileCooldown = Math.max(0, this.projectileCooldown - deltaTime);
+        }
+
         // Calculate distance to player
         const distToPlayer = Utils.distance(
             transform.x, transform.y,
             playerTransform.x, playerTransform.y
         );
 
-        // Check for lunge attack (goblin-specific)
+        // Get enemy config once (used for lunge and projectile checks)
         const enemyConfig = this.enemyType ? GameConfig.enemy.types[this.enemyType] : null;
+        
+        // Check for lunge attack (goblin-specific)
         const lungeConfig = enemyConfig && enemyConfig.lunge ? enemyConfig.lunge : null;
-        const canLunge = lungeConfig && lungeConfig.enabled && combat && combat.cooldown === 0 && !this.isChargingLunge;
+        // Can lunge if: lunge is enabled, not on cooldown, haven't used all lunges, and not already charging
+        const canLunge = lungeConfig && lungeConfig.enabled && combat && 
+                        this.lungeCooldown === 0 && 
+                        this.lungeCount < this.maxLunges && 
+                        !this.isChargingLunge;
 
         // AI State machine
         // Handle lunge charging
@@ -80,12 +107,19 @@ class AI {
             // When charge completes, start lunge
             if (this.lungeChargeTimer <= 0 && lungeConfig) {
                 this.isChargingLunge = false;
+                // Increment lunge count
+                this.lungeCount++;
                 // Start lunge attack
                 if (combat.enemyAttack) {
                     combat.enemyAttack.startLunge(this.lungeTargetX, this.lungeTargetY, lungeConfig);
                 }
                 // Start lunge movement
                 movement.startLunge(this.lungeTargetX, this.lungeTargetY, lungeConfig);
+                
+                // If we've used all lunges, set cooldown (will be set again when lunge ends, but set it here too in case lunge is interrupted)
+                if (this.lungeCount >= this.maxLunges) {
+                    this.lungeCooldown = this.lungeCooldownDuration;
+                }
             }
         }
         // Check if should start charging lunge
@@ -95,6 +129,32 @@ class AI {
             this.lungeTargetX = playerTransform.x;
             this.lungeTargetY = playerTransform.y;
             this.state = 'lunge';
+        }
+        // Check for projectile attack (ranged enemies like skeleton)
+        const projectileConfig = enemyConfig && enemyConfig.projectile ? enemyConfig.projectile : null;
+        const canShootProjectile = projectileConfig && projectileConfig.enabled && 
+                                   this.projectileCooldown === 0 && 
+                                   distToPlayer <= projectileConfig.range && 
+                                   distToPlayer > this.attackRange;
+        
+        if (canShootProjectile) {
+            // Shoot projectile at player
+            const projectileManager = systems ? systems.get('projectiles') : null;
+            if (projectileManager) {
+                const angle = Utils.angleTo(transform.x, transform.y, playerTransform.x, playerTransform.y);
+                projectileManager.createProjectile(
+                    transform.x,
+                    transform.y,
+                    angle,
+                    projectileConfig.speed,
+                    projectileConfig.damage,
+                    projectileConfig.range,
+                    this.entity,
+                    'enemy'
+                );
+                this.projectileCooldown = projectileConfig.cooldown;
+                this.state = 'attack';
+            }
         }
         // Normal attack
         else if (distToPlayer < this.attackRange && combat && combat.cooldown === 0 && !combat.isWindingUp && !combat.isLunging) {
@@ -111,6 +171,7 @@ class AI {
                 movement.stop();
             }
         } else if (distToPlayer < this.detectionRange) {
+            // Chase player (this includes when lunge is on cooldown)
             this.state = 'chase';
             this.chasePlayer(playerTransform, movement, systems);
         } else if (this.patrolConfig) {

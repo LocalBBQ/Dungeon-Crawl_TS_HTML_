@@ -56,6 +56,13 @@ const GameConfig = {
         knockback: {
             force: 250, // Knockback force for player attacks (pixels per second initial velocity)
             decay: 0.85 // Friction factor (higher = less friction, more distance)
+        },
+        projectile: {
+            speed: 400, // Pixels per second
+            damage: 10, // Base damage
+            range: 500, // Maximum travel distance
+            cooldown: 0.5, // Seconds between shots
+            staminaCost: 8 // Stamina cost per shot
         }
     },
     
@@ -95,6 +102,13 @@ const GameConfig = {
                 knockback: {
                     force: 190, // Knockback force when skeleton hits player (increased by 10)
                     decay: 0.87
+                },
+                projectile: {
+                    enabled: true, // Skeletons are ranged enemies
+                    speed: 300, // Pixels per second
+                    damage: 6,
+                    range: 400,
+                    cooldown: 2.0 // Seconds between shots
                 }
             },
             demon: {

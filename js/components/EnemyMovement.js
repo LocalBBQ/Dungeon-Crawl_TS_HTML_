@@ -129,6 +129,16 @@ class EnemyMovement extends Movement {
         if (combat && combat.enemyAttack) {
             combat.enemyAttack.endLunge();
         }
+        
+        // Notify AI component - set cooldown if we've used all lunges
+        const ai = this.entity.getComponent(AI);
+        if (ai) {
+            // If we've used all allowed lunges, set cooldown and reset counter
+            if (ai.lungeCount >= ai.maxLunges) {
+                ai.lungeCooldown = ai.lungeCooldownDuration;
+                ai.lungeCount = 0; // Reset counter for next cooldown cycle
+            }
+        }
     }
 }
 

@@ -264,6 +264,15 @@ class Movement {
 
         // Determine if this is the player or an enemy
         const isPlayer = currentEntity.id === 'player';
+        
+        // Check if player is dodging (ignore enemy collisions during dodge)
+        let isDodging = false;
+        if (isPlayer) {
+            const movement = currentEntity.getComponent(Movement);
+            if (movement && movement.isDodging !== undefined) {
+                isDodging = movement.isDodging;
+            }
+        }
 
         // Check collision with player (if this is an enemy)
         if (!isPlayer) {
@@ -284,19 +293,22 @@ class Movement {
             }
         } else {
             // Check collision with all enemies (if this is the player)
-            const enemies = entityManager.getAll('enemy');
-            if (enemies && enemies.length > 0) {
-                for (const enemy of enemies) {
-                    const enemyTransform = enemy.getComponent(Transform);
-                    const enemyHealth = enemy.getComponent(Health);
-                    
-                    if (enemyTransform && enemyHealth && !enemyHealth.isDead) {
-                        if (Utils.rectCollision(
-                            testX - width / 2, testY - height / 2, width, height,
-                            enemyTransform.left, enemyTransform.top,
-                            enemyTransform.width, enemyTransform.height
-                        )) {
-                            return true;
+            // Skip enemy collisions if player is dodging
+            if (!isDodging) {
+                const enemies = entityManager.getAll('enemy');
+                if (enemies && enemies.length > 0) {
+                    for (const enemy of enemies) {
+                        const enemyTransform = enemy.getComponent(Transform);
+                        const enemyHealth = enemy.getComponent(Health);
+                        
+                        if (enemyTransform && enemyHealth && !enemyHealth.isDead) {
+                            if (Utils.rectCollision(
+                                testX - width / 2, testY - height / 2, width, height,
+                                enemyTransform.left, enemyTransform.top,
+                                enemyTransform.width, enemyTransform.height
+                            )) {
+                                return true;
+                            }
                         }
                     }
                 }

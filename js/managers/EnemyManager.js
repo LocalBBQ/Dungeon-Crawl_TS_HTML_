@@ -355,9 +355,8 @@ class EnemyManager {
                     
                     playerHealth.takeDamage(finalDamage, blocked);
                     
-                    // Apply knockback to player if not blocked
-                    // Blocking prevents knockback entirely
-                    if (!blocked && playerMovement && (!playerCombat || !playerCombat.isBlocking)) {
+                    // Apply knockback to player (even when blocked)
+                    if (playerMovement) {
                         // Get enemy type to determine knockback force
                         const ai = enemy.getComponent(AI);
                         const enemyType = ai ? ai.enemyType : 'goblin';
@@ -414,9 +413,8 @@ class EnemyManager {
                     // Deal damage to player
                     playerHealth.takeDamage(finalDamage, blocked);
                     
-                    // Apply knockback to player if not blocked
-                    // Blocking prevents knockback entirely
-                    if (!blocked && playerMovement && (!playerCombat || !playerCombat.isBlocking)) {
+                    // Apply knockback to player (even when blocked)
+                    if (playerMovement) {
                         // Get enemy type to determine knockback force
                         const ai = enemy.getComponent(AI);
                         const enemyType = ai ? ai.enemyType : 'goblin';
