@@ -3,6 +3,8 @@ class Combat {
     constructor(attackRange, attackDamage, attackArc, cooldown, windUpTime = 0.5, isPlayer = false, weapon = null) {
         this.entity = null;
         this.isPlayer = isPlayer;
+        this.currentAttackIsCircular = false;
+        this.currentAttackAnimationKey = null;
         
         // Use appropriate attack handler
         if (isPlayer) {
@@ -23,9 +25,12 @@ class Combat {
         
         // Blocking properties (player only)
         this.isBlocking = false;
-        this.blockDamageReduction = 0.7; // Reduce damage by 70% when blocking
+        this.blockDamageReduction = 1.0; // 100% damage reduction when blocking
         this.blockStaminaCost = 5; // Stamina cost to start blocking (one-time)
         this.blockArc = Math.PI * 0.75; // 135 degrees - can block attacks from front
+
+        // Current attack knockback (player only; from weapon/stage config, used when applying hit)
+        this._currentAttackKnockbackForce = null;
     }
     
     // Set weapon for player
@@ -96,10 +101,13 @@ class Combat {
             // Player attack with weapon combos
             const attackData = this.playerAttack.startAttack(targetX, targetY, this.entity);
             if (attackData) {
+                this._currentAttackKnockbackForce = attackData.knockbackForce ?? null;
                 // Update legacy properties for compatibility
                 this.attackRange = attackData.range;
                 this.attackDamage = attackData.damage;
                 this.attackArc = attackData.arc;
+                this.currentAttackIsCircular = attackData.isCircular === true;
+                this.currentAttackAnimationKey = attackData.animationKey || null;
                 
                 // Emit attack event
                 if (this.entity && this.entity.systems) {
@@ -117,6 +125,9 @@ class Combat {
                 
                 // Set timeout to end attack
                 setTimeout(() => {
+                    this.currentAttackIsCircular = false;
+                    this.currentAttackAnimationKey = null;
+                    this._currentAttackKnockbackForce = null;
                     this.playerAttack.endAttack();
                 }, attackData.duration);
                 
@@ -180,6 +191,10 @@ class Combat {
             return this.playerAttack.hitEnemies;
         }
         return new Set();
+    }
+
+    get currentAttackKnockbackForce() {
+        return this._currentAttackKnockbackForce;
     }
     
     get windUpProgress() {

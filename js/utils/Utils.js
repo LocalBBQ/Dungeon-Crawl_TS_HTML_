@@ -1,6 +1,12 @@
 // Utility functions for the game
 
+const FULL_CIRCLE_DEGREES = 360;
+
 const Utils = {
+    // Convert degrees to radians (for config/design values)
+    degToRad(degrees) {
+        return degrees * Math.PI / 180;
+    },
     // Calculate distance between two points
     distance(x1, y1, x2, y2) {
         const dx = x2 - x1;

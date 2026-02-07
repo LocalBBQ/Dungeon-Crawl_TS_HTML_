@@ -5,6 +5,22 @@ const GameConfig = {
         height: 1400,
         tileSize: 50
     },
+
+    weapons: {
+        sword: {
+            name: 'sword',
+            baseRange: 80,
+            baseDamage: 15,
+            baseArcDegrees: 60,
+            cooldown: 0.3,
+            comboWindow: 1.5,
+            stages: [
+                { name: 'swipe', arcDegrees: 90, duration: 320, staminaCost: 10, rangeMultiplier: 1.0, damageMultiplier: 1.2, animationKey: 'melee' },
+                { name: 'stab', arcDegrees: 24, duration: 350, staminaCost: 12, rangeMultiplier: 1.2, damageMultiplier: 1.0, animationKey: 'melee2', dashSpeed: 500, dashDuration: 0.25 },
+                { name: 'spin', arcDegrees: 360, duration: 520, staminaCost: 15, rangeMultiplier: 0.9, damageMultiplier: 1.5, animationKey: 'meleeSpin', dashSpeed: 450, dashDuration: 0.45 }
+            ]
+        }
+    },
     
     player: {
         startX: 1200,
@@ -15,34 +31,12 @@ const GameConfig = {
         maxHealth: 100,
         maxStamina: 50,
         staminaRegen: 5, // stamina per second (scaled by deltaTime)
-        attackRange: 100,
+        attackRange: 80,
         attackDamage: 15,
-        attackArc: Math.PI / 3,
+        attackArcDegrees: 60,
         attackCooldown: 0.3, // seconds - faster for combos (was 0.5)
         color: '#4444ff',
-        combo: {
-            window: 1.5, // seconds to continue combo
-            staminaCosts: {
-                stage1: 10, // swipe
-                stage2: 12, // stab
-                stage3: 15  // spin
-            },
-            stab: {
-                rangeMultiplier: 1.2,
-                damageMultiplier: 1.0,
-                arc: Math.PI / 6 // 30 degrees
-            },
-            swipe: {
-                rangeMultiplier: 1.0,
-                damageMultiplier: 1.2,
-                arc: Math.PI * 0.6 // 108 degrees
-            },
-            spin: {
-                rangeMultiplier: 0.9,
-                damageMultiplier: 1.5,
-                arc: Math.PI * 2 // 360 degrees
-            }
-        },
+        defaultWeapon: 'sword',
         sprint: {
             multiplier: 1.66, // 66% speed increase
             staminaCost: 12 // stamina consumed per second
@@ -54,7 +48,7 @@ const GameConfig = {
             staminaCost: 15 // stamina cost to dodge
         },
         knockback: {
-            force: 250, // Knockback force for player attacks (pixels per second initial velocity)
+            force: 550, // Knockback force for player attacks (pixels per second initial velocity)
             decay: 0.85 // Friction factor (higher = less friction, more distance)
         },
         projectile: {
@@ -73,6 +67,7 @@ const GameConfig = {
                 speed: 40, // pixels per second (now properly scaled by deltaTime)
                 attackRange: 40,
                 attackDamage: 5,
+                attackArcDegrees: 90,
                 detectionRange: 200,
                 color: '#44aa44',
                 attackCooldown: 1.0, // seconds (was 60 frames at 60fps)
@@ -87,7 +82,8 @@ const GameConfig = {
                     chargeTime: 0.8, // Time to charge up the lunge
                     lungeSpeed: 300, // Speed during lunge
                     lungeDistance: 120, // Maximum distance to lunge
-                    lungeDamage: 8 // Damage dealt by lunge (higher than normal attack)
+                    lungeDamage: 8, // Damage dealt by lunge (higher than normal attack)
+                    knockback: { force: 240 } // Per-attack knockback (default type is 160)
                 }
             },
             skeleton: {
@@ -95,6 +91,7 @@ const GameConfig = {
                 speed: 30, // pixels per second (now properly scaled by deltaTime)
                 attackRange: 50,
                 attackDamage: 8,
+                attackArcDegrees: 90,
                 detectionRange: 250,
                 color: '#cccccc',
                 attackCooldown: 0.83, // seconds (was 50 frames at 60fps)
@@ -116,6 +113,7 @@ const GameConfig = {
                 speed: 50, // pixels per second (now properly scaled by deltaTime)
                 attackRange: 60,
                 attackDamage: 12,
+                attackArcDegrees: 90,
                 detectionRange: 300,
                 color: '#aa4444',
                 attackCooldown: 0.67, // seconds (was 40 frames at 60fps)

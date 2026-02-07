@@ -90,14 +90,10 @@ class Animation {
         
         // 1. Check for combat states (highest priority)
         if (combat && combat.isAttacking) {
-            // Determine which attack animation based on combo stage
-            if (combat.comboStage === 3 && this.animations.meleeSpin) {
-                if (this.currentAnimation !== 'meleeSpin') {
-                    this.setAnimation('meleeSpin', false);
-                }
-            } else if (combat.comboStage === 2 && this.animations.melee2) {
-                if (this.currentAnimation !== 'melee2') {
-                    this.setAnimation('melee2', false);
+            const animKey = combat.currentAttackAnimationKey || 'melee';
+            if (this.animations[animKey]) {
+                if (this.currentAnimation !== animKey) {
+                    this.setAnimation(animKey, false);
                 }
             } else if (this.animations.melee) {
                 if (this.currentAnimation !== 'melee') {

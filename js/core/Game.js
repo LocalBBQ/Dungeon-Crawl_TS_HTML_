@@ -358,7 +358,7 @@ class Game {
             .addComponent(new Health(config.maxHealth))
             .addComponent(new Stamina(config.maxStamina, config.staminaRegen))
             .addComponent(new PlayerMovement(config.speed))
-            .addComponent(new Combat(config.attackRange, config.attackDamage, config.attackArc, config.attackCooldown, 0, true, Weapons.sword)) // isPlayer=true, default sword
+            .addComponent(new Combat(config.attackRange, config.attackDamage, Utils.degToRad(config.attackArcDegrees), config.attackCooldown, 0, true, Weapons[config.defaultWeapon] || Weapons.sword)) // isPlayer=true, weapon from config
             .addComponent(new Renderable('player', { color: config.color }))
             .addComponent(new Sprite(defaultSheetKey, config.width * 2, config.height * 2))
             .addComponent(new Animation(animationConfig));

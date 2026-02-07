@@ -358,43 +358,12 @@ class RenderSystem {
 
         // Draw attack/block indicators (for player)
         if (renderable && renderable.type === 'player') {
-            // Draw attack arc if attacking
             if (combat && combat.isAttacking && movement) {
-                const range = combat.attackRange * camera.zoom;
-                const halfArc = combat.attackArc / 2;
-                const startAngle = movement.facingAngle - halfArc;
-                const endAngle = movement.facingAngle + halfArc;
-                
-                this.ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)';
-                this.ctx.lineWidth = 3 / camera.zoom;
-                this.ctx.beginPath();
-                this.ctx.arc(screenX, screenY, range, startAngle, endAngle);
-                this.ctx.lineTo(screenX, screenY);
-                this.ctx.closePath();
-                this.ctx.stroke();
-                
-                this.ctx.fillStyle = 'rgba(255, 100, 100, 0.2)';
-                this.ctx.fill();
+                PlayerCombatRenderer.drawAttackArc(this.ctx, screenX, screenY, combat, movement, camera, { comboColors: false });
             }
 
-            // Draw block indicator if blocking
-            if (combat && combat.isBlocking && movement) {
-                const blockRange = (transform.width / 2 + 5) * camera.zoom;
-                const halfArc = combat.blockArc / 2;
-                const startAngle = movement.facingAngle - halfArc;
-                const endAngle = movement.facingAngle + halfArc;
-                
-                this.ctx.strokeStyle = 'rgba(100, 150, 255, 0.8)';
-                this.ctx.lineWidth = 4 / camera.zoom;
-                this.ctx.beginPath();
-                this.ctx.arc(screenX, screenY, blockRange, startAngle, endAngle);
-                this.ctx.lineTo(screenX, screenY);
-                this.ctx.closePath();
-                this.ctx.stroke();
-                
-                this.ctx.fillStyle = 'rgba(100, 150, 255, 0.2)';
-                this.ctx.fill();
-            }
+            PlayerCombatRenderer.drawSword(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
+            PlayerCombatRenderer.drawShield(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
         }
     }
 
@@ -421,84 +390,8 @@ class RenderSystem {
             this.ctx.stroke();
         }
 
-        // Draw block indicator
-        if (combat && combat.isBlocking && movement) {
-            const blockRange = (transform.width / 2 + 5) * camera.zoom;
-            const halfArc = combat.blockArc / 2;
-            const startAngle = movement.facingAngle - halfArc;
-            const endAngle = movement.facingAngle + halfArc;
-            
-            // Draw block arc
-            this.ctx.strokeStyle = 'rgba(100, 150, 255, 0.8)';
-            this.ctx.lineWidth = 4 / camera.zoom;
-            this.ctx.beginPath();
-            this.ctx.arc(screenX, screenY, blockRange, startAngle, endAngle);
-            this.ctx.lineTo(screenX, screenY);
-            this.ctx.closePath();
-            this.ctx.stroke();
-            
-            // Fill block arc with semi-transparent color
-            this.ctx.fillStyle = 'rgba(100, 150, 255, 0.2)';
-            this.ctx.fill();
-            
-            // Draw shield icon (small circle at front)
-            const shieldX = screenX + Math.cos(movement.facingAngle) * blockRange;
-            const shieldY = screenY + Math.sin(movement.facingAngle) * blockRange;
-            this.ctx.fillStyle = 'rgba(100, 150, 255, 0.9)';
-            this.ctx.beginPath();
-            this.ctx.arc(shieldX, shieldY, 8 / camera.zoom, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-
-        // Draw attack arc with combo-specific visuals
-        // Show visual for entire duration of attack (0.8s for stage 3, 0.2s for others)
         if (combat && combat.isAttacking) {
-            const range = combat.attackRange * camera.zoom;
-            
-            // Different colors for each combo stage
-            let attackColor = 'rgba(255, 100, 100, 0.8)';
-            let fillAlpha = '0.2';
-            if (combat.comboStage === 1) {
-                attackColor = 'rgba(255, 100, 100, 0.8)'; // Red for swipe
-                fillAlpha = '0.2';
-            } else if (combat.comboStage === 2) {
-                attackColor = 'rgba(255, 200, 100, 0.8)'; // Orange for stab
-                fillAlpha = '0.2';
-            } else if (combat.comboStage === 3) {
-                attackColor = 'rgba(255, 255, 100, 0.9)'; // Yellow for spin
-                fillAlpha = '0.3';
-            }
-            
-            // Draw based on combo stage
-            if (combat.comboStage === 3) {
-                // 360 spin - draw full circle (visible for full 0.8s duration)
-                this.ctx.strokeStyle = attackColor;
-                this.ctx.lineWidth = 4 / camera.zoom;
-                this.ctx.beginPath();
-                this.ctx.arc(screenX, screenY, range, 0, Math.PI * 2);
-                this.ctx.stroke();
-                
-                this.ctx.fillStyle = attackColor.replace('0.9', fillAlpha);
-                this.ctx.beginPath();
-                this.ctx.arc(screenX, screenY, range, 0, Math.PI * 2);
-                this.ctx.fill();
-            } else {
-                // Normal arc attack (stab or swipe)
-                const halfArc = combat.attackArc / 2;
-                const startAngle = movement ? movement.facingAngle - halfArc : -halfArc;
-                const endAngle = movement ? movement.facingAngle + halfArc : halfArc;
-                
-                this.ctx.strokeStyle = attackColor;
-                this.ctx.lineWidth = 3 / camera.zoom;
-                this.ctx.beginPath();
-                this.ctx.arc(screenX, screenY, range, startAngle, endAngle);
-                this.ctx.lineTo(screenX, screenY);
-                this.ctx.closePath();
-                this.ctx.stroke();
-                
-                this.ctx.fillStyle = attackColor.replace('0.8', fillAlpha);
-                this.ctx.fill();
-            }
+            PlayerCombatRenderer.drawAttackArc(this.ctx, screenX, screenY, combat, movement, camera, { comboColors: true });
         }
 
         // Draw shadow
@@ -515,15 +408,11 @@ class RenderSystem {
 
         // Draw body
         const isDodging = movement && movement.isDodging;
-        const isBlocking = combat && combat.isBlocking;
         
         // Grey out player during dodge
         if (isDodging) {
             this.ctx.globalAlpha = 0.5;
             this.ctx.fillStyle = '#888888';
-        } else if (isBlocking) {
-            // Blue tint when blocking
-            this.ctx.fillStyle = '#6666ff';
         } else {
             this.ctx.fillStyle = combat && combat.isAttacking ? '#ff4444' : renderable.color;
         }
@@ -539,24 +428,8 @@ class RenderSystem {
         // Reset alpha
         this.ctx.globalAlpha = 1.0;
 
-        // Draw facing direction
-        if (movement) {
-            const indicatorLength = 15 * camera.zoom;
-            const indicatorX = screenX + Math.cos(movement.facingAngle) * indicatorLength;
-            const indicatorY = screenY + Math.sin(movement.facingAngle) * indicatorLength;
-            
-            this.ctx.strokeStyle = '#ffffff';
-            this.ctx.lineWidth = 2 / camera.zoom;
-            this.ctx.beginPath();
-            this.ctx.moveTo(screenX, screenY);
-            this.ctx.lineTo(indicatorX, indicatorY);
-            this.ctx.stroke();
-            
-            this.ctx.fillStyle = '#ffffff';
-            this.ctx.beginPath();
-            this.ctx.arc(indicatorX, indicatorY, 3 / camera.zoom, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
+        PlayerCombatRenderer.drawSword(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
+        PlayerCombatRenderer.drawShield(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
 
         // Draw health bar
         if (health) {

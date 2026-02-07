@@ -4,16 +4,17 @@ class PlayerAttack {
         this.weapon = weapon || Weapons.sword; // Default to sword
         this.comboStage = 0;
         this.comboTimer = 0;
-        this.comboWindow = 1.5; // seconds
+        this.comboWindow = (this.weapon.comboWindow ?? 1.5); // seconds, from weapon config
         this.hitEnemies = new Set();
         this.attackTimer = 0;
         this.attackDuration = 0;
         this.attackBuffer = 0;
-        this.attackBufferDuration = 0.2; // 200ms
+        this.attackBufferDuration = 0; // no delay after attack completes — can chain next attack immediately
     }
     
     setWeapon(weapon) {
         this.weapon = weapon;
+        this.comboWindow = weapon.comboWindow ?? 1.5;
         this.resetCombo();
     }
     
@@ -84,7 +85,11 @@ class PlayerAttack {
             arc: stageProps.arc,
             comboStage: this.comboStage,
             staminaCost: stageProps.staminaCost,
-            duration: stageProps.duration
+            duration: stageProps.duration,
+            stageName: stageProps.stageName,
+            animationKey: stageProps.animationKey,
+            isCircular: stageProps.isCircular,
+            knockbackForce: stageProps.knockbackForce
         };
     }
     
