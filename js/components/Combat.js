@@ -13,14 +13,14 @@ class Combat {
             this.skeletonAttack = null;
             this.demonAttack = null;
             this.enemyAttack = null;
-        } else if (enemyType === 'demon') {
-            // Demons use DemonAttack (claw: charge cone then heavy blow)
+        } else if (enemyType === 'greaterDemon') {
+            // Greater demons use DemonAttack (claw: charge cone then heavy blow)
             this.demonAttack = new DemonAttack();
             this.goblinAttack = null;
             this.skeletonAttack = null;
             this.enemyAttack = null;
             this.playerAttack = null;
-        } else if (enemyType === 'goblin') {
+        } else if (enemyType === 'goblin' || enemyType === 'lesserDemon') {
             // Goblins use GoblinAttack (lunge and swipe)
             this.goblinAttack = new GoblinAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime);
             this.skeletonAttack = null;
@@ -55,7 +55,7 @@ class Combat {
         this.isBlocking = false;
         this.blockDamageReduction = 1.0; // 100% damage reduction when blocking
         this.blockStaminaCost = 5; // Stamina cost to start blocking (one-time)
-        this.blockArc = Math.PI * 0.75; // 135 degrees - can block attacks from front
+        this.blockArc = Math.PI; // 180 degrees - can block attacks from front half
 
         // Current attack knockback (player only; from weapon/stage config, used when applying hit)
         this._currentAttackKnockbackForce = null;

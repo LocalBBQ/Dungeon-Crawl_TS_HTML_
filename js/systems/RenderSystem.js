@@ -206,6 +206,44 @@ class RenderSystem {
         this.ctx.stroke();
     }
 
+    renderPortalInteractionPrompt(portal, camera, playerNearPortal) {
+        if (!portal || !portal.spawned || !playerNearPortal) return;
+        const screenX = camera.toScreenX(portal.x);
+        const screenY = camera.toScreenY(portal.y);
+        const w = portal.width * camera.zoom;
+        const h = portal.height * camera.zoom;
+        if (screenX + w < 0 || screenX > this.canvas.width || screenY + h < 0 || screenY > this.canvas.height) return;
+        
+        const cx = screenX + w / 2;
+        const cy = screenY + h / 2;
+        const promptY = cy - h / 2 - 30; // Position above the portal
+        
+        // Draw background for text (semi-transparent dark background)
+        const text = 'Press E to interact';
+        this.ctx.font = 'bold 18px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        const textMetrics = this.ctx.measureText(text);
+        const padding = 12;
+        const bgWidth = textMetrics.width + padding * 2;
+        const bgHeight = 28;
+        const bgX = cx - bgWidth / 2;
+        const bgY = promptY - bgHeight / 2;
+        
+        // Draw background with rounded corners effect
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        this.ctx.strokeStyle = 'rgba(180, 140, 255, 0.9)';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+        
+        // Draw text with shadow for visibility
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillText(text, cx + 1, promptY + 1);
+        this.ctx.fillStyle = '#e8dcc8';
+        this.ctx.fillText(text, cx, promptY);
+    }
+
     renderEntities(entities, camera) {
         const spriteManager = this.systems ? this.systems.get('sprites') : null;
         
@@ -522,8 +560,6 @@ class RenderSystem {
         const isDodging = movement && movement.isDodging;
         const w = transform.width * camera.zoom;
         const h = transform.height * camera.zoom;
-        const halfW = w / 2;
-        const halfH = h / 2;
 
         if (isDodging) this.ctx.globalAlpha = 0.6;
 
@@ -533,91 +569,54 @@ class RenderSystem {
         const steelDark = '#5a5a68';
         const steelDarker = '#4a4a58';
 
-        // Knight drawn in fixed perspective; only sword and shield rotate with cursor
-        // Boots (base of figure)
-        const footY = screenY + halfH * 0.92;
-        const footW = w * 0.22;
-        const footH = h * 0.18;
-        this.ctx.fillStyle = '#2a2a30';
-        this.ctx.strokeStyle = '#1a1a20';
-        this.ctx.beginPath();
-        this.ctx.ellipse(screenX - w * 0.2, footY, footW / 2, footH / 2, 0, 0, Math.PI * 2);
-        this.ctx.ellipse(screenX + w * 0.2, footY, footW / 2, footH / 2, 0, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
+        // Top-down knight's helmet (rotates with facing direction); pauldrons drawn first so helmet sits on top
+        const facingAngle = movement ? movement.facingAngle : 0;
+        this.ctx.save();
+        this.ctx.translate(screenX, screenY);
+        this.ctx.rotate(facingAngle);
 
-        // Torso (breastplate) – tapered: wider at shoulders, narrower at waist
-        const bodyTop = screenY - halfH * 0.82;
-        const bodyBottom = screenY + halfH * 0.78;
-        const bodyH = bodyBottom - bodyTop;
-        const shoulderW = w * 0.88;
-        const waistW = w * 0.58;
-        const topRound = bodyH * 0.15;
-        const bottomRound = bodyH * 0.08;
-        const leftShoulder = screenX - shoulderW / 2;
-        const rightShoulder = screenX + shoulderW / 2;
-        const leftWaist = screenX - waistW / 2;
-        const rightWaist = screenX + waistW / 2;
+        const helmetRx = w * 0.42;
+        const helmetRy = w * 0.38;
+
+        // Pauldrons first (under the helmet in perspective – only the rims peek out from under the dome)
+        const paulOffsetY = helmetRy * 0.72;  // partly under helmet so dome covers inner portion
+        const paulRx = w * 0.22;
+        const paulRy = w * 0.28;
         this.ctx.fillStyle = steel;
-        this.ctx.strokeStyle = steelDark;
-        this.ctx.beginPath();
-        this.ctx.moveTo(leftShoulder + topRound, bodyTop);
-        this.ctx.lineTo(rightShoulder - topRound, bodyTop);
-        this.ctx.quadraticCurveTo(rightShoulder, bodyTop, rightShoulder, bodyTop + topRound);
-        this.ctx.lineTo(rightWaist, bodyBottom - bottomRound);
-        this.ctx.quadraticCurveTo(rightWaist, bodyBottom, rightWaist - bottomRound, bodyBottom);
-        this.ctx.lineTo(leftWaist + bottomRound, bodyBottom);
-        this.ctx.quadraticCurveTo(leftWaist, bodyBottom, leftWaist, bodyBottom - bottomRound);
-        this.ctx.lineTo(leftShoulder, bodyTop + topRound);
-        this.ctx.quadraticCurveTo(leftShoulder, bodyTop, leftShoulder + topRound, bodyTop);
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-        // Center ridge (breastplate)
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
-        this.ctx.lineWidth = lw * 0.6;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenX, bodyTop + bodyH * 0.22);
-        this.ctx.lineTo(screenX, bodyBottom - bodyH * 0.12);
-        this.ctx.stroke();
+        this.ctx.strokeStyle = steelDarker;
         this.ctx.lineWidth = lw;
-
-        // Pauldrons (shoulders)
-        const paulY = bodyTop + bodyH * 0.12;
-        const paulR = w * 0.26;
-        this.ctx.fillStyle = steelDark;
-        this.ctx.strokeStyle = steelDarker;
         this.ctx.beginPath();
-        this.ctx.ellipse(screenX - shoulderW / 2 - paulR * 0.15, paulY, paulR, paulR * 0.7, 0, 0, Math.PI * 2);
-        this.ctx.ellipse(screenX + shoulderW / 2 + paulR * 0.15, paulY, paulR, paulR * 0.7, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(0, paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(0, -paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Gorget (neck band)
-        const gorgetY = bodyTop - h * 0.04;
-        const gorgetW = shoulderW * 0.9;
-        const gorgetH = h * 0.1;
-        this.ctx.fillStyle = steelDark;
-        this.ctx.strokeStyle = steelDarker;
-        this.ctx.fillRect(screenX - gorgetW / 2, gorgetY - gorgetH / 2, gorgetW, gorgetH);
-        this.ctx.strokeRect(screenX - gorgetW / 2, gorgetY - gorgetH / 2, gorgetW, gorgetH);
-
-        // Helmet (dome with visor)
-        const helmetY = gorgetY - h * 0.18;
-        const helmetW = w * 0.68;
-        const helmetH = h * 0.5;
+        // Helmet dome on top (covers inner part of pauldrons so they read as underneath)
         this.ctx.fillStyle = isDodging ? '#505060' : steelDark;
         this.ctx.strokeStyle = steelDarker;
         this.ctx.beginPath();
-        this.ctx.ellipse(screenX, helmetY, helmetW / 2, helmetH / 2, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(0, 0, helmetRx, helmetRy, 0, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
-        // Visor (dark band + slit)
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-        this.ctx.fillRect(screenX - helmetW * 0.38, helmetY + helmetH * 0.05, helmetW * 0.76, helmetH * 0.28);
-        this.ctx.fillStyle = 'rgba(80, 80, 90, 0.5)';
-        this.ctx.fillRect(screenX - helmetW * 0.22, helmetY + helmetH * 0.14, helmetW * 0.44, helmetH * 0.06);
 
+        // Visor slit (dark line at "front" of helmet – positive X in local space)
+        const slitY = 0;
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        this.ctx.lineWidth = Math.max(1.5, lw * 1.2);
+        this.ctx.beginPath();
+        this.ctx.moveTo(helmetRx * 0.35, slitY);
+        this.ctx.lineTo(helmetRx * 0.95, slitY);
+        this.ctx.stroke();
+
+        // Slight highlight along top ridge (center line front-to-back)
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        this.ctx.lineWidth = lw * 0.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(-helmetRx * 0.5, 0);
+        this.ctx.lineTo(helmetRx * 0.5, 0);
+        this.ctx.stroke();
+
+        this.ctx.restore();
         this.ctx.globalAlpha = 1.0;
 
         PlayerCombatRenderer.drawSword(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
@@ -705,7 +704,7 @@ class RenderSystem {
             const player = this.systems && this.systems.get('entities') ? this.systems.get('entities').get('player') : null;
             const playerTransform = player ? player.getComponent(Transform) : null;
             if (playerTransform) {
-                const pillarConfig = GameConfig.enemy.types.demon && GameConfig.enemy.types.demon.pillarFlame;
+                const pillarConfig = GameConfig.enemy.types.greaterDemon && GameConfig.enemy.types.greaterDemon.pillarFlame;
                 const radius = (pillarConfig && pillarConfig.radius ? pillarConfig.radius : 45) * camera.zoom;
                 const telegraphX = camera.toScreenX(playerTransform.x);
                 const telegraphY = camera.toScreenY(playerTransform.y);
@@ -899,6 +898,36 @@ class RenderSystem {
             this.ctx.arc(screenX - r * 0.35, screenY - h * 0.2, eyeSize, 0, Math.PI * 2);
             this.ctx.arc(screenX + r * 0.35, screenY - h * 0.2, eyeSize, 0, Math.PI * 2);
             this.ctx.fill();
+        } else if (enemyType === 'lesserDemon') {
+            // Lesser demon: similar to goblin but darker/more demonic
+            this.ctx.fillStyle = bodyColor;
+            this.ctx.beginPath();
+            this.ctx.ellipse(screenX, screenY, r * 0.85, h * 0.9, 0, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            this.ctx.fillStyle = '#3a1a1a';
+            this.ctx.strokeStyle = strokeColor;
+            this.ctx.lineWidth = 2 / camera.zoom;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenX - r * 0.6, screenY - h * 0.6);
+            this.ctx.lineTo(screenX - r * 0.95, screenY - h * 1.15);
+            this.ctx.lineTo(screenX - r * 0.35, screenY - h * 0.5);
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.stroke();
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenX + r * 0.6, screenY - h * 0.6);
+            this.ctx.lineTo(screenX + r * 0.95, screenY - h * 1.15);
+            this.ctx.lineTo(screenX + r * 0.35, screenY - h * 0.5);
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.stroke();
+            const eyeSize = 2.5 / camera.zoom;
+            this.ctx.fillStyle = ai && ai.state === 'chase' ? '#ff4400' : '#2a0a0a';
+            this.ctx.beginPath();
+            this.ctx.arc(screenX - r * 0.35, screenY - h * 0.2, eyeSize, 0, Math.PI * 2);
+            this.ctx.arc(screenX + r * 0.35, screenY - h * 0.2, eyeSize, 0, Math.PI * 2);
+            this.ctx.fill();
         } else if (enemyType === 'skeleton') {
             // Skeleton: skull shape, dark sockets, bony
             this.ctx.fillStyle = bodyColor;
@@ -921,8 +950,8 @@ class RenderSystem {
             this.ctx.lineTo(screenX, screenY + h * 0.75);
             this.ctx.lineTo(screenX + r * 0.25, screenY + h * 0.4);
             this.ctx.stroke();
-        } else if (enemyType === 'demon') {
-            // Demon: broad muscular torso, swept horns, shoulder mass, glowing eyes, tail
+        } else if (enemyType === 'greaterDemon') {
+            // Greater demon: broad muscular torso, swept horns, shoulder mass, glowing eyes, tail
             const dr = r * 1.0;
             const dh = h * 1.05;
             this.ctx.fillStyle = bodyColor;

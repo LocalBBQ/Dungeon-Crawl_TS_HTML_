@@ -117,7 +117,31 @@ const GameConfig = {
                     cooldown: 3.5 // Seconds between shots - increased cooldown
                 }
             },
-            demon: {
+            lesserDemon: {
+                maxHealth: 45,
+                speed: 32, // pixels per second - faster than goblin
+                attackRange: 45,
+                attackDamage: 7,
+                attackArcDegrees: 90,
+                detectionRange: 220,
+                color: '#884444',
+                attackCooldown: 0.85, // seconds - faster than goblin
+                windUpTime: 0.5, // seconds before attack hits
+                knockback: {
+                    force: 180, // Knockback force when lesser demon hits player
+                    decay: 0.87
+                },
+                lunge: {
+                    enabled: true,
+                    chargeRange: 160, // Distance at which lesser demon starts charging lunge
+                    chargeTime: 0.7, // Time to charge up the lunge - faster than goblin
+                    lungeSpeed: 220, // Speed during lunge - faster than goblin
+                    lungeDistance: 130, // Maximum distance to lunge
+                    lungeDamage: 10, // Damage dealt by lunge (higher than goblin)
+                    knockback: { force: 260 } // Per-attack knockback
+                }
+            },
+            greaterDemon: {
                 maxHealth: 80,
                 speed: 30, // pixels per second (now properly scaled by deltaTime) - slowed down
                 attackRange: 60,
@@ -132,12 +156,12 @@ const GameConfig = {
                     decay: 0.86
                 },
                 pillarFlame: {
-                    castDelay: 1.6,   // Telegraph time before pillar spawns (more time to escape)
+                    castDelay: 2.0,   // Telegraph time before pillar spawns (more time to escape)
                     activeDuration: 2.0,
                     radius: 45,
                     damage: 8,
                     damageInterval: 0.4,
-                    cooldown: 10.0,   // Seconds before same demon can cast again (fewer pillars)
+                    cooldown: 18.0,   // Seconds before same demon can cast again (fewer pillars)
                     pillarRange: 220
                 }
             }
@@ -211,7 +235,7 @@ const GameConfig = {
         3: {
             name: 'Demon Approach',
             packSpawn: { density: 0.016, packSize: { min: 4, max: 6 } },
-            enemyTypes: ['goblin', 'skeleton', 'skeleton', 'demon', 'demon'],
+            enemyTypes: ['skeleton', 'skeleton', 'lesserDemon', 'lesserDemon'],
             killsToUnlockPortal: 20,
             theme: {
                 ground: { r: 34, g: 16, b: 18, variation: 12 },

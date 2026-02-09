@@ -144,8 +144,8 @@ const PlayerCombatRenderer = {
     drawShield(ctx, screenX, screenY, transform, movement, combat, camera) {
         if (!movement || !combat || !transform) return;
         const shieldDist = (transform.width / 2 + 8) * camera.zoom;
-        const shieldW = 26 * camera.zoom;
-        const shieldH = 5 * camera.zoom;
+        const shieldW = 40 * camera.zoom;
+        const shieldH = 8 * camera.zoom;
         if (combat.isBlocking) {
             const shieldX = screenX + Math.cos(movement.facingAngle) * shieldDist;
             const shieldY = screenY + Math.sin(movement.facingAngle) * shieldDist;

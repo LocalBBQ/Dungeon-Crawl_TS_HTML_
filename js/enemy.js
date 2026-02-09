@@ -26,7 +26,7 @@ class Enemy {
                 color: '#cccccc',
                 attackCooldown: 0.83 // seconds (was 50 frames)
             },
-            demon: {
+            greaterDemon: {
                 maxHealth: 80,
                 speed: 50, // pixels per second (slowed down)
                 attackRange: 60,
@@ -242,7 +242,7 @@ class EnemyManager {
                 y = Utils.clamp(y, 0, worldHeight);
                 
                 // Random enemy type
-                const types = ['goblin', 'goblin', 'skeleton', 'demon'];
+                const types = ['goblin', 'goblin', 'skeleton', 'greaterDemon'];
                 const randomType = types[Utils.randomInt(0, types.length - 1)];
                 
                 this.spawnEnemy(x, y, randomType);

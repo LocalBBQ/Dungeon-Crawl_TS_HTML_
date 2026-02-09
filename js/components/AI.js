@@ -92,13 +92,15 @@ class AI {
 
         // Get enemy config once (used for lunge, projectile, and pillar checks)
         const enemyConfig = this.enemyType ? GameConfig.enemy.types[this.enemyType] : null;
-        const pillarConfig = this.enemyType === 'demon' && enemyConfig && enemyConfig.pillarFlame ? enemyConfig.pillarFlame : null;
+        const pillarConfig = this.enemyType === 'greaterDemon' && enemyConfig && enemyConfig.pillarFlame ? enemyConfig.pillarFlame : null;
         
-        // Check for lunge attack (goblin-specific only)
+        // Check for lunge attack (goblin and lesser demon specific)
         const isGoblin = this.enemyType === 'goblin';
-        const lungeConfig = isGoblin && enemyConfig && enemyConfig.lunge ? enemyConfig.lunge : null;
-        // Can lunge if: goblin, lunge is enabled, not on cooldown, haven't used all lunges, and not already charging
-        const canLunge = isGoblin && lungeConfig && lungeConfig.enabled && combat && 
+        const isLesserDemon = this.enemyType === 'lesserDemon';
+        const hasLunge = (isGoblin || isLesserDemon);
+        const lungeConfig = hasLunge && enemyConfig && enemyConfig.lunge ? enemyConfig.lunge : null;
+        // Can lunge if: goblin or lesser demon, lunge is enabled, not on cooldown, haven't used all lunges, and not already charging
+        const canLunge = hasLunge && lungeConfig && lungeConfig.enabled && combat && 
                         this.lungeCooldown === 0 && 
                         this.lungeCount < this.maxLunges && 
                         !this.isChargingLunge;
@@ -116,7 +118,12 @@ class AI {
                 this.isCastingPillar = false;
                 const enemyManager = systems ? systems.get('enemies') : null;
                 if (enemyManager && enemyManager.createPillar) {
-                    enemyManager.createPillar(playerTransform.x, playerTransform.y, pillarConfig);
+                    // Cast pillar near player, not directly on them (random offset of 30-80 pixels)
+                    const offsetDistance = Utils.random(30, 80);
+                    const offsetAngle = Math.random() * Math.PI * 2;
+                    const pillarX = playerTransform.x + Math.cos(offsetAngle) * offsetDistance;
+                    const pillarY = playerTransform.y + Math.sin(offsetAngle) * offsetDistance;
+                    enemyManager.createPillar(pillarX, pillarY, pillarConfig);
                 }
                 this.pillarFlameCooldown = pillarConfig.cooldown;
             }
@@ -138,12 +145,12 @@ class AI {
                 movement.facingAngle = Math.atan2(dy, dx);
             }
             
-            // When charge completes, start lunge (goblin-specific)
-            if (this.lungeChargeTimer <= 0 && lungeConfig && this.enemyType === 'goblin') {
+            // When charge completes, start lunge (goblin and lesser demon specific)
+            if (this.lungeChargeTimer <= 0 && lungeConfig && (this.enemyType === 'goblin' || this.enemyType === 'lesserDemon')) {
                 this.isChargingLunge = false;
                 // Increment lunge count
                 this.lungeCount++;
-                // Start lunge attack (goblin-specific)
+                // Start lunge attack (goblin and lesser demon)
                 if (combat.goblinAttack) {
                     combat.goblinAttack.startLunge(this.lungeTargetX, this.lungeTargetY, lungeConfig);
                 }
@@ -195,12 +202,12 @@ class AI {
             const inMeleeRange = distToPlayer < this.attackRange;
             const inPillarRange = distToPlayer <= pillarConfig.pillarRange && distToPlayer > this.attackRange;
             const canClaw = combat && combat.demonAttack && combat.demonAttack.canAttack();
-            if (inPillarRange && Math.random() < 0.5) {
-                // 50% chance when in range so pillars don't spam
+            if (inPillarRange && Math.random() < 0.2) {
+                // 20% chance when in range so pillars don't spam
                 this.isCastingPillar = true;
                 this.pillarCastTimer = pillarConfig.castDelay;
                 this.attackInitiatedThisFrame = true;
-            } else if (inMeleeRange && canClaw && !this.attackInitiatedThisFrame && Math.random() < 0.12) {
+            } else if (inMeleeRange && canClaw && !this.attackInitiatedThisFrame && Math.random() < 0.05) {
                 // Rare chance to cast from melee instead of claw
                 this.isCastingPillar = true;
                 this.pillarCastTimer = pillarConfig.castDelay;

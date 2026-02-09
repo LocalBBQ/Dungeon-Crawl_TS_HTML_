@@ -37,7 +37,7 @@ class EnemyManager {
             spriteSheetKey = found ? found.key : spritePath;
         }
         
-        const size = type === 'demon' ? 38 : 25;
+        const size = type === 'greaterDemon' ? 38 : 25;
         enemy
             .addComponent(new Transform(x, y, size, size))
             .addComponent(new Health(config.maxHealth))
@@ -147,7 +147,7 @@ class EnemyManager {
                 const clampedY = Utils.clamp(y, 0, worldHeight);
 
                 if (!obstacleManager || obstacleManager.canMoveTo(clampedX, clampedY, 25, 25)) {
-                    const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin', 'goblin', 'skeleton', 'demon'];
+                    const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin', 'goblin', 'skeleton', 'greaterDemon'];
                     const randomType = types[Utils.randomInt(0, types.length - 1)];
                     this.spawnEnemy(clampedX, clampedY, randomType, entityManager);
                     enemiesSpawnedInPack++;

@@ -21,6 +21,7 @@ class Game {
             // Portal state (spawns after enough kills; enter with E)
             this.portal = null;
             this.portalUseCooldown = 0;
+            this.playerNearPortal = false;
             
             // Initialize screen manager
             this.screenManager = null; // Will be initialized after canvas setup
@@ -946,28 +947,38 @@ class Game {
             this.portal.targetLevel = nextLevel;
             this.portal.spawned = nextLevelExists && kills >= killsRequired;
 
-            if (this.portal.spawned && this.portalUseCooldown <= 0 && player) {
+            if (this.portal.spawned && player) {
                 const transform = player.getComponent(Transform);
-                const inputSystem = this.systems.get('input');
-                if (transform && inputSystem && inputSystem.isKeyPressed('e')) {
+                if (transform) {
+                    // Check if player is near/overlapping portal
                     const overlap = Utils.rectCollision(
                         transform.left, transform.top, transform.width, transform.height,
                         this.portal.x, this.portal.y, this.portal.width, this.portal.height
                     );
-                    if (overlap && nextLevelExists) {
-                        const obstacleManager = this.systems.get('obstacles');
-                        const worldConfig = GameConfig.world;
-                        const nextObstacles = GameConfig.levels[nextLevel].obstacles;
-                        obstacleManager.clearWorld();
-                        obstacleManager.generateWorld(worldConfig.width, worldConfig.height, nextObstacles, {
-                            x: this.portal.x + this.portal.width / 2,
-                            y: this.portal.y + this.portal.height / 2,
-                            radius: 120
-                        });
-                        enemyManager.changeLevel(nextLevel, this.entities, obstacleManager);
-                        this.portalUseCooldown = 1.5; // Prevent double-trigger
+                    this.playerNearPortal = overlap;
+                    
+                    // Handle E key press to enter portal
+                    if (overlap && this.portalUseCooldown <= 0) {
+                        const inputSystem = this.systems.get('input');
+                        if (inputSystem && inputSystem.isKeyPressed('e') && nextLevelExists) {
+                            const obstacleManager = this.systems.get('obstacles');
+                            const worldConfig = GameConfig.world;
+                            const nextObstacles = GameConfig.levels[nextLevel].obstacles;
+                            obstacleManager.clearWorld();
+                            obstacleManager.generateWorld(worldConfig.width, worldConfig.height, nextObstacles, {
+                                x: this.portal.x + this.portal.width / 2,
+                                y: this.portal.y + this.portal.height / 2,
+                                radius: 120
+                            });
+                            enemyManager.changeLevel(nextLevel, this.entities, obstacleManager);
+                            this.portalUseCooldown = 1.5; // Prevent double-trigger
+                        }
                     }
+                } else {
+                    this.playerNearPortal = false;
                 }
+            } else {
+                this.playerNearPortal = false;
             }
         }
         
@@ -1020,6 +1031,9 @@ class Game {
             renderSystem.renderWorld(cameraSystem, obstacleManager, currentLevel);
             if (this.portal) {
                 renderSystem.renderPortal(this.portal, cameraSystem);
+                if (this.playerNearPortal) {
+                    renderSystem.renderPortalInteractionPrompt(this.portal, cameraSystem, this.playerNearPortal);
+                }
             }
             const entities = this.entities.getAll();
             if (entities.length === 0) {
