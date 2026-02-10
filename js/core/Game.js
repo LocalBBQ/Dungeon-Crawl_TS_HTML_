@@ -143,22 +143,65 @@ class Game {
             renderSystem.init(this.systems);
         }
         
-        // Load knight animation sprite sheets (horizontal strips)
+        // Load knight 8-direction sprite sheet (single frame per direction)
+        // Auto-detect layout: horizontal strip (1 row × 8 cols) vs vertical (8 rows × 1 col)
+        const loadedKnightSheets = {};
+        let knightRows = 1, knightCols = 8, knightFrameWidth = 0, knightFrameHeight = 0;
+        const knight8DirPath = 'assets/sprites/player/Knight_8_Direction.png';
+        try {
+            const knightImg = await spriteManager.loadSprite(knight8DirPath);
+            const isHorizontalStrip = knightImg.width >= knightImg.height;
+            knightRows = isHorizontalStrip ? 1 : 8;
+            knightCols = isHorizontalStrip ? 8 : 1;
+            knightFrameWidth = knightImg.width / knightCols;
+            knightFrameHeight = knightImg.height / knightRows;
+            await spriteManager.loadSpriteSheet(
+                knight8DirPath,
+                knightFrameWidth,
+                knightFrameHeight,
+                knightRows,
+                knightCols
+            );
+            const knightSheetKey = `${knight8DirPath}_${knightFrameWidth}_${knightFrameHeight}_${knightRows}_${knightCols}`;
+            loadedKnightSheets.idle = knightSheetKey;
+            loadedKnightSheets._8DirLayout = isHorizontalStrip ? '1x8' : '8x1'; // for createPlayer
+            console.log(`Loaded Knight_8_Direction: ${knightImg.width}x${knightImg.height}, frame ${knightFrameWidth}x${knightFrameHeight} (${knightRows} rows × ${knightCols} cols)`);
+        } catch (error) {
+            console.warn('Failed to load Knight_8_Direction.png:', error);
+        }
+
+        // Load knight 8-direction block sprite sheet — use same frame size and layout as idle so one frame per direction
+        const knightBlockPath = 'assets/sprites/player/Knight_8_D_Block.png';
+        if (knightFrameWidth > 0 && knightFrameHeight > 0) {
+            try {
+                await spriteManager.loadSprite(knightBlockPath);
+                await spriteManager.loadSpriteSheet(
+                    knightBlockPath,
+                    knightFrameWidth,
+                    knightFrameHeight,
+                    knightRows,
+                    knightCols
+                );
+                const blockSheetKey = `${knightBlockPath}_${knightFrameWidth}_${knightFrameHeight}_${knightRows}_${knightCols}`;
+                loadedKnightSheets.block = blockSheetKey;
+                console.log(`Loaded Knight_8_D_Block: same frame size as idle (${knightFrameWidth}x${knightFrameHeight}, ${knightRows}×${knightCols})`);
+            } catch (error) {
+                console.warn('Failed to load Knight_8_D_Block.png:', error);
+            }
+        }
+
+        // Load optional knight animation sprite sheets (horizontal strips) from alternate path
         const spriteBasePath = 'assets/sprites/player/2D HD Character Knight/Spritesheets/With shadows/';
         const knightAnimations = {
-            idle: 'Idle.png',
             walk: 'Walk.png',
             run: 'Run.png',
             melee: 'Melee.png',
             melee2: 'Melee2.png',
             meleeSpin: 'MeleeSpin.png',
-            block: 'ShieldBlockStart.png',
             roll: 'Rolling.png',
             takeDamage: 'TakeDamage.png'
         };
-        
-        const loadedKnightSheets = {};
-        
+
         for (const [animName, fileName] of Object.entries(knightAnimations)) {
             try {
                 const spritePath = spriteBasePath + fileName;
@@ -297,16 +340,19 @@ class Game {
         if (knightSheets.idle) {
             const idleSheet = spriteManager.getSpriteSheet(knightSheets.idle);
             if (idleSheet) {
-                // Use total frames (rows * cols) for animations that span multiple rows
-                // For horizontal-only animations, we can use just the first row (cols frames)
-                // But if the sprite sheet has multiple rows, we should use all frames
-                const totalFrames = idleSheet.totalFrames || (idleSheet.rows * idleSheet.cols);
-                const idleFrames = Array.from({length: totalFrames}, (_, i) => i);
+                // 8-direction single-frame: same layout as Knight_8_D_Block (1 row × 8 cols or 8 rows × 1 col)
+                const is8DirSingleFrame = (idleSheet.rows === 8 && idleSheet.cols === 1) || (idleSheet.rows === 1 && idleSheet.cols === 8);
+                const useDirectionAsColumn = idleSheet.rows === 1 && idleSheet.cols === 8; // horizontal strip
+                const idleFrames = is8DirSingleFrame
+                    ? [0]
+                    : Array.from({length: idleSheet.totalFrames || (idleSheet.rows * idleSheet.cols)}, (_, i) => i);
                 animationConfig.animations.idle = {
                     spriteSheetKey: knightSheets.idle,
                     frames: idleFrames,
                     frameDuration: 0.15,
-                    loop: true
+                    loop: true,
+                    useDirection: is8DirSingleFrame,
+                    useDirectionAsColumn
                 };
             }
         }
@@ -388,13 +434,16 @@ class Game {
         if (knightSheets.block) {
             const blockSheet = spriteManager.getSpriteSheet(knightSheets.block);
             if (blockSheet) {
-                const totalFrames = blockSheet.totalFrames || (blockSheet.rows * blockSheet.cols);
-                const blockFrames = Array.from({length: totalFrames}, (_, i) => i);
+                const is8DirSingleFrame = (blockSheet.rows === 8 && blockSheet.cols === 1) || (blockSheet.rows === 1 && blockSheet.cols === 8);
+                const blockUseDirectionAsColumn = blockSheet.rows === 1 && blockSheet.cols === 8;
+                const blockFrames = is8DirSingleFrame ? [0] : Array.from({length: blockSheet.totalFrames || (blockSheet.rows * blockSheet.cols)}, (_, i) => i);
                 animationConfig.animations.block = {
                     spriteSheetKey: knightSheets.block,
                     frames: blockFrames,
                     frameDuration: 0.15,
-                    loop: true
+                    loop: true,
+                    useDirection: is8DirSingleFrame,
+                    useDirectionAsColumn: blockUseDirectionAsColumn
                 };
             }
         }
@@ -434,7 +483,7 @@ class Game {
             .addComponent(new PlayerMovement(config.speed))
             .addComponent(new Combat(config.attackRange, config.attackDamage, Utils.degToRad(config.attackArcDegrees), config.attackCooldown, 0, true, Weapons[config.defaultWeapon] || Weapons.sword)) // isPlayer=true, weapon from config
             .addComponent(new Renderable('player', { color: config.color }))
-            .addComponent(new Sprite(defaultSheetKey, config.width * 2, config.height * 2))
+            .addComponent(new Sprite(defaultSheetKey, config.width * 4, config.height * 4))
             .addComponent(new Animation(animationConfig));
         
         // Set up player-specific behavior

@@ -375,12 +375,22 @@ class RenderSystem {
                 const frameIndex = animation.getCurrentFrameIndex();
                 
                 // Convert frame index to row and column based on sprite sheet layout
-                // Check if this animation uses direction-based row selection (e.g., Walk.png with 8 directions)
+                // Check if this animation uses direction-based selection (8 directions)
                 if (anim.useDirection && movement) {
-                    // Direction-based animation: row is determined by movement direction, col is the frame index
                     const direction = SpriteUtils.angleTo8Direction(movement.facingAngle);
-                    row = direction;
-                    col = frameIndex; // frameIndex is already 0-12 for walk animation
+                    // Knight_8_Direction.png column order: 0=South, 1=SE, 2=East, 3=NE, 4=North, 5=NW, 6=West, 7=SW
+                    // Game order: 0=East, 1=SE, 2=South, 3=SW, 4=West, 5=NW, 6=North, 7=NE
+                    const directionToFrame = [2, 1, 0, 7, 6, 5, 4, 3];
+                    const frameDir = directionToFrame[direction];
+                    if (anim.useDirectionAsColumn) {
+                        // Horizontal strip: 1 row × 8 cols — direction is column
+                        row = 0;
+                        col = frameDir;
+                    } else {
+                        // Vertical strip: 8 rows × 1 col — direction is row, col is frame index
+                        row = frameDir;
+                        col = frameIndex;
+                    }
                 } else if (spriteSheet && spriteSheet.rows > 1) {
                     // Multi-row sprite sheet: calculate row and col from frame index
                     // For non-directional animations, frames are laid out left-to-right, top-to-bottom
@@ -476,9 +486,9 @@ class RenderSystem {
         // Draw only the specific frame from the sprite sheet
         // Parameters: image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight
         // CRITICAL: We MUST use the 9-parameter version to extract a portion of the image
-        // For horizontal sprite sheets (single row), sourceHeight CAN equal imageHeight (that's correct!)
-        // We only need to check that sourceWidth is less than imageWidth (we're extracting a column)
-        if (frameCoords.sourceWidth >= spriteSheet.image.width) {
+        // For single-column sheets (cols === 1), frame width correctly equals image width
+        // Only flag when we have multiple columns but frame width would span the whole image
+        if (spriteSheet.cols > 1 && frameCoords.sourceWidth >= spriteSheet.image.width) {
             console.error('Frame width matches entire image width! This will draw the whole sprite sheet.', {
                 sourceWidth: frameCoords.sourceWidth,
                 sourceHeight: frameCoords.sourceHeight,
@@ -488,7 +498,7 @@ class RenderSystem {
                 frameHeight: spriteSheet.frameHeight,
                 row, col
             });
-            return; // Don't draw if frame width matches entire image width
+            return;
         }
         
         // Ensure all source coordinates are integers (required by drawImage)
@@ -566,14 +576,14 @@ class RenderSystem {
             this.ctx.strokeRect(barX, barY, barWidth, barHeight);
         }
 
-        // Draw attack/block indicators (for player)
+        // Draw attack/block indicators for player only when using procedural fallback (renderPlayer).
+        // When drawing from sprite (idle/block sheets), the sprite is the single source of truth — do not
+        // draw procedural sword/shield on top or we get two images.
         if (renderable && renderable.type === 'player') {
             if (combat && combat.isAttacking && movement) {
                 PlayerCombatRenderer.drawAttackArc(this.ctx, screenX, screenY, combat, movement, camera, { comboColors: false });
             }
-
-            PlayerCombatRenderer.drawSword(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
-            PlayerCombatRenderer.drawShield(this.ctx, screenX, screenY, transform, movement, combat, camera, {});
+            // Skip procedural sword/shield when player is rendered via sprite (sprite already includes character + weapons)
         }
     }
 
