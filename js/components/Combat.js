@@ -51,11 +51,11 @@ class Combat {
         this.maxCooldown = cooldown;
         this.windUpTime = windUpTime;
         
-        // Blocking properties (player only)
+        // Blocking state (player only); block config comes from weapon.getBlockConfig()
         this.isBlocking = false;
-        this.blockDamageReduction = 1.0; // 100% damage reduction when blocking
-        this.blockStaminaCost = 5; // Stamina cost to start blocking (one-time)
-        this.blockArc = Math.PI; // 180 degrees - can block attacks from front half
+        // Block input buffer: start block as soon as attack ends if right-click was pressed during attack
+        this.blockInputBuffered = false;
+        this.blockInputBufferedFacingAngle = null;
 
         // Current attack knockback (player only; from weapon/stage config, used when applying hit)
         this._currentAttackKnockbackForce = null;
@@ -88,23 +88,34 @@ class Combat {
     }
     
     startBlocking() {
-        if (this.isPlayer && !this.isAttacking) {
-            // Start blocking - no stamina cost (cost is per blocked attack)
+        const blockConfig = this._getBlockConfig();
+        if (this.isPlayer && !this.isAttacking && blockConfig && blockConfig.enabled) {
             this.isBlocking = true;
             return true;
         }
         return false;
     }
+
+    _getBlockConfig() {
+        if (!this.isPlayer || !this.weapon) return null;
+        return this.weapon.getBlockConfig ? this.weapon.getBlockConfig() : null;
+    }
+
+    get blockDamageReduction() {
+        const blockConfig = this._getBlockConfig();
+        return blockConfig ? blockConfig.damageReduction : 0;
+    }
     
     // Consume stamina when successfully blocking an attack
     consumeBlockStamina() {
         if (this.isPlayer && this.isBlocking) {
+            const blockConfig = this._getBlockConfig();
+            if (!blockConfig) return false;
             const stamina = this.entity.getComponent(Stamina);
-            if (stamina && stamina.currentStamina >= this.blockStaminaCost) {
-                stamina.currentStamina -= this.blockStaminaCost;
+            if (stamina && stamina.currentStamina >= blockConfig.staminaCost) {
+                stamina.currentStamina -= blockConfig.staminaCost;
                 return true;
             }
-            // Not enough stamina - stop blocking
             this.stopBlocking();
             return false;
         }
@@ -118,16 +129,14 @@ class Combat {
     // Check if an attack from a given angle can be blocked
     canBlockAttack(attackAngle, facingAngle) {
         if (!this.isBlocking || !this.isPlayer) return false;
+        const blockConfig = this._getBlockConfig();
+        if (!blockConfig || !blockConfig.arcRad) return false;
         
-        // Calculate angle difference
         let angleDiff = Math.abs(attackAngle - facingAngle);
-        // Normalize to -PI to PI
         if (angleDiff > Math.PI) {
             angleDiff = (Math.PI * 2) - angleDiff;
         }
-        
-        // Check if attack is within block arc
-        return angleDiff <= (this.blockArc / 2);
+        return angleDiff <= (blockConfig.arcRad / 2);
     }
 
     attack(targetX = null, targetY = null, chargeDuration = 0) {
@@ -158,11 +167,22 @@ class Combat {
                 }
                 
                 // Set timeout to end attack
+                const combatRef = this;
                 setTimeout(() => {
-                    this.currentAttackIsCircular = false;
-                    this.currentAttackAnimationKey = null;
-                    this._currentAttackKnockbackForce = null;
-                    this.playerAttack.endAttack();
+                    combatRef.currentAttackIsCircular = false;
+                    combatRef.currentAttackAnimationKey = null;
+                    combatRef._currentAttackKnockbackForce = null;
+                    combatRef.playerAttack.endAttack();
+                    // Apply buffered block input (player pressed block during attack)
+                    if (combatRef.isPlayer && combatRef.blockInputBuffered) {
+                        combatRef.blockInputBuffered = false;
+                        if (combatRef.blockInputBufferedFacingAngle != null && combatRef.entity) {
+                            const movement = combatRef.entity.getComponent(Movement);
+                            if (movement) movement.facingAngle = combatRef.blockInputBufferedFacingAngle;
+                            combatRef.blockInputBufferedFacingAngle = null;
+                        }
+                        combatRef.startBlocking();
+                    }
                 }, attackData.duration);
                 
                 return attackData;

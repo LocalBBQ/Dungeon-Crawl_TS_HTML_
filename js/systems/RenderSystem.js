@@ -14,19 +14,28 @@ class RenderSystem {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
-    renderWorld(camera, obstacleManager, currentLevel = 1) {
-        const tileSize = GameConfig.world.tileSize;
+    renderWorld(camera, obstacleManager, currentLevel = 1, worldWidth = null, worldHeight = null) {
+        const isHub = currentLevel === 0;
+        const tileSize = isHub && GameConfig.hub.tileSize ? GameConfig.hub.tileSize : GameConfig.world.tileSize;
         const effectiveWidth = this.canvas.width / camera.zoom;
         const effectiveHeight = this.canvas.height / camera.zoom;
-        const startX = Math.floor(camera.x / tileSize) * tileSize;
-        const startY = Math.floor(camera.y / tileSize) * tileSize;
+        let startX = Math.floor(camera.x / tileSize) * tileSize;
+        let startY = Math.floor(camera.y / tileSize) * tileSize;
+        let endX = camera.x + effectiveWidth + tileSize;
+        let endY = camera.y + effectiveHeight + tileSize;
+        if (isHub && worldWidth != null && worldHeight != null) {
+            startX = Math.max(0, startX);
+            startY = Math.max(0, startY);
+            endX = Math.min(worldWidth, endX);
+            endY = Math.min(worldHeight, endY);
+        }
 
-        const levelConfig = GameConfig.levels && GameConfig.levels[currentLevel];
+        const levelConfig = isHub ? GameConfig.hub : (GameConfig.levels && GameConfig.levels[currentLevel]);
         const theme = levelConfig && levelConfig.theme ? levelConfig.theme : null;
         const ground = theme && theme.ground ? theme.ground : { r: 30, g: 50, b: 30, variation: 18 };
 
-        for (let x = startX; x < camera.x + effectiveWidth + tileSize; x += tileSize) {
-            for (let y = startY; y < camera.y + effectiveHeight + tileSize; y += tileSize) {
+        for (let x = startX; x < endX; x += tileSize) {
+            for (let y = startY; y < endY; y += tileSize) {
                 const screenX = camera.toScreenX(x);
                 const screenY = camera.toScreenY(y);
                 const v = Math.floor((x + y) % 3) * (ground.variation || 15);
@@ -240,6 +249,57 @@ class RenderSystem {
         // Draw text with shadow for visibility
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillText(text, cx + 1, promptY + 1);
+        this.ctx.fillStyle = '#e8dcc8';
+        this.ctx.fillText(text, cx, promptY);
+    }
+
+    renderBoard(board, camera) {
+        if (!board) return;
+        const screenX = camera.toScreenX(board.x);
+        const screenY = camera.toScreenY(board.y);
+        const w = board.width * camera.zoom;
+        const h = board.height * camera.zoom;
+        if (screenX + w < 0 || screenX > this.canvas.width || screenY + h < 0 || screenY > this.canvas.height) return;
+        this.ctx.fillStyle = '#2a2418';
+        this.ctx.fillRect(screenX, screenY, w, h);
+        this.ctx.strokeStyle = '#c9a227';
+        this.ctx.lineWidth = 3 / camera.zoom;
+        this.ctx.strokeRect(screenX, screenY, w, h);
+        this.ctx.strokeStyle = '#8b7355';
+        this.ctx.lineWidth = 2 / camera.zoom;
+        this.ctx.strokeRect(screenX + 4, screenY + 4, w - 8, h - 8);
+        this.ctx.fillStyle = '#e8dcc8';
+        this.ctx.font = '600 14px Cinzel, Georgia, serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Level Board', screenX + w / 2, screenY + h / 2);
+    }
+
+    renderBoardInteractionPrompt(board, camera, playerNearBoard) {
+        if (!board || !playerNearBoard) return;
+        const screenX = camera.toScreenX(board.x);
+        const screenY = camera.toScreenY(board.y);
+        const w = board.width * camera.zoom;
+        const h = board.height * camera.zoom;
+        if (screenX + w < 0 || screenX > this.canvas.width || screenY + h < 0 || screenY > this.canvas.height) return;
+        const cx = screenX + w / 2;
+        const cy = screenY + h / 2;
+        const promptY = cy - h / 2 - 28;
+        const text = 'Press E to select level';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        const textMetrics = this.ctx.measureText(text);
+        const padding = 10;
+        const bgWidth = textMetrics.width + padding * 2;
+        const bgHeight = 24;
+        const bgX = cx - bgWidth / 2;
+        const bgY = promptY - bgHeight / 2;
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        this.ctx.strokeStyle = '#c9a227';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
         this.ctx.fillStyle = '#e8dcc8';
         this.ctx.fillText(text, cx, promptY);
     }
@@ -1058,7 +1118,8 @@ class RenderSystem {
         this.ctx.strokeRect(minimapX + 3, minimapY + 3, minimapSize - 6, minimapSize - 6);
 
         // Label: current level name (inside panel with clear gap from border)
-        const levelConfigLabel = GameConfig.levels && GameConfig.levels[currentLevel];
+        const isHub = currentLevel === 0;
+        const levelConfigLabel = isHub ? GameConfig.hub : (GameConfig.levels && GameConfig.levels[currentLevel]);
         const mapLabel = (levelConfigLabel && levelConfigLabel.name) ? levelConfigLabel.name : 'Map';
         this.ctx.fillStyle = '#c9a227';
         this.ctx.font = '600 12px Cinzel, Georgia, serif';
@@ -1075,9 +1136,9 @@ class RenderSystem {
         this.ctx.scale(scale, scale);
         
         // Draw world background (level theme)
-        const tileSize = GameConfig.world.tileSize;
-        const levelConfig = GameConfig.levels && GameConfig.levels[currentLevel];
-        const theme = levelConfig && levelConfig.theme ? levelConfig.theme : null;
+        const tileSize = isHub && GameConfig.hub.tileSize ? GameConfig.hub.tileSize : GameConfig.world.tileSize;
+        const levelConfigMinimap = isHub ? GameConfig.hub : (GameConfig.levels && GameConfig.levels[currentLevel]);
+        const theme = levelConfigMinimap && levelConfigMinimap.theme ? levelConfigMinimap.theme : null;
         const ground = theme && theme.ground ? theme.ground : { r: 30, g: 50, b: 30, variation: 18 };
         for (let x = 0; x < worldWidth; x += tileSize) {
             for (let y = 0; y < worldHeight; y += tileSize) {
@@ -1138,14 +1199,16 @@ class RenderSystem {
         this.ctx.restore();
 
         // Objective underneath minimap
-        const enemyManager = this.systems ? this.systems.get('enemies') : null;
-        const kills = enemyManager ? enemyManager.getEnemiesKilledThisLevel() : 0;
-        const levelCfg = GameConfig.levels && GameConfig.levels[currentLevel];
-        const required = (levelCfg && levelCfg.killsToUnlockPortal != null) ? levelCfg.killsToUnlockPortal : 0;
-        const hasPortalGoal = required > 0 && (GameConfig.levels[currentLevel + 1]);
-        const objectiveText = hasPortalGoal
-            ? `Slay ${required} foes to open the portal (${kills}/${required})`
-            : (required > 0 ? `Foes felled: ${kills}` : '');
+        const objectiveText = isHub ? 'Approach the board and press E to select a level' : (() => {
+            const enemyManager = this.systems ? this.systems.get('enemies') : null;
+            const kills = enemyManager ? enemyManager.getEnemiesKilledThisLevel() : 0;
+            const levelCfg = GameConfig.levels && GameConfig.levels[currentLevel];
+            const required = (levelCfg && levelCfg.killsToUnlockPortal != null) ? levelCfg.killsToUnlockPortal : 0;
+            const hasPortalGoal = required > 0 && (GameConfig.levels[currentLevel + 1]);
+            return hasPortalGoal
+                ? `Slay ${required} foes to open the portal (${kills}/${required})`
+                : (required > 0 ? `Foes felled: ${kills}` : '');
+        })();
         if (objectiveText) {
             this.ctx.fillStyle = '#c4a574';
             this.ctx.font = '600 13px Cinzel, Georgia, serif';

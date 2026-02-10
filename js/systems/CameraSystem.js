@@ -41,17 +41,23 @@ class CameraSystem {
         }
     }
 
+    setWorldBounds(worldWidth, worldHeight) {
+        this.worldWidth = worldWidth;
+        this.worldHeight = worldHeight;
+    }
+
     follow(transform, canvasWidth, canvasHeight) {
         if (!transform) return;
         
-        // Calculate desired camera position (centered on target)
         const effectiveWidth = canvasWidth / this.zoom;
         const effectiveHeight = canvasHeight / this.zoom;
         
-        const targetX = transform.x - effectiveWidth / 2;
-        const targetY = transform.y - effectiveHeight / 2;
+        let targetX = transform.x - effectiveWidth / 2;
+        let targetY = transform.y - effectiveHeight / 2;
 
-        // Smooth camera movement
+        targetX = Utils.clamp(targetX, 0, Math.max(0, this.worldWidth - effectiveWidth));
+        targetY = Utils.clamp(targetY, 0, Math.max(0, this.worldHeight - effectiveHeight));
+
         this.x = Utils.lerp(this.x, targetX, this.smoothing);
         this.y = Utils.lerp(this.y, targetY, this.smoothing);
     }

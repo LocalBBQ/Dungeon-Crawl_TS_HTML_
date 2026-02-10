@@ -22,6 +22,12 @@ class Game {
             this.portal = null;
             this.portalUseCooldown = 0;
             this.playerNearPortal = false;
+            // Hub: level-select board (safe area, no enemies)
+            this.board = null;
+            this.boardOpen = false;
+            this.boardUseCooldown = 0;
+            this.playerNearBoard = false;
+            this.hubSelectedLevel = 1;
             
             // Initialize screen manager
             this.screenManager = null; // Will be initialized after canvas setup
@@ -48,15 +54,21 @@ class Game {
                         const isStartKey = key === ' ' || key === 'enter';
                         if (isStartKey) {
                             if (this.screenManager.isScreen('title')) {
-                                this.startGame();
+                                this.startHub();
                             } else if (this.screenManager.isScreen('death')) {
                                 this.restartGame();
+                            } else if (this.screenManager.isScreen('hub') && this.boardOpen) {
+                                this.boardOpen = false;
+                                this.screenManager.selectedStartLevel = this.hubSelectedLevel;
+                                this.startGame();
                             }
                         } else if (key === 'escape') {
                             if (this.screenManager.isScreen('playing')) {
                                 this.screenManager.setScreen('pause');
                             } else if (this.screenManager.isScreen('pause')) {
                                 this.screenManager.setScreen('playing');
+                            } else if (this.screenManager.isScreen('hub') && this.boardOpen) {
+                                this.boardOpen = false;
                             }
                         }
                     });
@@ -263,9 +275,11 @@ class Game {
         };
     }
 
-    createPlayer() {
+    createPlayer(overrideStart = null) {
         const config = GameConfig.player;
-        const player = new Entity(config.startX, config.startY, 'player');
+        const x = overrideStart ? overrideStart.x : config.startX;
+        const y = overrideStart ? overrideStart.y : config.startY;
+        const player = new Entity(x, y, 'player');
         
         const spriteManager = this.systems.get('sprites');
         // Get loaded knight sprite sheet keys
@@ -414,7 +428,7 @@ class Game {
         }
         
         player
-            .addComponent(new Transform(config.startX, config.startY, config.width, config.height))
+            .addComponent(new Transform(x, y, config.width, config.height))
             .addComponent(new Health(config.maxHealth))
             .addComponent(new Stamina(config.maxStamina, config.staminaRegen))
             .addComponent(new PlayerMovement(config.speed))
@@ -509,24 +523,28 @@ class Game {
             }
         });
         
-        // Handle right click - Block
+        // Handle right click - Block (buffer input if attacking so block starts when attack ends)
         this.systems.eventBus.on('input:rightclick', (data) => {
             const combat = player.getComponent(Combat);
             const movement = player.getComponent(Movement);
             const transform = player.getComponent(Transform);
             const cameraSystem = this.systems.get('camera');
             
-            if (combat && combat.isPlayer && !combat.isAttacking) {
-                const worldPos = cameraSystem.screenToWorld(data.x, data.y);
-                
-                // Face the cursor direction while blocking
+            if (!combat || !combat.isPlayer) return;
+            
+            const worldPos = cameraSystem.screenToWorld(data.x, data.y);
+            const facingAngle = transform ? Utils.angleTo(transform.x, transform.y, worldPos.x, worldPos.y) : 0;
+            
+            if (combat.isAttacking) {
+                // Buffer block input to apply as soon as attack ends
+                combat.blockInputBuffered = true;
+                combat.blockInputBufferedFacingAngle = facingAngle;
+            } else {
+                combat.blockInputBuffered = false;
+                combat.blockInputBufferedFacingAngle = null;
                 if (movement && transform) {
-                    movement.facingAngle = Utils.angleTo(
-                        transform.x, transform.y,
-                        worldPos.x, worldPos.y
-                    );
+                    movement.facingAngle = facingAngle;
                 }
-                
                 combat.startBlocking();
             }
         });
@@ -647,6 +665,22 @@ class Game {
             }
         });
 
+        // TEMPORARY: weapon switch for testing (1 = sword & shield, 2 = greatsword) - remove when proper weapon UI exists
+        this.systems.eventBus.on('input:keydown', (key) => {
+            const combat = player.getComponent(Combat);
+            if (!combat || !combat.isPlayer) return;
+            if (key === '1' && Weapons.swordAndShield) {
+                combat.stopBlocking();
+                combat.setWeapon(Weapons.swordAndShield);
+            } else if (key === '2' && Weapons.greatsword) {
+                combat.stopBlocking();
+                combat.setWeapon(Weapons.greatsword);
+            } else if (key === '3' && Weapons.broadsword) {
+                combat.stopBlocking();
+                combat.setWeapon(Weapons.broadsword);
+            }
+        });
+
         // Handle WASD movement
         this.systems.eventBus.on('input:keydown', (key) => {
             const movement = player.getComponent(Movement);
@@ -717,7 +751,21 @@ class Game {
                 if (levelAt !== null) {
                     this.screenManager.selectedStartLevel = levelAt;
                 } else if (this.screenManager.checkButtonClick(x, y, 'title')) {
-                    this.startGame();
+                    this.startHub();
+                }
+            } else if (this.screenManager.isScreen('hub') && this.boardOpen) {
+                const levelAt = this.screenManager.getLevelSelectAt(x, y);
+                if (levelAt !== null) {
+                    this.hubSelectedLevel = levelAt;
+                } else {
+                    const btn = this.screenManager.getHubBoardButtonAt(x, y);
+                    if (btn === 'start') {
+                        this.boardOpen = false;
+                        this.screenManager.selectedStartLevel = this.hubSelectedLevel;
+                        this.startGame();
+                    } else if (btn === 'back') {
+                        this.boardOpen = false;
+                    }
                 }
             } else if (this.screenManager.isScreen('death')) {
                 if (this.screenManager.checkButtonClick(x, y, 'death')) {
@@ -750,12 +798,60 @@ class Game {
         this.screenManager.setScreen('title');
         this.updateUIVisibility(false);
     }
+
+    startHub() {
+        const hubConfig = GameConfig.hub;
+        const obstacleManager = this.systems.get('obstacles');
+        const enemyManager = this.systems.get('enemies');
+
+        obstacleManager.clearWorld();
+        for (const w of hubConfig.walls) {
+            obstacleManager.addObstacle(w.x, w.y, w.width, w.height, 'wall', null, { color: '#4a3020' });
+        }
+
+        if (enemyManager) {
+            enemyManager.enemies = [];
+            enemyManager.enemiesSpawned = false;
+        }
+
+        const allEntities = this.entities.getAll();
+        for (const entity of allEntities) {
+            this.entities.remove(entity.id);
+        }
+        const projectileManager = this.systems.get('projectiles');
+        if (projectileManager) projectileManager.projectiles = [];
+
+        const player = this.createPlayer(hubConfig.playerStart);
+        this.entities.add(player, 'player');
+
+        const cameraSystem = this.systems.get('camera');
+        cameraSystem.setWorldBounds(1e7, 1e7);
+        const transform = player.getComponent(Transform);
+        if (transform && cameraSystem) {
+            const effectiveWidth = this.canvas.width / cameraSystem.zoom;
+            const effectiveHeight = this.canvas.height / cameraSystem.zoom;
+            cameraSystem.x = transform.x - effectiveWidth / 2;
+            cameraSystem.y = transform.y - effectiveHeight / 2;
+        }
+
+        this.portal = null;
+        this.board = { ...hubConfig.board };
+        this.boardOpen = false;
+        this.boardUseCooldown = 0;
+        this.playerNearBoard = false;
+        this.hubSelectedLevel = 1;
+
+        this.screenManager.setScreen('hub');
+        this.updateUIVisibility(true);
+    }
     
     startGame() {
         const selectedLevel = this.screenManager.selectedStartLevel;
         const worldConfig = GameConfig.world;
         const obstacleManager = this.systems.get('obstacles');
         const enemyManager = this.systems.get('enemies');
+        const cameraSystem = this.systems.get('camera');
+        if (cameraSystem) cameraSystem.setWorldBounds(worldConfig.width, worldConfig.height);
 
         obstacleManager.clearWorld();
         const levelConfig = GameConfig.levels && GameConfig.levels[selectedLevel] && GameConfig.levels[selectedLevel].obstacles
@@ -853,7 +949,57 @@ class Game {
         }
     }
 
+    updateHub(deltaTime) {
+        if (this.boardOpen) return; // modal overlay; only clicks matter
+
+        if (this.boardUseCooldown > 0) {
+            this.boardUseCooldown = Math.max(0, this.boardUseCooldown - deltaTime);
+        }
+
+        const inputSystem = this.systems.get('input');
+        const cameraSystem = this.systems.get('camera');
+        const wheelDelta = inputSystem.getWheelDelta();
+        if (wheelDelta !== 0) {
+            const zoomChange = wheelDelta > 0 ? -GameConfig.camera.zoomSpeed : GameConfig.camera.zoomSpeed;
+            const newZoom = cameraSystem.targetZoom + zoomChange;
+            cameraSystem.setZoom(newZoom, inputSystem.mouseX, inputSystem.mouseY, this.canvas.width, this.canvas.height);
+        }
+
+        this.systems.update(deltaTime);
+        this.entities.update(deltaTime, this.systems);
+
+        const player = this.entities.get('player');
+        if (player) {
+            const transform = player.getComponent(Transform);
+            if (transform && cameraSystem) {
+                cameraSystem.follow(transform, this.canvas.width, this.canvas.height);
+            }
+        }
+        if (player && this.board) {
+            const transform = player.getComponent(Transform);
+            if (transform) {
+                const overlap = Utils.rectCollision(
+                    transform.left, transform.top, transform.width, transform.height,
+                    this.board.x, this.board.y, this.board.width, this.board.height
+                );
+                this.playerNearBoard = overlap;
+                if (overlap && this.boardUseCooldown <= 0 && inputSystem.isKeyPressed('e')) {
+                    this.boardOpen = true;
+                    this.boardUseCooldown = 0.4;
+                }
+            } else {
+                this.playerNearBoard = false;
+            }
+        } else {
+            this.playerNearBoard = false;
+        }
+    }
+
     update(deltaTime) {
+        if (this.screenManager.currentScreen === 'hub') {
+            this.updateHub(deltaTime);
+            return;
+        }
         // Only update game logic if playing (not title, death, or pause)
         if (this.screenManager.currentScreen !== 'playing') {
             return;
@@ -1015,17 +1161,36 @@ class Game {
                 return;
             }
 
-            // Game world and entities (draw for both 'playing' and 'pause' so pause shows over frozen frame)
             const renderSystem = this.systems.get('render');
             const cameraSystem = this.systems.get('camera');
             const obstacleManager = this.systems.get('obstacles');
             const worldConfig = GameConfig.world;
-            
+
             if (!renderSystem || !cameraSystem) {
                 console.error('Missing render or camera system');
                 return;
             }
-            
+
+            if (this.screenManager.isScreen('hub')) {
+                const hubConfig = GameConfig.hub;
+                renderSystem.clear();
+                renderSystem.renderWorld(cameraSystem, obstacleManager, 0, hubConfig.width, hubConfig.height);
+                if (this.board) {
+                    renderSystem.renderBoard(this.board, cameraSystem);
+                    if (this.playerNearBoard) {
+                        renderSystem.renderBoardInteractionPrompt(this.board, cameraSystem, true);
+                    }
+                }
+                const hubEntities = this.entities.getAll();
+                renderSystem.renderEntities(hubEntities, cameraSystem);
+                renderSystem.renderMinimap(cameraSystem, this.entities, hubConfig.width, hubConfig.height, null, 0);
+                if (this.boardOpen) {
+                    this.screenManager.renderHubBoardOverlay(this.hubSelectedLevel);
+                }
+                return;
+            }
+
+            // Game world and entities (draw for both 'playing' and 'pause' so pause shows over frozen frame)
             renderSystem.clear();
             const currentLevel = this.systems.get('enemies') ? this.systems.get('enemies').getCurrentLevel() : 1;
             renderSystem.renderWorld(cameraSystem, obstacleManager, currentLevel);

@@ -19,6 +19,56 @@ const GameConfig = {
                 { name: 'stab', arcDegrees: 24, duration: 350, staminaCost: 12, rangeMultiplier: 1.2, damageMultiplier: 1.0, animationKey: 'melee2', dashSpeed: 500, dashDuration: 0.25 },
                 { name: 'spin', arcDegrees: 360, duration: 520, staminaCost: 15, rangeMultiplier: 0.9, damageMultiplier: 1.5, animationKey: 'meleeSpin', dashSpeed: 450, dashDuration: 0.45 }
             ]
+        },
+        swordAndShield: {
+            name: 'swordAndShield',
+            baseRange: 80,
+            baseDamage: 15,
+            baseArcDegrees: 60,
+            cooldown: 0.3,
+            comboWindow: 1.5,
+            block: {
+                enabled: true,
+                arcDegrees: 180,
+                damageReduction: 1.0,
+                staminaCost: 5,
+                animationKey: 'block'
+            },
+            stages: [
+                { name: 'swipe', arcDegrees: 90, duration: 320, staminaCost: 10, rangeMultiplier: 1.0, damageMultiplier: 1.2, animationKey: 'melee' },
+                { name: 'stab', arcDegrees: 24, duration: 350, staminaCost: 12, rangeMultiplier: 1.2, damageMultiplier: 1.0, animationKey: 'melee2', dashSpeed: 500, dashDuration: 0.25 },
+                { name: 'spin', arcDegrees: 360, duration: 520, staminaCost: 15, rangeMultiplier: 0.9, damageMultiplier: 1.5, animationKey: 'meleeSpin', dashSpeed: 450, dashDuration: 0.45 }
+            ]
+        },
+        greatsword: {
+            weaponClass: 'Greatsword',
+            name: 'greatsword',
+            twoHanded: true,
+            baseRange: 100,
+            baseDamage: 28,
+            baseArcDegrees: 100,
+            cooldown: 0.55,
+            comboWindow: 1.6,
+            stages: [
+                { name: 'slash1', arcDegrees: 100, duration: 480, staminaCost: 18, rangeMultiplier: 1.0, damageMultiplier: 1.2, animationKey: 'melee' },
+                { name: 'slash2', arcDegrees: 110, duration: 540, staminaCost: 20, rangeMultiplier: 1.05, damageMultiplier: 1.5, animationKey: 'melee2' },
+                { name: 'slash3', arcDegrees: 120, duration: 620, staminaCost: 24, rangeMultiplier: 1.05, damageMultiplier: 1.9, animationKey: 'meleeSpin' }
+            ]
+        },
+        broadsword: {
+            weaponClass: 'Greatsword',
+            name: 'broadsword',
+            twoHanded: true,
+            baseRange: 110,
+            baseDamage: 32,
+            baseArcDegrees: 95,
+            cooldown: 0.5,
+            comboWindow: 1.5,
+            stages: [
+                { name: 'broad1', arcDegrees: 95, duration: 440, staminaCost: 16, rangeMultiplier: 1.0, damageMultiplier: 1.25, animationKey: 'melee' },
+                { name: 'broad2', arcDegrees: 100, duration: 500, staminaCost: 18, rangeMultiplier: 1.05, damageMultiplier: 1.45, animationKey: 'melee2' },
+                { name: 'broad3', arcDegrees: 110, duration: 580, staminaCost: 22, rangeMultiplier: 1.05, damageMultiplier: 1.85, animationKey: 'meleeSpin' }
+            ]
         }
     },
     
@@ -36,7 +86,7 @@ const GameConfig = {
         attackArcDegrees: 60,
         attackCooldown: 0.3, // seconds - faster for combos (was 0.5)
         color: '#8b8b9a', // steel (fallback when knight sprites not loaded)
-        defaultWeapon: 'sword',
+        defaultWeapon: 'swordAndShield',
         chargedAttack: {
             minChargeTime: 0.5, // Minimum time to charge (seconds)
             maxChargeTime: 2.0, // Maximum charge time (seconds)
@@ -177,6 +227,27 @@ const GameConfig = {
         y: 1400,
         width: 80,
         height: 80
+    },
+
+    // Safe hub: static square tile room, no procedural gen; camera follows player (later: NPCs)
+    hub: {
+        name: 'Sanctuary',
+        tileSize: 50,
+        width: 1600,
+        height: 1600,
+        playerStart: { x: 800, y: 800 },
+        board: { x: 750, y: 765, width: 100, height: 70 },
+        theme: {
+            ground: { r: 42, g: 38, b: 32, variation: 6 },
+            sky: 'rgba(100, 90, 80, 0.06)'
+        },
+        // Static walls: room inset by 200px on each side so there is space around the sanctuary
+        walls: [
+            { x: 200, y: 200, width: 1200, height: 50 },
+            { x: 200, y: 1350, width: 1200, height: 50 },
+            { x: 200, y: 200, width: 50, height: 1200 },
+            { x: 1350, y: 200, width: 50, height: 1200 }
+        ]
     },
 
     levels: {

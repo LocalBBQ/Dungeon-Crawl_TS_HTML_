@@ -72,8 +72,11 @@ const PlayerCombatRenderer = {
 
     drawSword(ctx, screenX, screenY, transform, movement, combat, camera) {
         if (!movement || !combat || !transform) return;
-        const swordLength = (combat.attackRange || 100) * 0.48 * camera.zoom;
-        const bladeWidthAtGuard = Math.max(3.5, 7 / camera.zoom);
+        const twoHanded = combat.weapon && combat.weapon.twoHanded;
+        const lengthMult = twoHanded ? 1.55 : 1;
+        const widthMult = twoHanded ? 1.4 : 1;
+        const swordLength = (combat.attackRange || 100) * 0.48 * camera.zoom * lengthMult;
+        const bladeWidthAtGuard = Math.max(3.5, 7 / camera.zoom) * widthMult;
         const sideOffset = (transform.width / 2 + 4) * camera.zoom;
         const gripX = screenX + Math.cos(movement.facingAngle + Math.PI / 2) * sideOffset;
         const gripY = screenY + Math.sin(movement.facingAngle + Math.PI / 2) * sideOffset;
@@ -92,10 +95,11 @@ const PlayerCombatRenderer = {
         ctx.rotate(swordAngle);
         const lw = Math.max(1, 1 / camera.zoom);
         ctx.lineWidth = lw;
+        const gripScale = twoHanded ? 1.35 : 1;
 
         // Pommel (back of grip) – dark metal
-        const pommelX = -14 / camera.zoom - 2 / camera.zoom;
-        const pommelR = 3 / camera.zoom;
+        const pommelX = (-14 / camera.zoom - 2 / camera.zoom) * gripScale;
+        const pommelR = (3 / camera.zoom) * (twoHanded ? 1.2 : 1);
         ctx.fillStyle = '#4a4a52';
         ctx.strokeStyle = '#3a3a42';
         ctx.beginPath();
@@ -104,16 +108,16 @@ const PlayerCombatRenderer = {
         ctx.stroke();
 
         // Grip (leather wrap)
-        const hiltHalfLen = 14 / camera.zoom;
-        const hiltThickness = 6 / camera.zoom;
+        const hiltHalfLen = (14 / camera.zoom) * gripScale;
+        const hiltThickness = (6 / camera.zoom) * (twoHanded ? 1.15 : 1);
         ctx.fillStyle = '#8b4513';
         ctx.strokeStyle = '#5d2e0c';
         ctx.fillRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
         ctx.strokeRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
 
         // Cross-guard (quillon) at base of blade
-        const guardHalfW = 6 / camera.zoom;
-        const guardThick = 2 / camera.zoom;
+        const guardHalfW = (6 / camera.zoom) * (twoHanded ? 1.4 : 1);
+        const guardThick = (2 / camera.zoom) * (twoHanded ? 1.3 : 1);
         ctx.fillStyle = '#6b6b75';
         ctx.strokeStyle = '#4a4a52';
         ctx.fillRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
@@ -143,6 +147,7 @@ const PlayerCombatRenderer = {
 
     drawShield(ctx, screenX, screenY, transform, movement, combat, camera) {
         if (!movement || !combat || !transform) return;
+        if (combat.weapon && combat.weapon.twoHanded) return;
         const shieldDist = (transform.width / 2 + 8) * camera.zoom;
         const shieldW = 40 * camera.zoom;
         const shieldH = 8 * camera.zoom;

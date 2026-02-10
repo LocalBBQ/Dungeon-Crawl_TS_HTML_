@@ -3,7 +3,7 @@ class ScreenManager {
     constructor(canvas, ctx) {
         this.canvas = canvas;
         this.ctx = ctx;
-        this.currentScreen = 'title'; // 'title', 'playing', 'death', 'pause'
+        this.currentScreen = 'title'; // 'title', 'hub', 'playing', 'death', 'pause'
         this.selectedStartLevel = 1; // 1, 2, or 3 for level select
     }
 
@@ -206,6 +206,77 @@ class ScreenManager {
         return x >= buttonLeft && x <= buttonRight && y >= buttonTop && y <= buttonBottom;
     }
 
+    // Hub board overlay: level select + Start / Back (canvas coords)
+    getHubBoardButtonAt(x, y) {
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const cx = width / 2;
+        const buttonWidth = 120;
+        const buttonHeight = 40;
+        const startY = height / 2 + 52;
+        const backY = height / 2 + 100;
+        const left = cx - buttonWidth / 2;
+        const right = cx + buttonWidth / 2;
+        if (x >= left && x <= right && y >= startY - buttonHeight / 2 && y <= startY + buttonHeight / 2) return 'start';
+        if (x >= left && x <= right && y >= backY - buttonHeight / 2 && y <= backY + buttonHeight / 2) return 'back';
+        return null;
+    }
+
+    renderHubBoardOverlay(selectedLevel) {
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+
+        this.ctx.fillStyle = 'rgba(10, 8, 6, 0.75)';
+        this.ctx.fillRect(0, 0, width, height);
+
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillStyle = '#c9a227';
+        this.ctx.font = '700 28px Cinzel, Georgia, serif';
+        this.ctx.fillText('Select level', width / 2, height / 2 - 100);
+
+        const b = this.getLevelSelectBounds();
+        const rowH = 32;
+        const rowW = 280;
+        const startY = height / 2 - 48;
+        for (let i = 0; i < b.rows.length; i++) {
+            const row = b.rows[i];
+            const isSelected = selectedLevel === row.level;
+            this.ctx.fillStyle = isSelected ? 'rgba(201, 162, 39, 0.25)' : 'rgba(20, 16, 8, 0.6)';
+            this.ctx.fillRect(b.cx - rowW / 2, row.y - rowH / 2, rowW, rowH);
+            this.ctx.strokeStyle = isSelected ? '#c9a227' : '#4a3020';
+            this.ctx.lineWidth = isSelected ? 2 : 1;
+            this.ctx.strokeRect(b.cx - rowW / 2, row.y - rowH / 2, rowW, rowH);
+            this.ctx.fillStyle = isSelected ? '#e8dcc8' : '#a08060';
+            this.ctx.font = isSelected ? '600 14px Cinzel, Georgia, serif' : '500 13px Cinzel, Georgia, serif';
+            this.ctx.fillText(`${row.level}. ${row.name}`, b.cx, row.y);
+        }
+
+        const cx = width / 2;
+        const buttonWidth = 120;
+        const buttonHeight = 40;
+        const startY_btn = height / 2 + 52;
+        const backY = height / 2 + 100;
+
+        this.ctx.fillStyle = '#1a1008';
+        this.ctx.fillRect(cx - buttonWidth / 2, startY_btn - buttonHeight / 2, buttonWidth, buttonHeight);
+        this.ctx.strokeStyle = '#c9a227';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(cx - buttonWidth / 2, startY_btn - buttonHeight / 2, buttonWidth, buttonHeight);
+        this.ctx.fillStyle = '#e8dcc8';
+        this.ctx.font = '600 14px Cinzel, Georgia, serif';
+        this.ctx.fillText('Start', cx, startY_btn);
+
+        this.ctx.fillStyle = '#1a1008';
+        this.ctx.fillRect(cx - buttonWidth / 2, backY - buttonHeight / 2, buttonWidth, buttonHeight);
+        this.ctx.strokeStyle = '#4a3020';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(cx - buttonWidth / 2, backY - buttonHeight / 2, buttonWidth, buttonHeight);
+        this.ctx.fillStyle = '#a08060';
+        this.ctx.font = '600 13px Cinzel, Georgia, serif';
+        this.ctx.fillText('Back', cx, backY);
+    }
+
     render() {
         if (this.currentScreen === 'title') {
             this.renderTitleScreen();
@@ -214,7 +285,7 @@ class ScreenManager {
         } else if (this.currentScreen === 'pause') {
             this.renderPauseScreen();
         }
-        // 'playing' screen is handled by the normal game rendering
+        // 'hub' and 'playing' screens are handled by the normal game rendering
     }
 }
 
