@@ -1,0 +1,127 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Cinzel', Georgia, serif;
+    background: #0f0b08;
+    overflow: hidden;
+    color: #e8dcc8;
+    -webkit-font-smoothing: antialiased;
+}
+
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #0d0a08;
+    cursor: crosshair;
+}
+
+#ui-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Stats panel - wooden frame, parchment interior */
+#stats {
+    align-self: flex-start;
+    width: 300px;
+    padding: 16px 20px;
+    background: linear-gradient(180deg, #2c1810 0%, #1a1008 100%);
+    border: 3px solid #4a3020;
+    border-radius: 4px;
+    box-shadow:
+        inset 0 1px 0 rgba(201, 162, 39, 0.15),
+        0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.stat-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.stat-bar:last-child {
+    margin-bottom: 0;
+}
+
+.stat-bar label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #c9a227;
+    width: 52px;
+    flex-shrink: 0;
+    letter-spacing: 0.05em;
+}
+
+.bar-container {
+    flex: 1;
+    height: 20px;
+    background: #0f0a06;
+    border: 2px solid #3d2817;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.bar {
+    height: 100%;
+    border-radius: 0;
+    transition: width 0.25s ease;
+}
+
+.bar.health {
+    background: linear-gradient(180deg, #8b2020 0%, #5c1010 50%, #4a0c0c 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 180, 180, 0.2);
+}
+
+.bar.stamina {
+    background: linear-gradient(180deg, #2a5070 0%, #1a3048 50%, #0f2035 100%);
+    box-shadow: inset 0 1px 0 rgba(180, 220, 255, 0.15);
+}
+
+.stat-bar span {
+    font-size: 13px;
+    font-weight: 600;
+    color: #b89870;
+    font-variant-numeric: tabular-nums;
+    min-width: 48px;
+    text-align: right;
+}
+
+/* Controls - bottom left */
+#controls {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    font-size: 14px;
+    color: #a08060;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    line-height: 1.7;
+}
+
+#controls p {
+    margin: 0;
+}
+
+#controls strong {
+    color: #c9a227;
+    font-weight: 600;
+}

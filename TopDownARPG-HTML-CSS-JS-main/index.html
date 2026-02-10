@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Crawl</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui-overlay">
+            <div id="stats">
+                <div class="stat-bar">
+                    <label>HP</label>
+                    <div class="bar-container">
+                        <div id="health-bar" class="bar health"></div>
+                    </div>
+                    <span id="health-text">100/100</span>
+                </div>
+                <div class="stat-bar">
+                    <label>SP</label>
+                    <div class="bar-container">
+                        <div id="stamina-bar" class="bar stamina"></div>
+                    </div>
+                    <span id="stamina-text">50/50</span>
+                </div>
+            </div>
+            <div id="controls">
+                <p>WASD move · Shift sprint · Space dodge · L/R click attack · block · R shoot · E portal · 1/2/3 weapon (temp)</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Scripts -->
+    <!-- Core Systems -->
+    <script src="js/utils/Utils.js"></script>
+    <script src="js/utils/SpriteUtils.js"></script>
+    <script src="js/core/EventBus.js"></script>
+    <script src="js/core/EventTypes.js"></script>
+    <script src="js/core/SystemManager.js"></script>
+    <script src="js/core/ScreenManager.js"></script>
+    <script src="js/config/GameConfig.js"></script>
+    
+    <!-- Weapons -->
+    <script src="js/weapons/Weapon.js"></script>
+    <script src="js/weapons/PlayerAttack.js"></script>
+    <script src="js/weapons/EnemyAttack.js"></script>
+    <script src="js/weapons/GoblinAttack.js"></script>
+    <script src="js/weapons/SkeletonAttack.js"></script>
+    <script src="js/weapons/DemonAttack.js"></script>
+    
+    <!-- Components -->
+    <script src="js/components/Transform.js"></script>
+    <script src="js/components/Health.js"></script>
+    <script src="js/components/Stamina.js"></script>
+    <script src="js/components/Movement.js"></script>
+    <script src="js/components/PlayerMovement.js"></script>
+    <script src="js/components/EnemyMovement.js"></script>
+    <script src="js/components/Combat.js"></script>
+    <script src="js/components/AI.js"></script>
+    <script src="js/components/Renderable.js"></script>
+    <script src="js/components/Sprite.js"></script>
+    <script src="js/components/Animation.js"></script>
+    
+    <!-- Entities -->
+    <script src="js/entities/Entity.js"></script>
+    
+    <!-- Systems -->
+    <script src="js/systems/InputSystem.js"></script>
+    <script src="js/systems/CameraSystem.js"></script>
+    <script src="js/systems/CollisionSystem.js"></script>
+    <script src="js/systems/PathfindingSystem.js"></script>
+    <script src="js/renderers/PlayerCombatRenderer.js"></script>
+    <script src="js/systems/RenderSystem.js"></script>
+    
+    <!-- Projectiles -->
+    <script src="js/projectiles/Projectile.js"></script>
+    
+    <!-- Managers -->
+    <script src="js/managers/EntityManager.js"></script>
+    <script src="js/managers/SpriteManager.js"></script>
+    <script src="js/managers/ObstacleManager.js"></script>
+    <script src="js/managers/EnemyManager.js"></script>
+    <script src="js/managers/HazardManager.js"></script>
+    <script src="js/managers/DamageNumberManager.js"></script>
+    <script src="js/managers/ProjectileManager.js"></script>
+    <script src="js/managers/HealthOrbManager.js"></script>
+    
+    <!-- Controllers -->
+    <script src="js/controllers/PlayerInputController.js"></script>
+    
+    <!-- Game -->
+    <script src="js/core/Game.js"></script>
+    
+    <!-- Initialize Game -->
+    <script>
+        window.addEventListener('load', () => {
+            const game = new Game();
+            console.log('Dungeon Crawler initialized!');
+        });
+    </script>
+</body>
+</html>
+
