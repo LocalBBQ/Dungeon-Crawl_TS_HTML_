@@ -1,6 +1,6 @@
 // Base weapon class - defines weapon types and their combos
 class Weapon {
-    constructor(name, baseRange, baseDamage, baseArcDegrees, cooldown, comboConfig, comboWindow = 1.5, knockback = null, block = null, twoHanded = false, dashAttack = null, rangeMultiplier = 1, weaponLength = null, chargeAttack = null) {
+    constructor(name, baseRange, baseDamage, baseArcDegrees, cooldown, comboConfig, comboWindow = 1.5, knockback = null, block = null, twoHanded = false, dashAttack = null, rangeMultiplier = 1, weaponLength = null, chargeAttack = null, attackVisual = null) {
         this.name = name;
         this.baseRange = baseRange;
         this.baseDamage = baseDamage;
@@ -15,6 +15,7 @@ class Weapon {
         this.chargeAttack = chargeAttack || null; // Optional charge attack config (minChargeTime, maxChargeTime, damageMultiplier, etc.)
         this.rangeMultiplier = rangeMultiplier != null ? rangeMultiplier : 1; // Weapon-specific range scale (e.g. unique weapons)
         this.weaponLength = weaponLength != null ? weaponLength : null; // Optional display length (world units); decouples drawn weapon size from attack range
+        this.attackVisual = attackVisual || null; // Optional: { anticipationRatio, pullBackRadians, sweepSpeed, followThroughExtra, followThroughStart, thrustAnticipationRatio, thrustPullBackWorld, thrustLungeForwardWorld }
     }
 
     static fromConfig(config) {
@@ -55,7 +56,8 @@ class Weapon {
             config.dashAttack ?? config.specialAttack ?? null,
             config.rangeMultiplier ?? 1,
             config.weaponLength ?? null,
-            config.chargeAttack ?? null
+            config.chargeAttack ?? null,
+            config.attackVisual ?? null
         );
     }
 

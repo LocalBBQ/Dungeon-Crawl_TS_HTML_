@@ -17,7 +17,7 @@ const PlayerCombatRenderer = {
     THRUST_ANTICIPATION_RATIO: 0.32,
     /** Thrust: world-unit offset. Negative = grip pulled back, positive = lunge forward. */
     THRUST_PULL_BACK_WORLD: 28,
-    THRUST_LUNGE_FORWARD_WORLD: 14,
+    THRUST_LUNGE_FORWARD_WORLD: 32,
     /** Thrust: very snappy forward (ease-out power 5). */
     easeOutQuint(t) {
         return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 5);
@@ -37,6 +37,16 @@ const PlayerCombatRenderer = {
         return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 4);
     },
 
+    /** Resolve a visual constant: weapon.attackVisual override if present (camelCase or UPPER_SNAKE), else renderer default. */
+    v(combat, key) {
+        const visual = combat && combat.weapon && combat.weapon.attackVisual;
+        if (!visual) return this[key];
+        const parts = key.split('_');
+        const camel = parts[0].toLowerCase() + parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('');
+        const value = visual[camel] !== undefined && visual[camel] !== null ? visual[camel] : visual[key];
+        return value !== undefined && value !== null ? value : this[key];
+    },
+
     /** Raw linear progress 0..1 over the attack duration. */
     getRawProgress(combat) {
         const duration = combat.attackDuration > 0 ? combat.attackDuration : 0.001;
@@ -46,45 +56,56 @@ const PlayerCombatRenderer = {
     /** Visual sweep progress: anticipation then snappy ease-out (hitbox/arc use this, no overshoot). */
     getSweepProgress(combat) {
         const raw = this.getRawProgress(combat);
-        if (raw <= this.ANTICIPATION_RATIO) return 0;
-        const swingPhase = (raw - this.ANTICIPATION_RATIO) / (1 - this.ANTICIPATION_RATIO);
+        const anticipationRatio = this.v(combat, 'ANTICIPATION_RATIO');
+        if (raw <= anticipationRatio) return 0;
+        const swingPhase = (raw - anticipationRatio) / (1 - anticipationRatio);
         const eased = this.easeOutQuart(swingPhase);
-        return Math.min(1, eased * this.SWEEP_SPEED);
+        const sweepSpeed = this.v(combat, 'SWEEP_SPEED');
+        return Math.min(1, eased * sweepSpeed);
     },
 
     /** Weapon-only sweep (includes follow-through overshoot for blade/mace angle). */
     getWeaponSweepProgress(combat) {
         const raw = this.getRawProgress(combat);
-        if (raw <= this.ANTICIPATION_RATIO) return 0;
-        const swingPhase = (raw - this.ANTICIPATION_RATIO) / (1 - this.ANTICIPATION_RATIO);
+        const anticipationRatio = this.v(combat, 'ANTICIPATION_RATIO');
+        if (raw <= anticipationRatio) return 0;
+        const swingPhase = (raw - anticipationRatio) / (1 - anticipationRatio);
         const eased = this.easeOutQuart(swingPhase);
-        const followThrough = swingPhase >= this.FOLLOW_THROUGH_START
-            ? this.easeOutCubic((swingPhase - this.FOLLOW_THROUGH_START) / (1 - this.FOLLOW_THROUGH_START))
+        const followThroughStart = this.v(combat, 'FOLLOW_THROUGH_START');
+        const followThroughExtra = this.v(combat, 'FOLLOW_THROUGH_EXTRA');
+        const followThrough = swingPhase >= followThroughStart
+            ? this.easeOutCubic((swingPhase - followThroughStart) / (1 - followThroughStart))
             : 0;
-        return Math.min(1, eased) + followThrough * this.FOLLOW_THROUGH_EXTRA;
+        return Math.min(1, eased) + followThrough * followThroughExtra;
     },
 
     /** Angle offset in radians during anticipation (pull-back); 0 when not in wind-up. */
     getAnticipationPullBack(combat) {
         const raw = this.getRawProgress(combat);
-        if (raw >= this.ANTICIPATION_RATIO) return 0;
-        return -this.PULL_BACK_RADIANS * (1 - raw / this.ANTICIPATION_RATIO);
+        const anticipationRatio = this.v(combat, 'ANTICIPATION_RATIO');
+        if (raw >= anticipationRatio) return 0;
+        const pullBackRadians = this.v(combat, 'PULL_BACK_RADIANS');
+        return -pullBackRadians * (1 - raw / anticipationRatio);
     },
 
     /** Thrust: grip offset in world units (negative = back, positive = forward). No angle change. */
     getThrustGripOffset(combat) {
         const raw = this.getRawProgress(combat);
-        if (raw < this.THRUST_ANTICIPATION_RATIO) {
-            const t = 1 - raw / this.THRUST_ANTICIPATION_RATIO;
-            return -this.THRUST_PULL_BACK_WORLD * t;
+        const thrustAnticipation = this.v(combat, 'THRUST_ANTICIPATION_RATIO');
+        const thrustPullBack = this.v(combat, 'THRUST_PULL_BACK_WORLD');
+        const thrustLunge = this.v(combat, 'THRUST_LUNGE_FORWARD_WORLD');
+        if (raw < thrustAnticipation) {
+            const t = 1 - raw / thrustAnticipation;
+            return -thrustPullBack * t;
         }
-        const thrustPhase = (raw - this.THRUST_ANTICIPATION_RATIO) / (1 - this.THRUST_ANTICIPATION_RATIO);
-        return this.THRUST_LUNGE_FORWARD_WORLD * this.easeOutQuint(thrustPhase);
+        const thrustPhase = (raw - thrustAnticipation) / (1 - thrustAnticipation);
+        return thrustLunge * this.easeOutQuint(thrustPhase);
     },
     getThrustWeaponSweep(combat) {
         const raw = this.getRawProgress(combat);
-        if (raw <= this.THRUST_ANTICIPATION_RATIO) return 0;
-        const thrustPhase = (raw - this.THRUST_ANTICIPATION_RATIO) / (1 - this.THRUST_ANTICIPATION_RATIO);
+        const thrustAnticipation = this.v(combat, 'THRUST_ANTICIPATION_RATIO');
+        if (raw <= thrustAnticipation) return 0;
+        const thrustPhase = (raw - thrustAnticipation) / (1 - thrustAnticipation);
         return Math.min(1, this.easeOutQuint(thrustPhase));
     },
 
@@ -196,18 +217,25 @@ const PlayerCombatRenderer = {
         }
     },
 
-    drawSword(ctx, screenX, screenY, transform, movement, combat, camera) {
+    /**
+     * part: 'handle' = pommel + grip only (draw under helmet); 'blade' = guard + blade only (draw over); 'all' = full sword (default).
+     */
+    drawSword(ctx, screenX, screenY, transform, movement, combat, camera, options = {}) {
+        const part = options.part || 'all';
         if (!movement || !combat || !transform) return;
         const twoHanded = combat.weapon && combat.weapon.twoHanded;
         const lengthMult = twoHanded ? 1.55 : 1;
         const widthMult = twoHanded ? 1.4 : 1;
         const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange || 100) * 0.48;
         const swordLength = baseLength * camera.zoom * lengthMult;
-        const bladeWidthAtGuard = Math.max(3.5, 7 / camera.zoom) * widthMult;
+        // Thickness in fixed pixels so it stays constant when camera zooms
+        const bladeWidthAtGuard = 7 * widthMult;
         const sideOffset = (transform.width / 2 + 4) * camera.zoom;
+        /** Grip orbits around player (head/body) during arc attacks so the handle glides realistically. */
+        const gripOrbitRadius = sideOffset;
         const facingAngle = movement.facingAngle;
-        let gripX = screenX + Math.cos(facingAngle + Math.PI / 2) * sideOffset;
-        let gripY = screenY + Math.sin(facingAngle + Math.PI / 2) * sideOffset;
+        let gripX = screenX + Math.cos(facingAngle + Math.PI / 2) * gripOrbitRadius;
+        let gripY = screenY + Math.sin(facingAngle + Math.PI / 2) * gripOrbitRadius;
         const animKey = combat.currentAttackAnimationKey || 'melee';
         const isMeleeSpinWithPlayer = animKey === 'meleeSpin'; // weapon fastened to player; whole body spins via RenderSystem
         const isThrust = combat.currentAttackIsThrust === true || (combat.weapon && combat.weapon.name === 'swordAndShield' && animKey === 'melee2');
@@ -216,81 +244,83 @@ const PlayerCombatRenderer = {
             if (isThrust) {
                 swordAngle = facingAngle;
                 const thrustOffset = this.getThrustGripOffset(combat);
-                gripX += thrustOffset * Math.cos(facingAngle) * camera.zoom;
-                gripY += thrustOffset * Math.sin(facingAngle) * camera.zoom;
+                // Stab comes from center of player (no side offset)
+                gripX = screenX + thrustOffset * Math.cos(facingAngle) * camera.zoom;
+                gripY = screenY + thrustOffset * Math.sin(facingAngle) * camera.zoom;
             } else {
                 const weaponSweep = this.getWeaponSweepProgress(combat);
                 const pullBack = this.getAnticipationPullBack(combat);
+                const halfArc = (combat.attackArc || Math.PI / 3) / 2;
+                const attackArc = combat.attackArc || Math.PI / 3;
+                let gripAngle;
                 if (combat.currentAttackIsCircular) {
                     swordAngle = facingAngle + pullBack + Math.min(1, weaponSweep) * Math.PI * 2;
+                    gripAngle = facingAngle + pullBack + Math.min(1, weaponSweep) * Math.PI * 2;
+                } else if (combat.currentAttackReverseSweep) {
+                    swordAngle = facingAngle + halfArc - pullBack - weaponSweep * attackArc;
+                    gripAngle = swordAngle;
                 } else {
-                    const halfArc = (combat.attackArc || Math.PI / 3) / 2;
-                    const attackArc = combat.attackArc || Math.PI / 3;
-                    if (combat.currentAttackReverseSweep) {
-                        swordAngle = facingAngle + halfArc - pullBack - weaponSweep * attackArc;
-                    } else {
-                        swordAngle = facingAngle - halfArc + pullBack + weaponSweep * attackArc;
-                    }
+                    swordAngle = facingAngle - halfArc + pullBack + weaponSweep * attackArc;
+                    gripAngle = swordAngle;
                 }
+                gripX = screenX + Math.cos(gripAngle) * gripOrbitRadius;
+                gripY = screenY + Math.sin(gripAngle) * gripOrbitRadius;
             }
         }
         if (isMeleeSpinWithPlayer) {
-            // Sword at side of player; full spin is applied to player+weapon in RenderSystem
             swordAngle = facingAngle + Math.PI / 2;
         }
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(swordAngle);
-        const lw = Math.max(1, 1 / camera.zoom);
+        const lw = 1;
         ctx.lineWidth = lw;
         const gripScale = twoHanded ? 1.35 : 1;
 
-        // Pommel (back of grip) – dark metal
-        const pommelX = (-14 / camera.zoom - 2 / camera.zoom) * gripScale;
-        const pommelR = (3 / camera.zoom) * (twoHanded ? 1.2 : 1);
-        ctx.fillStyle = '#4a4a52';
-        ctx.strokeStyle = '#3a3a42';
-        ctx.beginPath();
-        ctx.arc(pommelX, 0, pommelR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        if (part === 'handle' || part === 'all') {
+            // Handle length constant when zooming (same as thickness)
+            const pommelX = -16 * gripScale;
+            const pommelR = 3 * (twoHanded ? 1.2 : 1);
+            ctx.fillStyle = '#4a4a52';
+            ctx.strokeStyle = '#3a3a42';
+            ctx.beginPath();
+            ctx.arc(pommelX, 0, pommelR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            const hiltHalfLen = 14 * gripScale;
+            const hiltThickness = 6 * (twoHanded ? 1.15 : 1);
+            ctx.fillStyle = '#8b4513';
+            ctx.strokeStyle = '#5d2e0c';
+            ctx.fillRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
+            ctx.strokeRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
+        }
 
-        // Grip (leather wrap)
-        const hiltHalfLen = (14 / camera.zoom) * gripScale;
-        const hiltThickness = (6 / camera.zoom) * (twoHanded ? 1.15 : 1);
-        ctx.fillStyle = '#8b4513';
-        ctx.strokeStyle = '#5d2e0c';
-        ctx.fillRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
-        ctx.strokeRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
-
-        // Cross-guard (quillon) at base of blade
-        const guardHalfW = (6 / camera.zoom) * (twoHanded ? 1.4 : 1);
-        const guardThick = (2 / camera.zoom) * (twoHanded ? 1.3 : 1);
-        ctx.fillStyle = '#6b6b75';
-        ctx.strokeStyle = '#4a4a52';
-        ctx.fillRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
-        ctx.strokeRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
-
-        // Blade – slight taper (trapezoid), medieval steel
-        const hw = bladeWidthAtGuard / 2;
-        const tipWidth = hw * 0.65; // Less taper: tip stays broad
-        ctx.fillStyle = '#a8a8b0';
-        ctx.strokeStyle = '#3d3d42';
-        ctx.beginPath();
-        ctx.moveTo(0, -hw);
-        ctx.lineTo(0, hw);
-        ctx.lineTo(swordLength, tipWidth);
-        ctx.lineTo(swordLength, -tipWidth);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Fuller (center line) for a bit of depth
-        ctx.strokeStyle = 'rgba(120, 118, 110, 0.55)';
-        ctx.lineWidth = lw * 0.6;
-        ctx.beginPath();
-        ctx.moveTo(hw * 0.5, 0);
-        ctx.lineTo(swordLength, 0);
-        ctx.stroke();
+        if (part === 'blade' || part === 'all') {
+            const guardHalfW = 6 * (twoHanded ? 1.4 : 1);
+            const guardThick = 2 * (twoHanded ? 1.3 : 1);
+            ctx.fillStyle = '#6b6b75';
+            ctx.strokeStyle = '#4a4a52';
+            ctx.fillRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
+            ctx.strokeRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
+            const hw = bladeWidthAtGuard / 2;
+            const tipWidth = hw * 0.65;
+            ctx.fillStyle = '#a8a8b0';
+            ctx.strokeStyle = '#3d3d42';
+            ctx.beginPath();
+            ctx.moveTo(0, -hw);
+            ctx.lineTo(0, hw);
+            ctx.lineTo(swordLength, tipWidth);
+            ctx.lineTo(swordLength, -tipWidth);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(120, 118, 110, 0.55)';
+            ctx.lineWidth = lw * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(hw * 0.5, 0);
+            ctx.lineTo(swordLength, 0);
+            ctx.stroke();
+        }
 
         ctx.restore();
     },
@@ -327,11 +357,11 @@ const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(maceAngle);
-        const lw = Math.max(1, 1 / zoom);
+        const lw = 1;
 
-        // Pommel / end cap (behind grip, -X)
+        // Pommel / end cap (behind grip, -X) — thickness constant when zooming
         const pommelX = -16 * zoom;
-        const pommelR = 4 * zoom;
+        const pommelR = 4;
         ctx.fillStyle = '#4a4a52';
         ctx.strokeStyle = '#3a3a42';
         ctx.lineWidth = lw;
@@ -342,7 +372,7 @@ const PlayerCombatRenderer = {
 
         // Grip (leather wrap)
         const gripLen = 18 * zoom;
-        const gripW = 5 * zoom;
+        const gripW = 5;
         ctx.fillStyle = '#6b4423';
         ctx.strokeStyle = '#4a2e14';
         ctx.fillRect(pommelX, -gripW / 2, gripLen, gripW);
@@ -351,7 +381,7 @@ const PlayerCombatRenderer = {
         // Shaft (metal), from grip to head
         const shaftStart = pommelX + gripLen;
         const shaftLen = maceLength * 0.5;
-        const shaftW = 4 * zoom;
+        const shaftW = 4;
         ctx.fillStyle = '#5a5a62';
         ctx.strokeStyle = '#3a3a42';
         ctx.fillRect(shaftStart, -shaftW / 2, shaftLen, shaftW);
@@ -361,7 +391,7 @@ const PlayerCombatRenderer = {
         const headCenterX = shaftStart + shaftLen;
         const headR = 12 * zoom;
         const flangeCount = 6;
-        const flangeOut = 3 * zoom;
+        const flangeOut = 3;
         ctx.fillStyle = '#4a4a52';
         ctx.strokeStyle = '#2a2a32';
         ctx.lineWidth = lw;
@@ -385,7 +415,7 @@ const PlayerCombatRenderer = {
         ctx.strokeStyle = 'rgba(180, 175, 165, 0.4)';
         ctx.lineWidth = lw * 0.5;
         ctx.beginPath();
-        ctx.arc(headCenterX, 0, headR - 2 * zoom, 0, Math.PI * 2);
+        ctx.arc(headCenterX, 0, headR - 2, 0, Math.PI * 2);
         ctx.stroke();
 
         ctx.restore();
@@ -394,7 +424,7 @@ const PlayerCombatRenderer = {
     drawCrossbow(ctx, screenX, screenY, transform, movement, combat, camera) {
         if (!movement || !combat || !transform) return;
         const zoom = camera.zoom;
-        const lw = Math.max(1, 1 / zoom);
+        const lw = 1;
         const dist = (transform.width / 2 + 12) * zoom;
         const cx = screenX + Math.cos(movement.facingAngle) * dist;
         const cy = screenY + Math.sin(movement.facingAngle) * dist;
@@ -404,8 +434,8 @@ const PlayerCombatRenderer = {
 
         const stockLen = 28 * zoom;
         const limbHalf = 22 * zoom;
-        const stockW = 5 * zoom;
-        const limbW = 7 * zoom;
+        const stockW = 5;
+        const limbW = 7;
 
         // Stock (body) – dark wood
         ctx.fillStyle = '#3d2817';
@@ -426,27 +456,27 @@ const PlayerCombatRenderer = {
         ctx.quadraticCurveTo(stockLen * 0.55, limbHalf, stockLen * 0.5, limbHalf * 0.6);
         ctx.stroke();
 
-        // Stirrup (metal at front)
+        // Stirrup (metal at front) — thickness constant when zooming
         ctx.fillStyle = '#5a5a62';
         ctx.strokeStyle = '#3a3a42';
         ctx.beginPath();
-        ctx.arc(stockLen * 0.5, 0, 4 * zoom, 0, Math.PI * 2);
+        ctx.arc(stockLen * 0.5, 0, 4, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
         // String
         ctx.strokeStyle = '#c0b090';
-        ctx.lineWidth = Math.max(1, 1.5 / zoom);
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(stockLen * 0.5, -limbHalf * 0.5);
         ctx.lineTo(stockLen * 0.5, limbHalf * 0.5);
         ctx.stroke();
 
-        // Trigger area (metal)
+        // Trigger area (metal) — thickness constant when zooming
         ctx.fillStyle = '#4a4a52';
-        ctx.fillRect(-8 * zoom, -stockW / 2 - 2 * zoom, 6 * zoom, stockW + 4 * zoom);
+        ctx.fillRect(-8 * zoom, -stockW / 2 - 2, 6, stockW + 4);
         ctx.strokeStyle = '#3a3a42';
-        ctx.strokeRect(-8 * zoom, -stockW / 2 - 2 * zoom, 6 * zoom, stockW + 4 * zoom);
+        ctx.strokeRect(-8 * zoom, -stockW / 2 - 2, 6, stockW + 4);
 
         ctx.restore();
     },
@@ -456,7 +486,7 @@ const PlayerCombatRenderer = {
         if (combat.weapon && combat.weapon.twoHanded) return;
         const shieldDist = (transform.width / 2 + 8) * camera.zoom;
         const shieldW = 40 * camera.zoom;
-        const shieldH = 8 * camera.zoom;
+        const shieldH = 8; // thickness constant when zooming
         if (combat.isBlocking) {
             const shieldX = screenX + Math.cos(movement.facingAngle) * shieldDist;
             const shieldY = screenY + Math.sin(movement.facingAngle) * shieldDist;
@@ -465,7 +495,7 @@ const PlayerCombatRenderer = {
             ctx.rotate(movement.facingAngle + Math.PI / 2);
             ctx.fillStyle = '#8b6914';
             ctx.strokeStyle = '#5d4a0c';
-            ctx.lineWidth = 2 / camera.zoom;
+            ctx.lineWidth = 2;
             ctx.fillRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.strokeRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.restore();
@@ -479,7 +509,7 @@ const PlayerCombatRenderer = {
             ctx.globalAlpha = 0.5;
             ctx.fillStyle = '#8b6914';
             ctx.strokeStyle = '#5d4a0c';
-            ctx.lineWidth = 1 / camera.zoom;
+            ctx.lineWidth = 1;
             ctx.fillRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.strokeRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.globalAlpha = 1;

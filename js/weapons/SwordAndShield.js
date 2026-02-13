@@ -34,11 +34,17 @@
             minChargeTime: 0.5,
             maxChargeTime: 2.0,
             damageMultiplier: 2.0,
-            rangeMultiplier: 3.0,
+            rangeMultiplier: 1.2,
             staminaCostMultiplier: 1.5,
             chargedThrustDashSpeed: 380,
             chargedThrustDashDistanceMin: 50,
-            chargedThrustDashDistanceMax: 280
+            chargedThrustDashDistanceMax: 170
+        },
+        // Optional per-weapon attack visuals (defaults in PlayerCombatRenderer)
+        attackVisual: {
+            thrustLungeForwardWorld: 32,
+            thrustAnticipationRatio: 0.32
+            // e.g. anticipationRatio, pullBackRadians, followThroughExtra, thrustPullBackWorld, etc.
         }
     };
     window.SwordAndShieldWeapon = Weapon.fromConfig(config);
