@@ -48,13 +48,16 @@
         const isThrust = stageConfig.thrust === true;
         const thrustWidth = stageConfig.thrustWidth != null ? stageConfig.thrustWidth : 40;
         const reverseSweep = stageConfig.reverseSweep === true;
+        const attackSpeed = weapon.attackSpeed ?? 1;
+        const rawDuration = stageConfig.duration || 100;
+        const duration = Math.round(rawDuration / attackSpeed);
         return {
             range: baseStageRange * (weapon.rangeMultiplier ?? 1),
             damage: weapon.baseDamage * (stageConfig.damageMultiplier || 1.0),
             arc: arcRad,
             arcOffset,
             reverseSweep,
-            duration: stageConfig.duration || 100,
+            duration,
             staminaCost: stageConfig.staminaCost || 10,
             dashSpeed: stageConfig.dashSpeed || null,
             dashDuration: stageConfig.dashDuration || 0,
@@ -153,16 +156,22 @@
         };
     }
 
-    /** Returns parsed config object for weapon constructors (name, baseRange, comboConfig, block, etc.). */
+    /** Returns parsed config object for weapon constructors (name, baseRange, comboConfig, block, etc.).
+     * Balancing: attackSpeed < 1 = slower swing (longer duration), cooldown = seconds between attacks,
+     * cooldownMultiplier scales cooldown (e.g. 1.2 = 20% longer wait between attacks). */
     function parseWeaponConfig(config) {
         const stages = config.stages || [];
         const block = buildBlockFromConfig(config.block);
+        const attackSpeed = config.attackSpeed ?? 1;
+        const baseCooldown = config.cooldown ?? 0.3;
+        const cooldownMultiplier = config.cooldownMultiplier ?? 1;
         return {
             name: config.name || 'weapon',
             baseRange: config.baseRange ?? 100,
             baseDamage: config.baseDamage ?? 15,
             baseArcDegrees: config.baseArcDegrees ?? 60,
-            cooldown: config.cooldown ?? 0.3,
+            attackSpeed,
+            cooldown: baseCooldown * cooldownMultiplier,
             comboConfig: stages,
             maxComboStage: config.maxComboStage != null ? config.maxComboStage : null,
             comboWindow: config.comboWindow ?? 1.5,

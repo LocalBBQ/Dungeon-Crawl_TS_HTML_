@@ -9,6 +9,7 @@
             this.baseRange = p.baseRange;
             this.baseDamage = p.baseDamage;
             this.baseArcDegrees = p.baseArcDegrees;
+            this.attackSpeed = p.attackSpeed ?? 1;
             this.cooldown = p.cooldown;
             this.comboConfig = p.comboConfig;
             this.comboWindow = p.comboWindow;
@@ -62,13 +63,16 @@
         }
     }
 
+    // Balancing: attackSpeed < 1 = slower swings, cooldown = seconds between attacks, cooldownMultiplier = scale cooldown
     const config = {
         name: 'swordAndShield',
         baseRange: 80,
         baseDamage: 15,
         baseArcDegrees: 60,
-        cooldown: 0.25,
-        comboWindow: 1,
+        cooldown: 0.46,
+        attackSpeed: .6 ,
+        cooldownMultiplier: .5,
+        comboWindow: 1.5                                                                                                                                                                                                                ,
         baseStunBuildup: 25,
         weaponLength: 55,
         block: {

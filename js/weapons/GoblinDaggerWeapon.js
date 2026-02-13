@@ -15,13 +15,16 @@
         }
     }
 
+    // Balancing: attackSpeed < 1 = slower swings, cooldown = seconds between attacks, cooldownMultiplier = scale cooldown
     const config = {
         name: 'Goblin Shiv',
         baseRange: 36,
         baseDamage: 4,
         baseArcDegrees: 90,
-        cooldown: 1.2,
-        comboWindow: 1.2,
+        cooldown: 1.5,
+        attackSpeed: 0.85,
+        cooldownMultiplier: 1.2,
+        comboWindow: .5,
         baseStunBuildup: 16,
         weaponLength: 30,
         stages: [

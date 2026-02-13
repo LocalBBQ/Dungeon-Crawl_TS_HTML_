@@ -83,6 +83,10 @@ class Combat {
         if (this.attackHandler && typeof this.attackHandler.update === 'function') {
             this.attackHandler.update(deltaTime, this.entity);
         }
+        // Flush buffered attack same tick as handler may have ended attack (game-loop check runs after all entity updates; flush here so we see !isAttacking immediately)
+        if (this.isPlayer && this.attackInputBuffered && !this.isAttacking) {
+            this.tryFlushBufferedAttack();
+        }
         if (this.isPlayer && this.isBlocking && this.entity) {
             const statusEffects = this.entity.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) this.stopBlocking();
@@ -217,6 +221,15 @@ class Combat {
         this.currentAttackAoeRadius = result.aoeRadius != null ? result.aoeRadius : 0;
     }
 
+    /** Flush buffered attack the same frame attack ends (called from game loop for responsive chaining). */
+    tryFlushBufferedAttack() {
+        if (!this.isPlayer || !this.attackInputBuffered || this.isAttacking) return false;
+        const b = this.attackInputBuffered;
+        this.attackInputBuffered = null;
+        this.attack(b.targetX, b.targetY, b.chargeDuration, b.options);
+        return true;
+    }
+
     _clearAttackState() {
         this.currentAttackIsCircular = false;
         this.currentAttackIsThrust = false;
@@ -254,10 +267,8 @@ class Combat {
             const durationMs = result.duration >= 100 ? result.duration : Math.round((result.duration || 0) * 1000);
             const combatRef = this;
             setTimeout(() => {
-                combatRef._clearAttackState();
-                // Do not call endAttack() here for player: attack is already ended in WeaponAttackHandler.update()
-                // when attackTimer >= attackDuration. Calling it here would clear hitEnemies of a *buffered*
-                // attack that may have already started, causing the same enemy to be hit twice (double hitbox).
+                // Only clear when not attacking, so an old timer cannot wipe the current attack's state (e.g. stab thrust → small arc when 2nd slash's timer fires mid-stab)
+                if (!combatRef.isAttacking) combatRef._clearAttackState();
                 if (combatRef.isPlayer && combatRef.blockInputBuffered) {
                     combatRef.blockInputBuffered = false;
                     if (combatRef.blockInputBufferedFacingAngle != null && combatRef.entity) {

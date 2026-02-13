@@ -351,7 +351,14 @@
                 if (this.attackBuffer > 0) this.attackBuffer = Math.max(0, this.attackBuffer - deltaTime);
                 if (this.comboStage > 0 && this.attackTimer <= 0) {
                     this.comboTimer -= deltaTime;
-                    if (this.comboTimer <= 0) this.resetCombo();
+                    if (this.comboTimer <= 0) {
+                        // Don't reset combo while player has a buffered attack so the 3rd hit (stab) can still resolve
+                        if (entity && typeof entity.getComponent === 'function' && typeof Combat !== 'undefined') {
+                            const combat = entity.getComponent(Combat);
+                            if (combat && combat.attackInputBuffered) return;
+                        }
+                        this.resetCombo();
+                    }
                 }
                 return;
             }

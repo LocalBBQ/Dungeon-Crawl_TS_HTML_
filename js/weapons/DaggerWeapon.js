@@ -10,6 +10,7 @@
             this.baseRange = p.baseRange;
             this.baseDamage = p.baseDamage;
             this.baseArcDegrees = p.baseArcDegrees;
+            this.attackSpeed = p.attackSpeed ?? 1;
             this.cooldown = p.cooldown;
             this.comboConfig = p.comboConfig;
             this.comboWindow = p.comboWindow;
@@ -62,12 +63,15 @@
         }
     }
 
+    // Balancing: attackSpeed < 1 = slower swings, cooldown = seconds between attacks, cooldownMultiplier = scale cooldown
     const config = {
         name: 'dagger',
         baseRange: 40,
         baseDamage: 5,
         baseArcDegrees: 90,
         cooldown: 0.25,
+        // attackSpeed: 0.85,
+        // cooldownMultiplier: 1.2,
         comboWindow: 1.2,
         baseStunBuildup: 18,
         weaponLength: 35,

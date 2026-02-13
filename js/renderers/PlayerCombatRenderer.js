@@ -309,12 +309,14 @@ const PlayerCombatRenderer = {
             ctx.strokeRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
             const hw = bladeWidthAtGuard / 2;
             const tipWidth = hw * 0.65;
+            const tipLength = tipWidth * 1.8;
             ctx.fillStyle = '#a8a8b0';
             ctx.strokeStyle = '#3d3d42';
             ctx.beginPath();
             ctx.moveTo(0, -hw);
             ctx.lineTo(0, hw);
             ctx.lineTo(swordLength, tipWidth);
+            ctx.lineTo(swordLength + tipLength, 0);
             ctx.lineTo(swordLength, -tipWidth);
             ctx.closePath();
             ctx.fill();
@@ -323,7 +325,7 @@ const PlayerCombatRenderer = {
             ctx.lineWidth = lw * 0.6;
             ctx.beginPath();
             ctx.moveTo(hw * 0.5, 0);
-            ctx.lineTo(swordLength, 0);
+            ctx.lineTo(swordLength + tipLength, 0);
             ctx.stroke();
         }
 
@@ -457,12 +459,14 @@ const PlayerCombatRenderer = {
             ctx.strokeRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
             const hw = bladeWidthAtGuard / 2;
             const tipWidth = hw * 0.65;
+            const tipLength = tipWidth * 1.8;
             ctx.fillStyle = '#a8a8b0';
             ctx.strokeStyle = '#3d3d42';
             ctx.beginPath();
             ctx.moveTo(0, -hw);
             ctx.lineTo(0, hw);
             ctx.lineTo(swordLength, tipWidth);
+            ctx.lineTo(swordLength + tipLength, 0);
             ctx.lineTo(swordLength, -tipWidth);
             ctx.closePath();
             ctx.fill();
@@ -471,7 +475,7 @@ const PlayerCombatRenderer = {
             ctx.lineWidth = lw * 0.6;
             ctx.beginPath();
             ctx.moveTo(hw * 0.5, 0);
-            ctx.lineTo(swordLength, 0);
+            ctx.lineTo(swordLength + tipLength, 0);
             ctx.stroke();
         }
 

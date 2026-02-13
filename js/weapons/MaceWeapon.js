@@ -1,4 +1,5 @@
 // Mace: two-handed, big sweeps back and forth, heavy knockback
+// Balancing: attackSpeed < 1 = slower swings, cooldown = seconds between attacks, cooldownMultiplier = scale cooldown
 (function () {
     const config = {
         name: 'mace',
@@ -7,7 +8,9 @@
         baseDamage: 22,
         baseArcDegrees: 200,
         cooldown: 0.35,
-        comboWindow: 2.0,
+        attackSpeed: 0.4,      // optional: 15% slower swing
+        cooldownMultiplier: 2, // optional: 20% longer between attacks
+        comboWindow: 1.0,
         knockback: { force: 1200 },
         weaponLength: 71,
         stages: [

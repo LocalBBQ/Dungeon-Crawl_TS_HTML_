@@ -694,7 +694,7 @@ class Game {
                 }
             } else if (this.screenManager.isScreen('death')) {
                 if (this.screenManager.checkButtonClick(x, y, 'death')) {
-                    this.restartGame();
+                    this.returnToSanctuaryOnDeath();
                 }
             } else if (this.screenManager.isScreen('pause')) {
                 const pauseBtn = this.screenManager.getPauseButtonAt(x, y);
@@ -759,7 +759,7 @@ class Game {
                     this.screenManager.selectedStartLevel = 0;
                     this.startGame();
                 } else if (this.screenManager.isScreen('death')) {
-                    this.restartGame();
+                    this.returnToSanctuaryOnDeath();
                 } else if (this.screenManager.isScreen('hub') && this.boardOpen) {
                     this.boardOpen = false;
                     this.screenManager.selectedStartLevel = this.hubSelectedLevel;
@@ -972,6 +972,12 @@ class Game {
         this.initializeEntities();
         this.screenManager.setScreen('playing');
         this.updateUIVisibility(true);
+    }
+
+    /** On death: return to Sanctuary (hub) with full health; player can then select level again. */
+    returnToSanctuaryOnDeath() {
+        this.screenManager.selectedStartLevel = 0;
+        this.startGame();
     }
     
     updateUIVisibility(visible) {
@@ -1238,6 +1244,11 @@ class Game {
         
         // Handle player attacks
         if (player) {
+            const combat = player.getComponent(Combat);
+            // Flush buffered attack same frame attack ends (no setTimeout delay)
+            if (combat && combat.isPlayer && !combat.isAttacking && combat.attackInputBuffered) {
+                combat.tryFlushBufferedAttack();
+            }
             const enemyManager = this.systems.get('enemies');
             
             // Check if player attacks hit any enemies

@@ -9,6 +9,7 @@
             this.baseRange = p.baseRange;
             this.baseDamage = p.baseDamage;
             this.baseArcDegrees = p.baseArcDegrees;
+            this.attackSpeed = p.attackSpeed ?? 1;
             this.cooldown = p.cooldown;
             this.comboConfig = p.comboConfig;
             this.comboWindow = p.comboWindow;
@@ -63,21 +64,24 @@
         }
     }
 
+    // Balancing: attackSpeed < 1 = slower swings, cooldown = seconds between attacks, cooldownMultiplier = scale cooldown
     const config = {
         name: 'greatsword',
         twoHanded: true,
-        baseRange: 100,
+        baseRange: 120,
         baseDamage: 20,
         baseArcDegrees: 100,
         cooldown: 0.4,
-        comboWindow: 2.0,
+        attackSpeed: 0.5,
+        cooldownMultiplier: .5,
+        comboWindow: 1.5,
         baseStunBuildup: 35,
-        weaponLength: 48,
+        weaponLength: 52,
         maxComboStage: 2,
         stages: [
-            { name: 'slash1', arcDegrees: 120, duration: 480, staminaCost: 16, range: 92, damageMultiplier: 1.0, animationKey: 'melee', stunBuildup: 35 },
-            { name: 'slash2', arcDegrees: 110, duration: 520, staminaCost: 18, range: 96, damageMultiplier: 1.4, animationKey: 'melee2', stunBuildup: 42, reverseSweep: true },
-            { name: 'spin360', arcDegrees: 360, duration: 1000, staminaCost: 24, range: 110, damageMultiplier: 1.8, animationKey: 'meleeSpin', stunBuildup: 50 }
+            { name: 'slash1', arcDegrees: 120, duration: 480, staminaCost: 16, range: 100, damageMultiplier: 1.0, animationKey: 'melee', stunBuildup: 35 },
+            { name: 'slash2', arcDegrees: 110, duration: 520, staminaCost: 18, range: 100, damageMultiplier: 1.4, animationKey: 'melee2', stunBuildup: 42, reverseSweep: true },
+            { name: 'spin360', arcDegrees: 360, duration: 1000, staminaCost: 24, range: 120, damageMultiplier: 1.8, animationKey: 'meleeSpin', stunBuildup: 50 }
         ],
         chargeAttack: {
             minChargeTime: 0.5,
@@ -92,7 +96,7 @@
             arcDegrees: 24,
             duration: 320,
             staminaCost: 14,
-            range: 115,
+            range: 140,
             damageMultiplier: 1.3,
             animationKey: 'melee2',
             thrust: true,

@@ -9,6 +9,7 @@
             this.baseRange = p.baseRange;
             this.baseDamage = p.baseDamage;
             this.baseArcDegrees = p.baseArcDegrees;
+            this.attackSpeed = p.attackSpeed ?? 1;
             this.cooldown = p.cooldown;
             this.comboConfig = p.comboConfig;
             this.comboWindow = p.comboWindow;
@@ -63,6 +64,7 @@
         }
     }
 
+    // Balancing: attackSpeed < 1 = slower (e.g. reload), cooldown = seconds between shots, cooldownMultiplier = scale cooldown
     const config = {
         name: 'crossbow',
         twoHanded: true,
@@ -70,6 +72,8 @@
         baseDamage: 22,
         baseArcDegrees: 0,
         cooldown: 0,
+        // attackSpeed: 0.85,
+        // cooldownMultiplier: 1.2,
         comboWindow: 0,
         stages: []
     };

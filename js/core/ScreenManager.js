@@ -395,7 +395,7 @@ class ScreenManager {
 
         this.ctx.fillStyle = '#a08060';
         this.ctx.font = '500 14px Cinzel, Georgia, serif';
-        this.ctx.fillText('Press SPACE or click to try again', width / 2, height / 2 - 18);
+        this.ctx.fillText('Press SPACE or click to return to Sanctuary', width / 2, height / 2 - 18);
 
         const buttonX = width / 2;
         const buttonY = height / 2 + 48;
@@ -413,7 +413,7 @@ class ScreenManager {
 
         this.ctx.fillStyle = '#e8dcc8';
         this.ctx.font = '600 15px Cinzel, Georgia, serif';
-        this.ctx.fillText('Try again', buttonX, buttonY);
+        this.ctx.fillText('Return to Sanctuary', buttonX, buttonY);
     }
 
     checkButtonClick(x, y, screen) {
