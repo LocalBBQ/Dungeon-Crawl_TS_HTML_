@@ -27,10 +27,7 @@ const GameConfig = {
         maxHealth: 100,
         maxStamina: 100,
         staminaRegen: 6.75, // stamina per second (scaled by deltaTime)
-        attackRange: 80,
-        attackDamage: 15,
-        attackArcDegrees: 60,
-        attackCooldown: 0.45, // seconds between attacks (weapon combo durations control actual swing length)
+        // Melee attack range, damage, arc and cooldown come from the equipped weapon (see weapons/*.js), not from here
         color: '#8b8b9a', // steel (fallback when knight sprites not loaded)
         defaultWeapon: 'swordAndShield',
         sprint: {

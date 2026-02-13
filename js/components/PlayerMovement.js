@@ -61,8 +61,34 @@ class PlayerMovement extends Movement {
                 this.isAttackDashing = false;
                 this.attackDashTimer = 0;
                 this.attackDashSpeedCurrent = this.attackDashSpeed;
-                this.velocityX = 0;
-                this.velocityY = 0;
+                // During thrust, restore movement from input so player can keep moving
+                const combat = this.entity.getComponent(Combat);
+                const isThrust = combat && combat.isPlayer && combat.currentAttackIsThrust;
+                if (isThrust && systems) {
+                    const inputSystem = systems.get('input');
+                    if (inputSystem) {
+                        let moveX = 0;
+                        let moveY = 0;
+                        if (inputSystem.isKeyPressed('w')) moveY -= 1;
+                        if (inputSystem.isKeyPressed('s')) moveY += 1;
+                        if (inputSystem.isKeyPressed('a')) moveX -= 1;
+                        if (inputSystem.isKeyPressed('d')) moveX += 1;
+                        if (moveX !== 0 || moveY !== 0) {
+                            const normalized = Utils.normalize(moveX, moveY);
+                            this.velocityX = normalized.x * this.speed;
+                            this.velocityY = normalized.y * this.speed;
+                        } else {
+                            this.velocityX = 0;
+                            this.velocityY = 0;
+                        }
+                    } else {
+                        this.velocityX = 0;
+                        this.velocityY = 0;
+                    }
+                } else {
+                    this.velocityX = 0;
+                    this.velocityY = 0;
+                }
             }
             
             // Apply movement for attack dash

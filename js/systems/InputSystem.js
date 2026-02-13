@@ -22,8 +22,14 @@ class InputSystem {
 
     setupEventListeners() {
         window.addEventListener('keydown', (e) => {
-            // Prevent Ctrl from triggering Windows/browser shortcuts (e.g. Ctrl+click, Ctrl+S)
-            if (e.ctrlKey || e.key === 'Control') {
+            // Block Ctrl/Cmd + key so browser shortcuts don't fire (e.g. Ctrl+S, Ctrl+W close tab)
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            const isModifierKey = e.key === 'Control' || e.key === 'Meta';
+            if (isCtrlOrCmd || isModifierKey) {
+                e.preventDefault();
+            }
+            // Explicitly block Ctrl+W / Cmd+W (close tab) in case browser handles it early
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'W')) {
                 e.preventDefault();
             }
             this.keys[e.key.toLowerCase()] = true;
@@ -31,7 +37,11 @@ class InputSystem {
         }, { capture: true });
 
         window.addEventListener('keyup', (e) => {
-            if (e.ctrlKey || e.key === 'Control') {
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            if (isCtrlOrCmd || e.key === 'Control' || e.key === 'Meta') {
+                e.preventDefault();
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'W')) {
                 e.preventDefault();
             }
             this.keys[e.key.toLowerCase()] = false;

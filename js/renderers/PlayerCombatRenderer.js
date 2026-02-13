@@ -27,11 +27,6 @@ const PlayerCombatRenderer = {
     easeOutCubic(t) {
         return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
     },
-    /** Cubic ease-in-out: slow start, fast middle (impact), slow end. */
-    easeInOutCubic(t) {
-        const x = Math.max(0, Math.min(1, t));
-        return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    },
     /** Strong ease-out (power 4): snappier impact out of wind-up. */
     easeOutQuart(t) {
         return 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 4);
@@ -101,13 +96,6 @@ const PlayerCombatRenderer = {
         const thrustPhase = (raw - thrustAnticipation) / (1 - thrustAnticipation);
         return thrustLunge * this.easeOutQuint(thrustPhase);
     },
-    getThrustWeaponSweep(combat) {
-        const raw = this.getRawProgress(combat);
-        const thrustAnticipation = this.v(combat, 'THRUST_ANTICIPATION_RATIO');
-        if (raw <= thrustAnticipation) return 0;
-        const thrustPhase = (raw - thrustAnticipation) / (1 - thrustAnticipation);
-        return Math.min(1, this.easeOutQuint(thrustPhase));
-    },
 
     drawAttackArc(ctx, screenX, screenY, combat, movement, camera, options) {
         if (!combat || !combat.isAttacking) return;
@@ -152,7 +140,7 @@ const PlayerCombatRenderer = {
             ctx.beginPath();
             ctx.arc(screenX, screenY, currentRadius - 2 / camera.zoom, 0, Math.PI * 2);
             ctx.stroke();
-        } else if (combat.currentAttackIsThrust || (combat.weapon && combat.weapon.name === 'swordAndShield' && (combat.currentAttackAnimationKey || '') === 'melee2')) {
+        } else if (combat.currentAttackIsThrust) {
             // Thrust: rectangle thrust forward from player (stab)
             const thrustLength = range * sweepProgress;
             const thrustHalfWidth = ((combat.currentAttackThrustWidth || 40) * camera.zoom) / 2;
@@ -218,44 +206,36 @@ const PlayerCombatRenderer = {
     },
 
     /**
-     * part: 'handle' = pommel + grip only (draw under helmet); 'blade' = guard + blade only (draw over); 'all' = full sword (default).
+     * Returns grip position and sword angle for the current combat state (used by drawSword).
+     * @returns {{ gripX: number, gripY: number, swordAngle: number, facingAngle: number, gripOrbitRadius: number } | null}
      */
-    drawSword(ctx, screenX, screenY, transform, movement, combat, camera, options = {}) {
-        const part = options.part || 'all';
-        if (!movement || !combat || !transform) return;
-        const twoHanded = combat.weapon && combat.weapon.twoHanded;
-        const lengthMult = twoHanded ? 1.55 : 1;
-        const widthMult = twoHanded ? 1.4 : 1;
-        const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange || 100) * 0.48;
-        const swordLength = baseLength * camera.zoom * lengthMult;
-        // Thickness in fixed pixels so it stays constant when camera zooms
-        const bladeWidthAtGuard = 7 * widthMult;
+    getSwordGrip(screenX, screenY, transform, movement, combat, camera) {
+        if (!movement || !combat || !transform) return null;
         const sideOffset = (transform.width / 2 + 4) * camera.zoom;
-        /** Grip orbits around player (head/body) during arc attacks so the handle glides realistically. */
         const gripOrbitRadius = sideOffset;
         const facingAngle = movement.facingAngle;
         let gripX = screenX + Math.cos(facingAngle + Math.PI / 2) * gripOrbitRadius;
         let gripY = screenY + Math.sin(facingAngle + Math.PI / 2) * gripOrbitRadius;
         const animKey = combat.currentAttackAnimationKey || 'melee';
-        const isMeleeSpinWithPlayer = animKey === 'meleeSpin'; // weapon fastened to player; whole body spins via RenderSystem
-        const isThrust = combat.currentAttackIsThrust === true || (combat.weapon && combat.weapon.name === 'swordAndShield' && animKey === 'melee2');
+        const isMeleeSpinWithPlayer = animKey === 'meleeSpin';
+        const isThrust = combat.currentAttackIsThrust === true;
         let swordAngle = facingAngle;
         if (combat.isAttacking && combat.attackDuration > 0 && !isMeleeSpinWithPlayer) {
             if (isThrust) {
                 swordAngle = facingAngle;
                 const thrustOffset = this.getThrustGripOffset(combat);
-                // Stab comes from center of player (no side offset)
                 gripX = screenX + thrustOffset * Math.cos(facingAngle) * camera.zoom;
                 gripY = screenY + thrustOffset * Math.sin(facingAngle) * camera.zoom;
             } else {
                 const weaponSweep = this.getWeaponSweepProgress(combat);
                 const pullBack = this.getAnticipationPullBack(combat);
-                const halfArc = (combat.attackArc || Math.PI / 3) / 2;
-                const attackArc = combat.attackArc || Math.PI / 3;
+                const defaultArc = combat.weapon ? Utils.degToRad(combat.weapon.baseArcDegrees) : Math.PI / 3;
+                const halfArc = ((combat.attackArc ?? defaultArc) / 2);
+                const attackArc = combat.attackArc ?? defaultArc;
                 let gripAngle;
                 if (combat.currentAttackIsCircular) {
                     swordAngle = facingAngle + pullBack + Math.min(1, weaponSweep) * Math.PI * 2;
-                    gripAngle = facingAngle + pullBack + Math.min(1, weaponSweep) * Math.PI * 2;
+                    gripAngle = swordAngle;
                 } else if (combat.currentAttackReverseSweep) {
                     swordAngle = facingAngle + halfArc - pullBack - weaponSweep * attackArc;
                     gripAngle = swordAngle;
@@ -270,6 +250,25 @@ const PlayerCombatRenderer = {
         if (isMeleeSpinWithPlayer) {
             swordAngle = facingAngle + Math.PI / 2;
         }
+        return { gripX, gripY, swordAngle, facingAngle, gripOrbitRadius };
+    },
+
+    /**
+     * part: 'handle' = pommel + grip only (draw under helmet); 'blade' = guard + blade only (draw over); 'all' = full sword (default).
+     */
+    drawSword(ctx, screenX, screenY, transform, movement, combat, camera, options = {}) {
+        const part = options.part || 'all';
+        if (!movement || !combat || !transform) return;
+        const grip = this.getSwordGrip(screenX, screenY, transform, movement, combat, camera);
+        if (!grip) return;
+        const { gripX, gripY, swordAngle } = grip;
+        const twoHanded = combat.weapon && combat.weapon.twoHanded;
+        const lengthMult = twoHanded ? 1.55 : 1;
+        const widthMult = twoHanded ? 1.4 : 1;
+        const defaultRange = combat.weapon ? combat.weapon.baseRange : 100;
+        const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange ?? defaultRange) * 0.48;
+        const swordLength = baseLength * camera.zoom * lengthMult;
+        const bladeWidthAtGuard = 7 * widthMult;
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(swordAngle);
@@ -328,7 +327,8 @@ const PlayerCombatRenderer = {
     drawMace(ctx, screenX, screenY, transform, movement, combat, camera) {
         if (!movement || !combat || !transform) return;
         const zoom = camera.zoom;
-        const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange || 100) * 0.5;
+        const defaultRange = combat.weapon ? combat.weapon.baseRange : 100;
+        const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange ?? defaultRange) * 0.5;
         const maceLength = baseLength * zoom * 1.5;
         const sideOffset = (transform.width / 2 + 4) * zoom;
         const gripX = screenX + Math.cos(movement.facingAngle + Math.PI / 2) * sideOffset;
@@ -339,11 +339,12 @@ const PlayerCombatRenderer = {
         if (combat.isAttacking && combat.attackDuration > 0 && !isMeleeSpinWithPlayer) {
             const weaponSweep = this.getWeaponSweepProgress(combat);
             const pullBack = this.getAnticipationPullBack(combat);
+            const defaultArc = combat.weapon ? Utils.degToRad(combat.weapon.baseArcDegrees) : Math.PI / 3;
+            const attackArc = combat.attackArc ?? defaultArc;
+            const halfArc = attackArc / 2;
             if (combat.currentAttackIsCircular) {
                 maceAngle = movement.facingAngle + pullBack + Math.min(1, weaponSweep) * Math.PI * 2;
             } else {
-                const halfArc = (combat.attackArc || Math.PI / 3) / 2;
-                const attackArc = combat.attackArc || Math.PI / 3;
                 if (combat.currentAttackReverseSweep) {
                     maceAngle = movement.facingAngle + halfArc - pullBack - weaponSweep * attackArc;
                 } else {

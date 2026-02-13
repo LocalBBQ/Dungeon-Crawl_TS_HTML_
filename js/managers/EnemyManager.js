@@ -400,7 +400,7 @@ class EnemyManager {
                 if (is360Attack) {
                     // 360 attack hits everything in range, no arc check needed
                     hitEnemy = true;
-                } else if (combat.currentAttackIsThrust || (combat.isPlayer && combat.weapon && combat.weapon.name === 'swordAndShield' && combat.currentAttackAnimationKey === 'melee2')) {
+                } else if (combat.currentAttackIsThrust) {
                     // Thrust: rectangle thrust forward from player (e.g. stab)
                     const facingAngle = movement ? movement.facingAngle : 0;
                     const thrustLength = combat.attackRange + rangeSensitivity;

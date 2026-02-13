@@ -36,12 +36,10 @@ class Combat {
             }
         }
         
-        // Legacy properties for compatibility (will be removed)
+        // Legacy properties for compatibility (attackRange/Damage/Arc read by hit detection and renderers)
         this.attackRange = attackRange;
         this.attackDamage = attackDamage;
         this.attackArc = attackArc;
-        this._cooldown = 0;
-        this.maxCooldown = cooldown;
         this.windUpTime = windUpTime;
         
         // Blocking state (player only); block config comes from weapon.getBlockConfig()
@@ -57,10 +55,22 @@ class Combat {
         this._currentAttackStunBuildup = null;
     }
     
-    // Set weapon for player
+    // Set weapon for player; sync displayed range/damage/arc from weapon (single source of truth)
     setWeapon(weapon) {
         if (this.isPlayer && this.playerAttack) {
             this.playerAttack.setWeapon(weapon);
+            if (weapon) {
+                const first = weapon.getComboStageProperties ? weapon.getComboStageProperties(1) : null;
+                if (first) {
+                    this.attackRange = first.range;
+                    this.attackDamage = first.damage;
+                    this.attackArc = first.arc;
+                } else {
+                    this.attackRange = weapon.baseRange;
+                    this.attackDamage = weapon.baseDamage;
+                    this.attackArc = typeof weapon.baseArcDegrees === 'number' ? Utils.degToRad(weapon.baseArcDegrees) : this.attackArc;
+                }
+            }
         }
     }
     
@@ -204,7 +214,7 @@ class Combat {
 
     attack(targetX = null, targetY = null, chargeDuration = 0, options = {}) {
         if (this.isPlayer && this.playerAttack) {
-            // Buffer one attack input while an attack is playing; it will fire when current attack ends
+            // Buffer one combo input during attack; fire when current attack ends so combos chain
             if (this.isAttacking) {
                 this.attackInputBuffered = { targetX, targetY, chargeDuration, options: options || {} };
                 return false;
@@ -247,7 +257,8 @@ class Combat {
                     }
                 }
                 
-                // Set timeout to end attack
+                // Set timeout to end attack (duration from weapon is in ms; ensure we never use seconds by mistake)
+                const durationMs = attackData.duration >= 100 ? attackData.duration : Math.round(attackData.duration * 1000);
                 const combatRef = this;
                 setTimeout(() => {
                     combatRef.currentAttackIsCircular = false;
@@ -276,7 +287,7 @@ class Combat {
                         combatRef.attackInputBuffered = null;
                         combatRef.attack(b.targetX, b.targetY, b.chargeDuration, b.options);
                     }
-                }, attackData.duration);
+                }, durationMs);
                 
                 return attackData;
             }

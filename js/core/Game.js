@@ -609,6 +609,14 @@ class Game {
             }
         }
         
+        // Player melee stats come only from the equipped weapon (no generic base values)
+        const weapon = Weapons[this.equippedWeaponKey] || Weapons.swordAndShield;
+        const firstStage = weapon.getComboStageProperties ? weapon.getComboStageProperties(1) : null;
+        const initialRange = firstStage ? firstStage.range : weapon.baseRange;
+        const initialDamage = firstStage ? firstStage.damage : weapon.baseDamage;
+        const initialArc = firstStage ? firstStage.arc : Utils.degToRad(weapon.baseArcDegrees);
+        const initialCooldown = weapon.cooldown != null ? weapon.cooldown : 0.25;
+
         player
             .addComponent(new Transform(x, y, config.width, config.height))
             .addComponent(new Health(config.maxHealth))
@@ -616,7 +624,7 @@ class Game {
             .addComponent(new Stamina(config.maxStamina, config.staminaRegen))
             .addComponent(new PlayerHealing())
             .addComponent(new PlayerMovement(config.speed))
-            .addComponent(new Combat(config.attackRange, config.attackDamage, Utils.degToRad(config.attackArcDegrees), config.attackCooldown, 0, true, Weapons[this.equippedWeaponKey] || Weapons.swordAndShield)) // isPlayer=true, single equipped weapon (switch in sanctuary)
+            .addComponent(new Combat(initialRange, initialDamage, initialArc, initialCooldown, 0, true, weapon))
             .addComponent(new Renderable('player', { color: config.color }))
             .addComponent(new Sprite(defaultSheetKey, config.width * 3, config.height * 3))
             .addComponent(new Animation(animationConfig));

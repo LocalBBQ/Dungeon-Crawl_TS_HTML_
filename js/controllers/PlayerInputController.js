@@ -11,6 +11,9 @@ class PlayerInputController {
         this.isChargingAttack = false;
         this.chargeTargetX = 0;
         this.chargeTargetY = 0;
+        /** One release per press: ignore duplicate/delayed mouseup that would send 0-charge (slash). */
+        this.attackPressId = 0;
+        this.processedReleaseForPressId = -1;
 
         this.bound = false;
     }
@@ -60,22 +63,27 @@ class PlayerInputController {
             const player = this.player;
             if (!player || !cameraSystem) return;
 
-            const transform = player.getComponent(Transform);
             const combat = player.getComponent(Combat);
             const worldPos = cameraSystem.screenToWorld(data.x, data.y);
             
             // Can't act while stunned
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
-            // Can't charge while blocking, already attacking, or healing
+            // Can't charge while blocking or healing
             const healing = player.getComponent(PlayerHealing);
             if (healing && healing.isHealing) return;
-            if (combat && (combat.isBlocking || combat.isAttacking)) {
+            if (combat && combat.isBlocking) return;
+            // During an attack: register a new press so the next release is accepted and can buffer; still record charge start so release can compute charge duration
+            if (combat && combat.isAttacking) {
+                this.attackPressId = (this.attackPressId || 0) + 1;
+                this.chargeStartTime = performance.now();
                 return;
             }
             
-            // Start charging
+            // Start charging (increment press id so we accept exactly one release for this press).
+            this.attackPressId = (this.attackPressId || 0) + 1;
             this.isChargingAttack = true;
+            this.chargeStartTime = performance.now();
             this.chargeTargetX = worldPos.x;
             this.chargeTargetY = worldPos.y;
         });
@@ -113,7 +121,6 @@ class PlayerInputController {
                             worldPos.x, worldPos.y
                         );
                     }
-                    const stamina = player.getComponent(Stamina);
                     if (stamina && stamina.currentStamina >= blockConfig.shieldBash.staminaCost) {
                         combat.shieldBash(this.systems, worldPos.x, worldPos.y);
                     }
@@ -121,8 +128,18 @@ class PlayerInputController {
                 return;
             }
             
-            // If we were charging, use the charge duration
-            const chargeDuration = this.isChargingAttack ? data.chargeDuration : 0;
+            // Ignore duplicate release (e.g. canvas + window both emit INPUT_MOUSEUP for one release)
+            if (this.processedReleaseForPressId === this.attackPressId) return;
+            
+            // Use payload charge when present; else if we were charging use our own charge duration (second event often has payload 0)
+            let chargeDuration = (data.chargeDuration != null && data.chargeDuration > 0)
+                ? data.chargeDuration
+                : (this.isChargingAttack ? data.chargeDuration : 0);
+            const hadChargeStartTime = this.chargeStartTime != null && this.chargeStartTime > 0;
+            if (chargeDuration === 0 && hadChargeStartTime) {
+                chargeDuration = (performance.now() - this.chargeStartTime) / 1000;
+            }
+            this.chargeStartTime = 0;
             this.isChargingAttack = false;
             
             // Face the cursor direction
@@ -166,7 +183,21 @@ class PlayerInputController {
                     useDashAttack ? 0 : chargeDuration,
                     useDashAttack ? { useDashAttack: true } : {}
                 );
-                if (stamina.currentStamina < staminaCost) return;
+                if (stamina.currentStamina < staminaCost) {
+                    return;
+                }
+
+                // One release per press: only skip duplicate 0-charge (tap); allow charge releases through so they never fail.
+                if (chargeDuration === 0 && this.attackPressId === this.processedReleaseForPressId) {
+                    return;
+                }
+                this.processedReleaseForPressId = this.attackPressId;
+
+                const minChargeForStab = (weapon.chargeAttack && weapon.chargeAttack.minChargeTime) ? weapon.chargeAttack.minChargeTime - 0.05 : 0.5;
+                // Don't send 0-charge attack while a thrust (stab) is playing - backup guard
+                if (chargeDuration === 0 && combat.isAttacking && combat.currentAttackIsThrust) {
+                    return;
+                }
 
                 if (useDashAttack) {
                     const dashProps = weapon.getDashAttackProperties();

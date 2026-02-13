@@ -373,9 +373,6 @@ class ScreenManager {
     }
 
     renderHubBoardOverlay(selectedLevel) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ScreenManager.js:renderHubBoardOverlay',message:'renderHubBoardOverlay entered',data:{selectedLevel},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         const width = this.canvas.width;
         const height = this.canvas.height;
@@ -753,9 +750,6 @@ class ScreenManager {
     }
 
     render(settings) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ScreenManager.js:render',message:'render entered',data:{currentScreen:this.currentScreen},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-        // #endregion
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         if (this.currentScreen === 'title') {
             this.renderTitleScreen();
