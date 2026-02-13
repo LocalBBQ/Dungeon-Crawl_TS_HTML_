@@ -92,5 +92,6 @@
         }
     };
 
+    window.DaggerWeapon = DaggerWeapon;
     window.DaggerWeaponInstance = DaggerWeapon.fromConfig(config);
 })();

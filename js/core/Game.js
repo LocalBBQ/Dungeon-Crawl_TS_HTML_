@@ -39,6 +39,8 @@ class Game {
             this.screenBeforePause = null; // 'playing' | 'hub' when in pause/settings, for resume
             // One weapon equipped at a time; switch only in sanctuary (hub board overlay)
             this.equippedWeaponKey = (GameConfig.player && GameConfig.player.defaultWeapon) ? GameConfig.player.defaultWeapon : 'swordAndShield';
+            // Most recent enemy hit by player (for tooltip)
+            this.lastHitEnemyId = null;
 
             // Game-wide settings (toggled from pause/settings screen)
             this.settings = {
@@ -806,12 +808,16 @@ class Game {
                     data.isPlayerDamage,
                     data.isBlocked
                 );
+                if (data.isPlayerDamage && data.entityId) {
+                    this.lastHitEnemyId = data.entityId;
+                }
             });
         }
 
     }
 
     clearAllEntitiesAndProjectiles() {
+        this.lastHitEnemyId = null;
         // Clear all entities
         const allEntities = this.entities.getAll();
         for (const entity of allEntities) {
@@ -1330,6 +1336,33 @@ class Game {
         }
     }
 
+    /** Get enemy entity at screen position (for hover tooltip). Returns null if none. */
+    getEnemyAtScreenPoint(screenX, screenY) {
+        const cameraSystem = this.systems && this.systems.get('camera');
+        if (!cameraSystem) return null;
+        const { x: wx, y: wy } = cameraSystem.screenToWorld(screenX, screenY);
+        for (const entity of this.entities.getAll()) {
+            const renderable = entity.getComponent(Renderable);
+            const health = entity.getComponent(Health);
+            if (!renderable || renderable.type !== 'enemy' || !health || health.isDead) continue;
+            const transform = entity.getComponent(Transform);
+            if (!transform) continue;
+            if (wx >= transform.left && wx <= transform.right && wy >= transform.top && wy <= transform.bottom) {
+                return entity;
+            }
+        }
+        return null;
+    }
+
+    /** Format enemy type key as display name (e.g. goblinChieftain -> Goblin Chieftain). */
+    getEnemyDisplayName(enemyTypeKey) {
+        if (!enemyTypeKey) return 'Enemy';
+        const withSpaces = enemyTypeKey
+            .replace(/([a-z])([A-Z])/g, '$1 $2')
+            .replace(/_/g, ' ');
+        return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1);
+    }
+
     render() {
         try {
             if (this.screenManager.isScreen('title') || this.screenManager.isScreen('death')) {
@@ -1390,11 +1423,9 @@ class Game {
 
             // Game world and entities (draw for both 'playing' and 'pause' so pause shows over frozen frame)
             const currentLevel = this.systems.get('enemies') ? this.systems.get('enemies').getCurrentLevel() : 1;
-            const player = this.entities.get('player');
-            const playerY = player ? (player.getComponent(Transform) || {}).y : null;
             try {
                 renderSystem.clear();
-                renderSystem.renderWorld(cameraSystem, obstacleManager, currentLevel, null, null, playerY);
+                renderSystem.renderWorld(cameraSystem, obstacleManager, currentLevel, null, null);
                 if (this.portal) {
                     renderSystem.renderPortal(this.portal, cameraSystem);
                     if (this.playerNearPortal) {
@@ -1405,8 +1436,7 @@ class Game {
                 if (entities.length === 0) {
                     console.warn('No entities to render');
                 }
-                renderSystem.renderEntities(entities, cameraSystem);
-                renderSystem.renderObstaclesInFront(cameraSystem, obstacleManager, currentLevel, playerY);
+                renderSystem.renderEntities(entities, cameraSystem, obstacleManager, currentLevel);
                 const projectileManager = this.systems.get('projectiles');
                 if (projectileManager) {
                     projectileManager.render(this.ctx, cameraSystem);
@@ -1431,6 +1461,26 @@ class Game {
                     const w = this._currentWorldWidth != null ? this._currentWorldWidth : worldConfig.width;
                     const h = this._currentWorldHeight != null ? this._currentWorldHeight : worldConfig.height;
                     renderSystem.renderMinimap(cameraSystem, this.entities, w, h, this.portal, currentLevel);
+                }
+                if (this.screenManager.isScreen('playing')) {
+                    const inputSystem = this.systems.get('input');
+                    const hoveredEnemy = inputSystem ? this.getEnemyAtScreenPoint(inputSystem.mouseX, inputSystem.mouseY) : null;
+                    const lastHitEntity = this.lastHitEnemyId ? this.entities.get(this.lastHitEnemyId) : null;
+                    const lastHitValid = lastHitEntity && lastHitEntity.getComponent(Renderable)?.type === 'enemy' && lastHitEntity.getComponent(Health) && !lastHitEntity.getComponent(Health).isDead;
+                    const tooltipEnemy = hoveredEnemy || (lastHitValid ? lastHitEntity : null);
+                    if (tooltipEnemy) {
+                        const ai = tooltipEnemy.getComponent(AI);
+                        const statusEffects = tooltipEnemy.getComponent(StatusEffects);
+                        const health = tooltipEnemy.getComponent(Health);
+                        const displayName = this.getEnemyDisplayName(ai ? ai.enemyType : null);
+                        const packModifiers = GameConfig.packModifiers || {};
+                        const rawMod = (statusEffects && statusEffects.packModifierName) || (ai && ai.packModifierName);
+                        const modifierName = (rawMod && typeof rawMod === 'string' && rawMod.trim() && packModifiers[rawMod.trim()])
+                            ? rawMod.trim() : null;
+                        const modDef = modifierName ? packModifiers[modifierName] : null;
+                        const modifierDesc = modifierName && modDef ? this.screenManager.getPackModifierDescription(modifierName, modDef) : '';
+                        this.screenManager.renderEnemyTooltip(displayName, modifierName, modifierDesc, health ? health.percent : null);
+                    }
                 }
                 if (this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls') || this.screenManager.isScreen('help')) {
                     this.screenManager.render(this.settings);

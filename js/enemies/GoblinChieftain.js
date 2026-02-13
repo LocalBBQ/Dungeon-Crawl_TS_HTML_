@@ -1,8 +1,8 @@
 (function () {
     const weapon = (typeof EnemyWeapons !== 'undefined' && EnemyWeapons.chieftainClub) ? EnemyWeapons.chieftainClub : null;
     const heavySmash = weapon && weapon.heavySmash ? weapon.heavySmash : {
-        chargeTime: 0.85,
-        releaseDuration: 0.15,
+        chargeTime: 1.15,
+        releaseDuration: 0.22,
         damage: 16,
         knockbackForce: 280,
         aoeInFront: true,
@@ -40,7 +40,6 @@
             speedMultiplier: 1.2,
             damageMultiplier: 1.2
         },
-        packModifier: 'inspiring'
     };
 
     function createAttack() {

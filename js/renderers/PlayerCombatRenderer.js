@@ -100,7 +100,9 @@ const PlayerCombatRenderer = {
     drawAttackArc(ctx, screenX, screenY, combat, movement, camera, options) {
         if (!combat || !combat.isAttacking) return;
         const range = combat.attackRange * camera.zoom;
-        const sweepProgress = this.getSweepProgress(combat);
+        // Optional override for enemies: pass options.sweepProgress (0..1) and options.pullBack (radians, e.g. 0)
+        const sweepProgress = (options && typeof options.sweepProgress === 'number') ? options.sweepProgress : this.getSweepProgress(combat);
+        const pullBackOverride = (options && typeof options.pullBack === 'number');
         const useComboColors = options && options.comboColors;
         const lw = 3 / camera.zoom;
         const lwCombo = 4 / camera.zoom;
@@ -175,7 +177,7 @@ const PlayerCombatRenderer = {
         } else {
             const arcCenter = facingAngle + (combat.attackArcOffset ?? 0);
             const halfArc = combat.attackArc / 2;
-            const pullBack = this.getAnticipationPullBack(combat);
+            const pullBack = pullBackOverride ? options.pullBack : this.getAnticipationPullBack(combat);
             const reverseSweep = combat.currentAttackReverseSweep === true;
             let startAngle, endAngle;
             if (reverseSweep) {
@@ -255,10 +257,14 @@ const PlayerCombatRenderer = {
 
     /**
      * Draw the one-handed sword/dagger shape at a given grip and angle.
-     * Shared by player (dagger/sword-and-shield) and goblin so the dagger looks identical.
+     * Shared by player (dagger/sword-and-shield) and goblin. options.style === 'goblin' draws a Goblin Shiv (jagged, rusty).
      * part: 'handle' = pommel + grip only; 'blade' = guard + blade only; 'all' = full (default).
      */
     drawDaggerAt(ctx, gripX, gripY, angle, baseLength, camera, options = {}) {
+        if (options.style === 'goblin') {
+            this._drawGoblinShivAt(ctx, gripX, gripY, angle, baseLength, camera, options);
+            return;
+        }
         const part = options.part || 'all';
         const swordLength = baseLength * camera.zoom;
         const bladeWidthAtGuard = 7;
@@ -310,6 +316,78 @@ const PlayerCombatRenderer = {
             ctx.beginPath();
             ctx.moveTo(hw * 0.5, 0);
             ctx.lineTo(swordLength, 0);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    },
+
+    /** Goblin Shiv: short jagged blade, rusty metal, wrapped bone/leather grip. */
+    _drawGoblinShivAt(ctx, gripX, gripY, angle, baseLength, camera, options = {}) {
+        const part = options.part || 'all';
+        const swordLength = baseLength * camera.zoom;
+        const scale = camera.zoom;
+        const lw = Math.max(1, 1.5 / scale);
+        ctx.save();
+        ctx.translate(gripX, gripY);
+        ctx.rotate(angle);
+        ctx.lineWidth = lw;
+
+        if (part === 'handle' || part === 'all') {
+            const pommelX = -12;
+            const pommelR = 2.5;
+            ctx.fillStyle = '#5c4a3a';
+            ctx.strokeStyle = '#3d3228';
+            ctx.beginPath();
+            ctx.arc(pommelX, 0, pommelR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            const hiltHalfLen = 10;
+            const hiltThickness = 5;
+            ctx.fillStyle = '#6b5344';
+            ctx.strokeStyle = '#4a3d32';
+            ctx.fillRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
+            ctx.strokeRect(-hiltHalfLen, -hiltThickness / 2, hiltHalfLen * 2, hiltThickness);
+            for (let i = -1; i <= 1; i += 2) {
+                ctx.fillStyle = '#5a4a3a';
+                ctx.fillRect(-hiltHalfLen + 2, (hiltThickness / 2) * i - 1, 4, 2);
+            }
+        }
+
+        if (part === 'blade' || part === 'all') {
+            const guardHalfW = 4;
+            const guardThick = 1.5;
+            ctx.fillStyle = '#6b5a48';
+            ctx.strokeStyle = '#4a4035';
+            ctx.fillRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
+            ctx.strokeRect(-guardThick / 2, -guardHalfW, guardThick, guardHalfW * 2);
+            const hw = 3.5;
+            const tipWidth = 1.2;
+            ctx.fillStyle = '#6d6b5e';
+            ctx.strokeStyle = '#4a4840';
+            const jagSteps = 5;
+            const step = swordLength / jagSteps;
+            ctx.beginPath();
+            ctx.moveTo(0, -hw);
+            for (let i = 1; i <= jagSteps; i++) {
+                const x = i * step;
+                const y = (i === jagSteps) ? (i % 2 === 0 ? -tipWidth : tipWidth) : ((i % 2 === 0 ? -hw : hw) * 0.85);
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(swordLength, tipWidth);
+            for (let i = jagSteps - 1; i >= 0; i--) {
+                const x = i * step;
+                const y = (i === 0) ? hw : ((i % 2 === 0 ? hw : -hw) * 0.85);
+                ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(80, 75, 65, 0.6)';
+            ctx.lineWidth = lw * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(hw * 0.6, 0);
+            for (let i = 1; i <= jagSteps; i++) ctx.lineTo(i * step, 0);
             ctx.stroke();
         }
 

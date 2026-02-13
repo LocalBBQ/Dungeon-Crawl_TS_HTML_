@@ -20,8 +20,7 @@
             range: 280,
             cooldown: 3.5,
             stunBuildup: 15
-        },
-        packModifier: 'fierce'
+        }
     };
 
     function createAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime) {

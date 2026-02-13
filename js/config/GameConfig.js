@@ -96,7 +96,9 @@ const GameConfig = {
         /** Pack detection: same-type allies within radius; need at least minAllies to count as "in pack". */
         pack: {
             radius: 180,
-            minAllies: 2
+            minAllies: 2,
+            /** Chance (0–1) that a pack gets a shared modifier; otherwise pack has no modifier. Difficulty tuning. */
+            modifierChance: 0.5
         },
         spawn: {
             maxEnemies: 20
@@ -194,7 +196,7 @@ const GameConfig = {
         1: {
             name: 'Village Outskirts',
             packSpawn: { density: 0.008, packSize: { min: 2, max: 4 }, patrol: true },
-            enemyTypes: ['goblin', 'goblin', 'goblinChieftain'],
+            enemyTypes: ['goblin', 'goblin', 'goblinChieftain', 'bandit'],
             killsToUnlockPortal: 10,
             theme: {
                 ground: { r: 38, g: 48, b: 38, variation: 8, texture: 'grass' },

@@ -280,9 +280,20 @@ class AI {
             if (distToPlayer < meleeRange && canAttack && !combat.isLunging) {
                 this.state = 'attack';
                 movement.stop();
-                // Pass player position for attack
-                const attackResult = combat.attack(playerTransform.x, playerTransform.y);
-                // Mark that we've initiated an attack this frame to prevent multiple calls
+                // comboAndCharge (e.g. bandit mace): pass chargeDuration like player input — 0 = light combo, else charged heavy
+                let chargeDuration = 0;
+                const handler = combat.enemyAttackHandler;
+                if (handler && handler.behaviorType === 'comboAndCharge' && handler.weapon) {
+                    const w = handler.weapon;
+                    const chargeConfig = w.chargeAttack;
+                    if (chargeConfig && chargeConfig.minChargeTime != null) {
+                        const roll = Math.random();
+                        if (roll < 0.35) {
+                            chargeDuration = chargeConfig.minChargeTime + Math.random() * ((chargeConfig.maxChargeTime || 2) - chargeConfig.minChargeTime) * 0.6;
+                        }
+                    }
+                }
+                const attackResult = combat.attack(playerTransform.x, playerTransform.y, chargeDuration);
                 if (attackResult) {
                     this.attackInitiatedThisFrame = true;
                 }

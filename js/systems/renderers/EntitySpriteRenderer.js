@@ -144,6 +144,14 @@ class EntitySpriteRenderer {
             if (ai && (ai.enemyType === 'goblin' || ai.enemyType === 'goblinChieftain') && typeof EnemyEntityRenderer !== 'undefined') {
                 const r = (transform.width / 2) * camera.zoom;
                 const h = (transform.height / 2) * camera.zoom;
+                // Goblin shiv: same miniature slash arc as player dagger
+                if (ai.enemyType === 'goblin' && combat && combat.isAttacking && !combat.isWindingUp && typeof PlayerCombatRenderer !== 'undefined') {
+                    PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement || { facingAngle: 0 }, camera, {
+                        sweepProgress: combat.enemySlashSweepProgress,
+                        pullBack: 0,
+                        comboColors: false
+                    });
+                }
                 EnemyEntityRenderer.drawWeapon(context, ai.enemyType, screenX, screenY, movement ? movement.facingAngle : 0, r, h, combat);
             }
         }

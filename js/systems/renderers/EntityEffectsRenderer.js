@@ -46,40 +46,44 @@ const EntityEffectsRenderer = {
         ctx.restore();
     },
 
-    /** Draw a colored glow under enemies that have a pack modifier or War Cry buff (replaces pill labels). */
+    /** Draw a colored glow under enemies for each active modifier (pack modifier, War Cry, etc.). */
     drawPackModifierGlow(context, entity, screenX, screenY) {
         const { ctx, camera } = context;
         const renderable = entity.getComponent(Renderable);
         const statusEffects = entity.getComponent(StatusEffects);
         const transform = entity.getComponent(Transform);
         if (!renderable || renderable.type !== 'enemy' || !statusEffects || !transform) return;
-        let color = null;
+        const colors = [];
         if (statusEffects.packModifierName) {
             const packModifiers = (typeof GameConfig !== 'undefined' && GameConfig.packModifiers) ? GameConfig.packModifiers : {};
             const modDef = packModifiers[statusEffects.packModifierName];
-            color = modDef && modDef.color ? modDef.color : '#ffffff';
-        } else {
-            const now = performance.now() / 1000;
-            if (statusEffects.buffedUntil != null && now < statusEffects.buffedUntil) color = '#ffaa00'; // War Cry
+            colors.push(modDef && modDef.color ? modDef.color : '#ffffff');
         }
-        if (!color) return;
+        const now = performance.now() / 1000;
+        if (statusEffects.buffedUntil != null && now < statusEffects.buffedUntil) {
+            colors.push('#ffaa00'); // War Cry
+        }
+        if (colors.length === 0) return;
         const z = camera.zoom;
         const glowY = screenY + (transform.height / 2 + 4) * z;
-        const radius = Math.max(transform.width, transform.height) * z * 0.9;
-        const gradient = ctx.createRadialGradient(screenX, glowY, 0, screenX, glowY, radius);
-        const hex = color.replace('#', '');
-        const r = parseInt(hex.slice(0, 2), 16);
-        const g = parseInt(hex.slice(2, 4), 16);
-        const b = parseInt(hex.slice(4, 6), 16);
-        gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.45)`);
-        gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.2)`);
-        gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-        ctx.save();
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.ellipse(screenX, glowY, radius, radius * 0.5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        const baseRadius = Math.max(transform.width, transform.height) * z * 0.9;
+        colors.forEach((color, i) => {
+            const radius = baseRadius * (1 + i * 0.15);
+            const gradient = ctx.createRadialGradient(screenX, glowY, 0, screenX, glowY, radius);
+            const hex = color.replace('#', '');
+            const r = parseInt(hex.slice(0, 2), 16);
+            const g = parseInt(hex.slice(2, 4), 16);
+            const b = parseInt(hex.slice(4, 6), 16);
+            gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
+            gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.18)`);
+            gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+            ctx.save();
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.ellipse(screenX, glowY, radius, radius * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
     },
 
     drawStunSymbol(context, screenX, symbolY, camera) {

@@ -83,6 +83,15 @@
                 if (w.cooldown != null) this.maxCooldown = w.cooldown;
                 if (w.comboWindow != null) this.comboWindow = w.comboWindow;
                 if (dash) this.lungeDamage = dash.damage;
+            } else if (this.behaviorType === 'comboAndCharge') {
+                const first = w.getComboStageProperties && w.getComboStageProperties(1);
+                if (first) {
+                    this.attackRange = first.range;
+                    this.attackDamage = first.damage;
+                    this.attackArc = first.arc;
+                }
+                if (w.cooldown != null) this.maxCooldown = w.cooldown;
+                if (w.comboWindow != null) this.comboWindow = w.comboWindow;
             }
         }
 
@@ -173,7 +182,49 @@
             const packMult = options.cooldownMultiplier != null ? options.cooldownMultiplier : 1;
             if (this.behaviorType === 'rangedOnly' || (this.weapon && this.weapon.noMelee)) return null;
             if (this.behaviorType === 'chargeRelease') return this._startChargeRelease(targetX, targetY, entity);
+            if (this.behaviorType === 'comboAndCharge') return this._startComboAndCharge(targetX, targetY, entity, chargeDuration, options);
             return this._doSlashAttack(packMult);
+        }
+
+        /** Player-like attack: light (combo) or charged heavy, driven by AI-supplied chargeDuration. */
+        _startComboAndCharge(targetX, targetY, entity, chargeDuration, options) {
+            if (!this.canAttack()) return null;
+            const w = this.weapon;
+            if (!w || typeof w.getResolvedAttack !== 'function') return null;
+            const resolved = w.getResolvedAttack(chargeDuration, this.comboStage, {});
+            if (!resolved) return null;
+
+            const { stageProps, finalDamage, finalRange, nextComboStage } = resolved;
+            const packMult = options.cooldownMultiplier != null ? options.cooldownMultiplier : 1;
+            const effectiveMult = this.damageMultiplier * packMult;
+
+            this.comboStage = nextComboStage;
+            this.comboTimer = this.comboWindow;
+            this.hitEnemies.clear();
+            let durationMs = stageProps.duration;
+            if (durationMs < 50) durationMs = Math.round(durationMs * 1000);
+
+            this.attackRange = finalRange;
+            this.attackDamage = finalDamage * effectiveMult;
+            this.attackArc = stageProps.arc;
+            this.attackDurationEnemy = durationMs / 1000;
+            this.attackTimer = 0.001;
+            this.cooldown = (w.cooldown != null ? w.cooldown : 0.35) * this.cooldownMultiplier * packMult;
+            this.maxCooldown = w.cooldown != null ? w.cooldown : 0.35;
+
+            return {
+                range: this.attackRange,
+                damage: this.attackDamage,
+                arc: this.attackArc,
+                arcOffset: stageProps.arcOffset ?? 0,
+                reverseSweep: stageProps.reverseSweep === true,
+                duration: durationMs,
+                knockbackForce: stageProps.knockbackForce ?? null,
+                stunBuildup: stageProps.stunBuildup != null ? stageProps.stunBuildup : 25,
+                animationKey: stageProps.animationKey || 'melee',
+                comboStage: this.comboStage,
+                isCircular: stageProps.isCircular === true
+            };
         }
 
         _doSlashAttack(packCooldownMultiplier) {
@@ -304,6 +355,17 @@
                 if (this.attackBuffer > 0) this.attackBuffer = Math.max(0, this.attackBuffer - deltaTime);
                 return;
             }
+            if (this.behaviorType === 'comboAndCharge') {
+                if (this.attackTimer > 0) {
+                    this.attackTimer += deltaTime;
+                    if (this.attackTimer >= this.attackDurationEnemy) this.endAttack();
+                }
+                if (!this.isAttacking && this.comboStage > 0) {
+                    this.comboTimer -= deltaTime;
+                    if (this.comboTimer <= 0) this.resetCombo();
+                }
+                return;
+            }
             if (this.behaviorType === 'slashOnly' || this.behaviorType === 'slashAndLeap') {
                 if (!this.isWindingUp && !this._slashAttacking && !this.isLunging && this.comboStage > 0) {
                     this.comboTimer -= deltaTime;
@@ -362,6 +424,12 @@
                 this.attackTimer = 0;
                 this.attackBuffer = this.attackBufferDuration;
                 this.hitEnemies.clear();
+                return;
+            }
+            if (this.behaviorType === 'comboAndCharge') {
+                if (this.attackTimer <= 0) return;
+                this.attackTimer = 0;
+                this.hitEnemies.clear();
             }
         }
 
@@ -375,6 +443,7 @@
             if (this.isPlayer) return this.attackBuffer <= 0;
             if (this.behaviorType === 'rangedOnly' || (this.weapon && this.weapon.noMelee)) return false;
             if (this.behaviorType === 'chargeRelease') return !this.isAttacking && this.attackBuffer <= 0;
+            if (this.behaviorType === 'comboAndCharge') return this.attackTimer <= 0 && this.cooldown <= 0;
             return this.cooldown <= 0 && !this.isWindingUp && !this.isLunging;
         }
 
@@ -392,6 +461,7 @@
         get isAttacking() {
             if (this.isPlayer) return this.attackTimer > 0;
             if (this.behaviorType === 'chargeRelease') return this.attackTimer > 0 && this.attackTimer < this.attackDurationEnemy;
+            if (this.behaviorType === 'comboAndCharge') return this.attackTimer > 0 && this.attackTimer < this.attackDurationEnemy;
             return this._slashAttacking || this.isLunging;
         }
 
@@ -409,6 +479,10 @@
 
         getSlashSweepProgress() {
             if (this.isPlayer) return 0;
+            if (this.behaviorType === 'comboAndCharge' && this.attackDurationEnemy > 0) {
+                const raw = Math.min(1, this.attackTimer / this.attackDurationEnemy);
+                return 1 - (1 - raw) ** 4;
+            }
             if (this.isLunging) return 1;
             if (!this._slashAttacking || !this._slashStartTime) return 0;
             const durationMs = this._currentSlashDurationMs != null ? this._currentSlashDurationMs : this.SLASH_DURATION_MS;

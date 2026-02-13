@@ -11,7 +11,7 @@ var EnemyWeapons = {
         id: 'chieftainClub',
         name: 'Chieftain Club',
         visual: 'maceClub',
-        heavySmash: { chargeTime: 0.85, releaseDuration: 0.15, damage: 16, knockbackForce: 280, aoeInFront: true, aoeOffset: 55, aoeRadius: 42 },
+        heavySmash: { chargeTime: 1.15, releaseDuration: 0.22, damage: 16, knockbackForce: 280, aoeInFront: true, aoeOffset: 55, aoeRadius: 42 },
         getHeavySmashProperties() {
             const h = this.heavySmash;
             const range = h.aoeInFront ? (h.aoeOffset || 0) + (h.aoeRadius || 40) : (h.range || 100);
@@ -31,6 +31,12 @@ var EnemyWeapons = {
     },
 
     get maceClub() { return this.chieftainClub; },
+
+    /** Goblin Shiv: goblin-specific dagger (extends DaggerWeapon); jagged blade, same slash/leap behavior. */
+    get goblinDagger() {
+        return (typeof window !== 'undefined' && window.GoblinDaggerWeaponInstance) ? window.GoblinDaggerWeaponInstance : this._goblinDaggerFallback;
+    },
+    _goblinDaggerFallback: null,
 
     /** Greater demon claw: charge-release cone. */
     demonClaw: {
@@ -89,8 +95,9 @@ EnemyWeapons.resolveWeapon = function (weaponId) {
     return null;
 };
 
-// Legacy: goblins use shared Dagger
+// Goblins use goblinDagger (Goblin Shiv); fallback to shared Dagger if not loaded.
 EnemyWeapons.getGoblinWeapon = function () {
+    if (EnemyWeapons.goblinDagger) return EnemyWeapons.goblinDagger;
     return (typeof Weapons !== 'undefined' && Weapons.dagger) ? Weapons.dagger : null;
 };
 

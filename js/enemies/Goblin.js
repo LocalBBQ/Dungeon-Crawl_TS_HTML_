@@ -1,8 +1,8 @@
 // Goblin uses the Dagger weapon; melee slash matches player's dagger (no wind-up, same timing/cooldown).
 // Lunge uses dash attack stats from dagger.
 (function () {
-    const weapon = (typeof EnemyWeapons !== 'undefined' && EnemyWeapons.resolveWeapon) ? EnemyWeapons.resolveWeapon('dagger') : null;
-    let attackRange = 40, attackDamage = 5, attackCooldown = 0.25, lungeDamage = 8, lungeKnockbackForce = 240;
+    const weapon = (typeof EnemyWeapons !== 'undefined' && EnemyWeapons.resolveWeapon) ? EnemyWeapons.resolveWeapon('goblinDagger') : null;
+    let attackRange = 40, attackDamage = 5, attackCooldown = 1.2, lungeDamage = 8, lungeKnockbackForce = 240;
     if (weapon) {
         const first = weapon.getComboStageProperties && weapon.getComboStageProperties(1);
         const dash = weapon.getDashAttackProperties && weapon.getDashAttackProperties();
@@ -20,7 +20,7 @@
     const config = {
         maxHealth: 30,
         moveSpeed: 25,
-        weaponId: 'dagger',
+        weaponId: 'goblinDagger',
         attackRange,
         attackDamage,
         detectionRange: 200,
@@ -50,7 +50,6 @@
             hopBackDistance: 60,
             hopBackSpeed: 140
         },
-        packModifier: 'fierce',
         // Stamina: goblins back off when exhausted until 50% recovered
         maxStamina: 30,
         staminaRegen: 4,

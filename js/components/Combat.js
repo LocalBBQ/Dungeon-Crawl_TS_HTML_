@@ -69,7 +69,7 @@ class Combat {
     }
 
     get weapon() {
-        return this.isPlayer && this.attackHandler ? this.attackHandler.weapon : null;
+        return this.attackHandler ? this.attackHandler.weapon : null;
     }
 
     /** Pack modifier: attack cooldown multiplier (enemies only). */
@@ -282,7 +282,7 @@ class Combat {
             const cost = (enemyConfig && enemyConfig.attackStaminaCost != null) ? enemyConfig.attackStaminaCost : 12;
             if (!stamina.use(cost)) return false;
         }
-        const result = this.attackHandler.startAttack(targetX, targetY, this.entity, 0, { cooldownMultiplier: this.getPackCooldownMultiplier() });
+        const result = this.attackHandler.startAttack(targetX, targetY, this.entity, chargeDuration, { cooldownMultiplier: this.getPackCooldownMultiplier() });
         if (!result || typeof result !== 'object' || result.range == null) return !!result;
         this._applyAttackResult(result);
         const durationMs = result.duration;

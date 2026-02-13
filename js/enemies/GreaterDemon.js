@@ -22,8 +22,7 @@
             damageInterval: 0.4,
             cooldown: 18.0,
             pillarRange: 220
-        },
-        packModifier: 'stalwart'
+        }
     };
 
     function createAttack() {

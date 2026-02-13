@@ -5,15 +5,17 @@ var Enemies = {
     skeleton: window.EnemySkeleton,
     lesserDemon: window.EnemyLesserDemon,
     greaterDemon: window.EnemyGreaterDemon,
-    goblinChieftain: window.EnemyGoblinChieftain
+    goblinChieftain: window.EnemyGoblinChieftain,
+    bandit: window.EnemyBandit
 };
 
 Enemies.weaponAndBehavior = {
-    goblin: { weaponId: 'dagger', behaviorId: 'slashAndLeap' },
+    goblin: { weaponId: 'goblinDagger', behaviorId: 'slashAndLeap' },
     lesserDemon: { weaponId: 'lesserDemonClaw', behaviorId: 'slashAndLeap' },
     goblinChieftain: { weaponId: 'chieftainClub', behaviorId: 'chargeRelease' },
     greaterDemon: { weaponId: 'demonClaw', behaviorId: 'chargeRelease' },
-    skeleton: { weaponId: 'skeletonNoMelee', behaviorId: 'rangedOnly' }
+    skeleton: { weaponId: 'skeletonNoMelee', behaviorId: 'rangedOnly' },
+    bandit: { weaponId: 'mace', behaviorId: 'comboAndCharge' }
 };
 
 Enemies.getConfig = function (type) {

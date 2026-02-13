@@ -15,7 +15,7 @@ class EnemyManager {
         this.systems = systems;
     }
 
-    spawnEnemy(x, y, type = 'goblin', entityManager, patrolConfig = null, packModifierOverride = null) {
+    spawnEnemy(x, y, type = 'goblin', entityManager, patrolConfig = null, packModifierOverride = null, packHasNoModifier = false) {
         const config = GameConfig.enemy.types[type] || GameConfig.enemy.types.goblin;
         
         const enemy = new Entity(x, y, `enemy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
@@ -24,14 +24,13 @@ class EnemyManager {
         if (!AIClass) throw new Error('AI component (AI.js) must load before EnemyManager. Check script order in index.html.');
         const ai = new AIClass(config.detectionRange, config.attackRange, patrolConfig);
         ai.enemyType = type; // Store enemy type for lunge detection
-        // Pack modifier: use pack-assigned modifier when provided, otherwise random from pool
-        if (packModifierOverride != null && GameConfig.packModifiers && GameConfig.packModifiers[packModifierOverride]) {
+        // Pack modifier: only set when pack explicitly has one (no default; difficulty tuning via modifierChance)
+        if (packHasNoModifier || packModifierOverride == null) {
+            ai.packModifierName = null;
+        } else if (GameConfig.packModifiers && GameConfig.packModifiers[packModifierOverride]) {
             ai.packModifierName = packModifierOverride;
         } else {
-            const allModifierNames = Object.keys(GameConfig.packModifiers || {});
-            ai.packModifierName = allModifierNames.length > 0
-                ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)]
-                : null;
+            ai.packModifierName = null;
         }
         const packDef = ai.packModifierName && GameConfig.packModifiers ? GameConfig.packModifiers[ai.packModifierName] : null;
         const healthMult = (packDef && packDef.healthMultiplier != null) ? packDef.healthMultiplier : 1;
@@ -55,7 +54,7 @@ class EnemyManager {
             }
         }
         
-        const size = type === 'greaterDemon' ? 38 : (type === 'goblinChieftain' ? 34 : 25);
+        const size = type === 'greaterDemon' ? 38 : (type === 'goblinChieftain' ? 34 : (type === 'bandit' ? 31 : 25));
         enemy
             .addComponent(new Transform(x, y, size, size))
             .addComponent(new Health(maxHealth))
@@ -166,11 +165,12 @@ class EnemyManager {
                 ? PatrolBehavior.createPatrolConfigForPack(packCenterX, packCenterY, packRadius)
                 : null;
 
-            // One modifier per pack, chosen from the full pool
+            const packConfig = GameConfig.enemy.pack || {};
+            const modifierChance = typeof packConfig.modifierChance === 'number' ? packConfig.modifierChance : 0.5;
             const allModifierNames = Object.keys(GameConfig.packModifiers || {});
-            const packModifier = allModifierNames.length > 0
-                ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)]
-                : null;
+            const packGetsModifier = allModifierNames.length > 0 && Math.random() < modifierChance;
+            const packModifier = packGetsModifier ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)] : null;
+            const packHasNoModifier = !packGetsModifier;
 
             let enemiesSpawnedInPack = 0;
             const packMaxAttempts = enemiesInPack * 5;
@@ -190,7 +190,7 @@ class EnemyManager {
                 if (!obstacleManager || obstacleManager.canMoveTo(clampedX, clampedY, 25, 25)) {
                     const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin', 'goblin', 'skeleton', 'greaterDemon'];
                     const randomType = types[Utils.randomInt(0, types.length - 1)];
-                    this.spawnEnemy(clampedX, clampedY, randomType, entityManager, patrolConfig, packModifier);
+                    this.spawnEnemy(clampedX, clampedY, randomType, entityManager, patrolConfig, packModifier, packHasNoModifier);
                     enemiesSpawnedInPack++;
                 }
             }
@@ -214,10 +214,12 @@ class EnemyManager {
         const patrolConfig = usePatrol && typeof PatrolBehavior !== 'undefined'
             ? PatrolBehavior.createPatrolConfigForPack(centerX, centerY, packRadius)
             : null;
+        const packConfig = GameConfig.enemy.pack || {};
+        const modifierChance = typeof packConfig.modifierChance === 'number' ? packConfig.modifierChance : 0.5;
         const allModifierNames = Object.keys(GameConfig.packModifiers || {});
-        const packModifier = allModifierNames.length > 0
-            ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)]
-            : null;
+        const packGetsModifier = allModifierNames.length > 0 && Math.random() < modifierChance;
+        const packModifier = packGetsModifier ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)] : null;
+        const packHasNoModifier = !packGetsModifier;
         let spawned = 0;
         const maxAttempts = size * 8;
         for (let a = 0; a < maxAttempts && spawned < size; a++) {
@@ -228,7 +230,7 @@ class EnemyManager {
             if (!obstacleManager || obstacleManager.canMoveTo(x, y, 25, 25)) {
                 const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin'];
                 const type = types[Utils.randomInt(0, types.length - 1)];
-                this.spawnEnemy(x, y, type, entityManager, patrolConfig, packModifier);
+                this.spawnEnemy(x, y, type, entityManager, patrolConfig, packModifier, packHasNoModifier);
                 spawned++;
             }
         }

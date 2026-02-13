@@ -22,8 +22,7 @@
             lungeDistance: 130,
             lungeDamage: 10,
             knockback: { force: 260 }
-        },
-        packModifier: 'swift'
+        }
     };
 
     function createAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime) {

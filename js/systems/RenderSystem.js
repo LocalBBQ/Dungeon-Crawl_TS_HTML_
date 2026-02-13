@@ -26,19 +26,13 @@ class RenderSystem {
         return createRenderContext(this.ctx, this.canvas, camera, this.systems, this.settings);
     }
 
-    renderWorld(camera, obstacleManager, currentLevel = 1, worldWidth = null, worldHeight = null, playerY = null) {
+    /** Draw world + non-depth obstacles only. Depth-sort obstacles (trees, etc.) are drawn with entities in renderEntities. */
+    renderWorld(camera, obstacleManager, currentLevel = 1, worldWidth = null, worldHeight = null) {
         const context = this._getContext(camera);
         this.worldLayer.render(context, { currentLevel, worldWidth, worldHeight });
         if (obstacleManager) {
-            const phase = typeof playerY === 'number' ? 'behind' : 'all';
-            this.obstacleLayer.render(context, { obstacleManager, currentLevel, playerY, phase });
+            this.obstacleLayer.render(context, { obstacleManager, currentLevel, playerY: null, phase: 'noDepth' });
         }
-    }
-
-    /** Draw only trees (and other depth-sorted obstacles) that are in front of the player. Call after renderEntities. */
-    renderObstaclesInFront(camera, obstacleManager, currentLevel = 1, playerY = null) {
-        if (!obstacleManager || typeof playerY !== 'number') return;
-        this.obstacleLayer.render(this._getContext(camera), { obstacleManager, currentLevel, playerY, phase: 'front' });
     }
 
     renderPortal(portal, camera, playerNearPortal) {
@@ -65,8 +59,15 @@ class RenderSystem {
         this.chestRenderer.render(this._getContext(camera), { chest, playerNearChest: showPrompt });
     }
 
-    renderEntities(entities, camera) {
-        this.entityLayer.render(this._getContext(camera), { entities });
+    /** Draw entities and depth-sort obstacles (trees, etc.) interleaved by Y so layering respects player and enemies. */
+    renderEntities(entities, camera, obstacleManager = null, currentLevel = 1) {
+        const context = this._getContext(camera);
+        const data = { entities };
+        if (obstacleManager) {
+            data.obstacleManager = obstacleManager;
+            data.obstacleLayerRenderer = this.obstacleLayer;
+        }
+        this.entityLayer.render(context, data);
     }
 
     renderMinimap(camera, entityManager, worldWidth, worldHeight, portal = null, currentLevel = 1) {

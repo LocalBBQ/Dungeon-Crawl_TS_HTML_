@@ -82,8 +82,10 @@ const EnemyEntityRenderer = {
         }
 
         if (isGoblin) {
-            const daggerLength = 35;
-            PlayerCombatRenderer.drawDaggerAt(ctx, baseX, baseY, drawAngle, daggerLength, camera);
+            const weapon = combat && combat.weapon;
+            const daggerLength = (weapon && weapon.weaponLength != null) ? weapon.weaponLength : 35;
+            const style = (weapon && weapon.visual === 'goblinDagger') ? 'goblin' : undefined;
+            PlayerCombatRenderer.drawDaggerAt(ctx, baseX, baseY, drawAngle, daggerLength, camera, style ? { style } : {});
             return;
         }
 
@@ -287,6 +289,24 @@ const EnemyEntityRenderer = {
             ctx.stroke();
         }
 
+        // Chieftain slam: white ground-impact zone (visual only, not hitbox)
+        if (ai && ai.enemyType === 'goblinChieftain' && combat && combat.isAttacking && !combat.isWindingUp &&
+            combat.currentAttackAoeInFront && combat.currentAttackAoeRadius > 0 && transform && movement) {
+            const facingAngle = movement.facingAngle;
+            const slamWorldX = transform.x + Math.cos(facingAngle) * (combat.currentAttackAoeOffset || 0);
+            const slamWorldY = transform.y + Math.sin(facingAngle) * (combat.currentAttackAoeOffset || 0);
+            const impactScreenX = camera.toScreenX(slamWorldX);
+            const impactScreenY = camera.toScreenY(slamWorldY);
+            const impactRadius = combat.currentAttackAoeRadius * camera.zoom;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.beginPath();
+            ctx.arc(impactScreenX, impactScreenY, impactRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+            ctx.lineWidth = Math.max(1, 2 / camera.zoom);
+            ctx.stroke();
+        }
+
         if (typeof EntityEffectsRenderer !== 'undefined') {
             EntityEffectsRenderer.drawShadow(ctx, screenX, screenY, transform, camera, { fillStyle: 'rgba(0, 0, 0, 0.3)' });
             EntityEffectsRenderer.drawPackModifierGlow(context, entity, screenX, screenY);
@@ -350,7 +370,50 @@ const EnemyEntityRenderer = {
             ctx.arc(screenX - r * 0.35, screenY - h * 0.2, eyeSize, 0, Math.PI * 2);
             ctx.arc(screenX + r * 0.35, screenY - h * 0.2, eyeSize, 0, Math.PI * 2);
             ctx.fill();
+            // Goblin shiv: same miniature slash arc as player dagger (DaggerWeapon/renderer logic)
+            if (combat && combat.isAttacking && !combat.isWindingUp && typeof PlayerCombatRenderer !== 'undefined') {
+                PlayerCombatRenderer.drawAttackArc(context.ctx, screenX, screenY, combat, movement || { facingAngle: 0 }, context.camera, {
+                    sweepProgress: combat.enemySlashSweepProgress,
+                    pullBack: 0,
+                    comboColors: false
+                });
+            }
             this.drawWeapon(context, 'goblin', screenX, screenY, movement ? movement.facingAngle : 0, r, h, combat);
+        } else if (enemyType === 'bandit') {
+            // Player-like humanoid: torso, hood, pauldrons, then mace (same proportions as player)
+            const lw = Math.max(1, 2 / camera.zoom);
+            ctx.fillStyle = bodyColor;
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            ctx.ellipse(screenX, screenY + h * 0.08, r * 0.92, h * 0.88, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.save();
+            ctx.translate(screenX, screenY);
+            ctx.rotate(movement ? movement.facingAngle : 0);
+            const helmetRx = r * 0.42;
+            const helmetRy = h * 0.38;
+            const paulOffsetY = helmetRy * 0.72;
+            const paulRx = r * 0.22;
+            const paulRy = h * 0.28;
+            ctx.fillStyle = '#5a4a3a';
+            ctx.strokeStyle = '#2a2218';
+            ctx.beginPath();
+            ctx.ellipse(0, paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, -paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#4a3d32';
+            ctx.strokeStyle = '#2a2218';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, helmetRx, helmetRy, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+            if (typeof PlayerCombatRenderer !== 'undefined' && combat && combat.weapon && combat.weapon.name === 'mace') {
+                PlayerCombatRenderer.drawMace(ctx, screenX, screenY, transform, movement, combat, camera);
+            }
         } else if (enemyType === 'goblinChieftain') {
             ctx.fillStyle = bodyColor;
             ctx.beginPath();

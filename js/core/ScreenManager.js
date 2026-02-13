@@ -239,6 +239,82 @@ class ScreenManager {
         return parts.length ? parts.join(', ') : '—';
     }
 
+    /** Draw a small info tile at top center when hovering an enemy: name, health bar, modifier (only if present), short description. */
+    renderEnemyTooltip(displayName, modifierName, modifierDescription, healthPercent) {
+        const width = this.canvas.width;
+        const padding = 16;
+        const lineHeight = 20;
+        const maxTextWidth = 280;
+        const barHeight = 6;
+        const barGap = 8;
+        const modifierTopGap = 6;
+
+        const hasModifier = modifierName && typeof modifierName === 'string' && modifierName.trim().length > 0;
+        const modifierLabel = hasModifier ? (modifierName.charAt(0).toUpperCase() + modifierName.slice(1)) : '';
+        const lines = [displayName];
+        if (modifierLabel) lines.push(modifierLabel);
+        if (hasModifier && modifierDescription) lines.push(modifierDescription);
+
+        this.ctx.font = '500 14px Cinzel, Georgia, serif';
+        const measure = (t) => this.ctx.measureText(t).width;
+        const tileWidth = Math.min(maxTextWidth, Math.max(...lines.map((t) => measure(t))) + padding * 2);
+        const hasBar = typeof healthPercent === 'number' && healthPercent >= 0;
+        const barArea = hasBar ? barHeight + barGap : 0;
+        const modifierGapArea = (hasModifier && (modifierLabel || modifierDescription)) ? modifierTopGap : 0;
+        const tileHeight = padding * 2 + lines.length * lineHeight + barArea + modifierGapArea;
+
+        const cx = width / 2;
+        const top = 12;
+        const left = cx - tileWidth / 2;
+        const topPad = 10;
+
+        this.ctx.fillStyle = 'rgba(26, 16, 8, 0.92)';
+        this.ctx.fillRect(left, top, tileWidth, tileHeight + topPad);
+        this.ctx.strokeStyle = '#4a3020';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(left, top, tileWidth, tileHeight + topPad);
+
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        const packModifiers = (typeof GameConfig !== 'undefined' && GameConfig.packModifiers) ? GameConfig.packModifiers : {};
+        const modDef = modifierName ? packModifiers[modifierName] : null;
+        const modifierColor = (modDef && modDef.color) ? modDef.color : '#e8dcc8';
+
+        let y = top + topPad / 2 + lineHeight / 2;
+        this.ctx.fillStyle = '#e8dcc8';
+        this.ctx.font = '600 15px Cinzel, Georgia, serif';
+        this.ctx.fillText(lines[0], cx, y);
+        y += lineHeight;
+
+        if (hasBar) {
+            const barWidth = tileWidth - padding * 2;
+            const barX = left + padding;
+            const barY = y + barGap / 2;
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            const pct = Math.max(0, Math.min(1, healthPercent));
+            this.ctx.fillStyle = pct > 0.5 ? '#44ff44' : pct > 0.25 ? '#ffff44' : '#ff4444';
+            this.ctx.fillRect(barX, barY, barWidth * pct, barHeight);
+            this.ctx.strokeStyle = '#222';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(barX, barY, barWidth, barHeight);
+            y += barHeight + barGap;
+        }
+        if (modifierGapArea > 0) y += modifierTopGap;
+
+        if (lines.length > 1) {
+            this.ctx.fillStyle = modifierColor;
+            this.ctx.font = '500 13px Cinzel, Georgia, serif';
+            this.ctx.fillText(lines[1], cx, y);
+            y += lineHeight;
+        }
+        if (lines.length > 2) {
+            this.ctx.fillStyle = '#a08060';
+            this.ctx.font = '500 12px Cinzel, Georgia, serif';
+            this.ctx.fillText(lines[2], cx, y);
+        }
+    }
+
     renderHelpScreen() {
         const width = this.canvas.width;
         const height = this.canvas.height;

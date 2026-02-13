@@ -36,7 +36,8 @@ class Health {
                         y: transform.y - transform.height / 2, // Above entity
                         damage: actualDamage,
                         isPlayerDamage: !isPlayer, // If not player, it's damage dealt by player
-                        isBlocked: isBlocked
+                        isBlocked: isBlocked,
+                        entityId: this.entity.id
                     });
                 }
             }

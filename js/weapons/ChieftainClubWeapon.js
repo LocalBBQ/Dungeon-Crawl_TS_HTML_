@@ -6,8 +6,8 @@
         name: 'Chieftain Club',
         visual: 'maceClub',
         heavySmash: {
-            chargeTime: 0.85,
-            releaseDuration: 0.15,
+            chargeTime: 1.15,
+            releaseDuration: 0.22,
             damage: 16,
             knockbackForce: 280,
             // Slam in front: AOE circle placed ahead of the chieftain (not centered on him)
