@@ -25,9 +25,5 @@
         }
     };
 
-    function createAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime) {
-        return new GoblinAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime);
-    }
-
-    window.EnemyLesserDemon = EnemyType.fromConfig(config, createAttack);
+    window.EnemyLesserDemon = EnemyType.fromConfig(config);
 })();

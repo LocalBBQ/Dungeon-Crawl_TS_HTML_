@@ -48,7 +48,7 @@ class EntityLayerRenderer {
             return;
         }
 
-        // Legacy path: no obstacleManager — draw all non-player entities then player last
+        // Fallback: no obstacleManager — draw all non-player entities then player last
         const spriteManager = systems ? systems.get('sprites') : null;
         let playerDraw = null;
 

@@ -25,11 +25,6 @@ Enemies.getConfig = function (type) {
     return def && def.config ? def.config : null;
 };
 
-Enemies.getAttackFactory = function (type) {
-    const def = this[type];
-    return def && typeof def.createAttack === 'function' ? def.createAttack : null;
-};
-
 Enemies.createAttackHandler = function (enemyType) {
     const map = Enemies.weaponAndBehavior && Enemies.weaponAndBehavior[enemyType];
     const config = Enemies.getConfig(enemyType) || (GameConfig && GameConfig.enemy && GameConfig.enemy.types && GameConfig.enemy.types[enemyType]);

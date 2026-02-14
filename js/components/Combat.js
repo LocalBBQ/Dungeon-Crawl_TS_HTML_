@@ -20,13 +20,8 @@ class Combat {
             this.attackHandler = HandlerClass ? new HandlerClass(weapon || Weapons.swordAndShield, { isPlayer: true }) : new PlayerAttack(weapon || Weapons.swordAndShield);
             this.playerAttack = this.attackHandler;
         } else {
-            this.attackHandler = (Enemies.createAttackHandler && Enemies.createAttackHandler(enemyType)) || null;
-            if (!this.attackHandler && typeof Enemies.getAttackFactory === 'function') {
-                const createAttack = Enemies.getAttackFactory(enemyType);
-                this.attackHandler = createAttack
-                    ? createAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime)
-                    : new EnemyAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime);
-            }
+            this.attackHandler = (Enemies.createAttackHandler && Enemies.createAttackHandler(enemyType))
+                || new EnemyAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime);
             this.enemyAttackHandler = this.attackHandler;
         }
 

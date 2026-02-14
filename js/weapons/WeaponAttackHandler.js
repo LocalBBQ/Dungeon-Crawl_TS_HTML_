@@ -519,7 +519,7 @@
             return this.weapon.getStaminaCostForAttack ? this.weapon.getStaminaCostForAttack(chargeDuration, this.comboStage, options || {}) : 0;
         }
 
-        /** Enemy legacy: Combat used to call .attack(targetX, targetY, entity, cooldownMultiplier). */
+        /** Forwards to startAttack (e.g. Combat may call .attack(x, y, entity, cooldownMult)). */
         attack(targetX, targetY, entity, cooldownMultiplier) {
             return this.startAttack(targetX, targetY, entity, 0, { cooldownMultiplier: cooldownMultiplier });
         }

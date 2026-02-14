@@ -66,7 +66,6 @@ const GameConfig = {
             perfectWindowEnd: 0.78,     // perfect reload zone end (0–1)
             perfectReloadDamageMultiplier: 1.5  // damage multiplier on next shot if perfect reload
         },
-        healthOrbDropChance: 0.25, // 25% chance for enemies to drop a health orb on death
         heal: {
             maxCharges: 3,
             drinkTime: 2,           // seconds of "drinking" before regen starts
@@ -193,9 +192,19 @@ const GameConfig = {
             ]
         },
         // Level-based enemy pack + theme (ground colors) + obstacles; portal after killsToUnlockPortal
+        // packSpread: radius range within each pack (enemies placed min..max from center). Larger = more dispersed.
+        // packCountVariance: 0..1; pack count is multiplied by random(1-variance, 1+variance) for more random density.
+        // minPackDistance: minimum distance between pack centers so packs don't cluster.
         1: {
             name: 'Village Outskirts',
-            packSpawn: { density: 0.008, packSize: { min: 2, max: 4 }, patrol: true },
+            packSpawn: {
+                density: 0.008,
+                packSize: { min: 2, max: 4 },
+                patrol: true,
+                packSpread: { min: 40, max: 95 },
+                packCountVariance: 0.35,
+                minPackDistance: 220
+            },
             enemyTypes: ['goblin', 'goblin', 'goblinChieftain', 'bandit'],
             killsToUnlockPortal: 10,
             theme: {
@@ -232,7 +241,14 @@ const GameConfig = {
         },
         2: {
             name: 'Cursed Wilds',
-            packSpawn: { density: 0.012, packSize: { min: 3, max: 5 }, patrol: true },
+            packSpawn: {
+                density: 0.012,
+                packSize: { min: 3, max: 5 },
+                patrol: true,
+                packSpread: { min: 45, max: 100 },
+                packCountVariance: 0.35,
+                minPackDistance: 240
+            },
             enemyTypes: ['goblin', 'goblin', 'goblinChieftain', 'skeleton', 'skeleton'],
             killsToUnlockPortal: 15,
             theme: {
@@ -265,7 +281,13 @@ const GameConfig = {
         },
         3: {
             name: 'Demon Approach',
-            packSpawn: { density: 0.016, packSize: { min: 4, max: 6 } },
+            packSpawn: {
+                density: 0.016,
+                packSize: { min: 4, max: 6 },
+                packSpread: { min: 50, max: 110 },
+                packCountVariance: 0.4,
+                minPackDistance: 260
+            },
             enemyTypes: ['skeleton', 'skeleton', 'lesserDemon', 'lesserDemon'],
             killsToUnlockPortal: 20,
             theme: {

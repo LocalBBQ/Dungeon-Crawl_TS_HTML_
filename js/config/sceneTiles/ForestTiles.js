@@ -25,6 +25,11 @@
                 { type: 'rock', x: 540, y: 200, width: 50, height: 50 },
                 { type: 'stoneDebris', x: 300, y: 450, width: 45, height: 45 },
                 { type: 'stoneDebris', x: 480, y: 350, width: 40, height: 40 }
+            ],
+            gatherables: [
+                { type: 'herb', x: 380, y: 360, width: 32, height: 32 },
+                { type: 'herb', x: 520, y: 280, width: 32, height: 32 },
+                { type: 'ore', x: 200, y: 520, width: 40, height: 40 }
             ]
         },
 
@@ -62,6 +67,10 @@
                 { type: 'fence', x: 40, y: 380, width: 36, height: 36 },
                 { type: 'fence', x: 40, y: 418, width: 36, height: 36 },
                 { type: 'well', x: 640, y: 560, width: 90, height: 90 }
+            ],
+            gatherables: [
+                { type: 'ore', x: 560, y: 320, width: 40, height: 40 },
+                { type: 'chest', x: 220, y: 420, width: 36, height: 36 }
             ]
         },
 
@@ -320,6 +329,11 @@
                 { type: 'tree', x: 630, y: 250, width: 95, height: 95 },
                 { type: 'bush', x: 240, y: 300, width: 50, height: 50 },
                 { type: 'bush', x: 510, y: 520, width: 48, height: 48 }
+            ],
+            gatherables: [
+                { type: 'shrineBlessing', x: 370, y: 400, width: 48, height: 48 },
+                { type: 'herb', x: 320, y: 450, width: 32, height: 32 },
+                { type: 'herb', x: 450, y: 370, width: 32, height: 32 }
             ]
         }
     };

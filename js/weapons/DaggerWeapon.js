@@ -80,7 +80,7 @@
             { name: 'slash', arcDegrees: 90, duration: 280, staminaCost: 6, range: 42, damageMultiplier: 1.0, animationKey: 'melee', knockbackForce: 80, stunBuildup: 18, reverseSweep: true },
             { name: 'slash', arcDegrees: 100, duration: 320, staminaCost: 8, range: 44, damageMultiplier: 1.2, animationKey: 'melee', knockbackForce: 100, stunBuildup: 22 }
         ],
-        // Dash attack: leap forward (player Shift+click; reserved for future goblin use)
+        // Dash attack: leap forward (player Shift+click)
         dashAttack: {
             name: 'leap',
             arcDegrees: 90,

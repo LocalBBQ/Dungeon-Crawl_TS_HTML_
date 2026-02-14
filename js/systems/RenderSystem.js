@@ -23,7 +23,8 @@ class RenderSystem {
     }
 
     _getContext(camera) {
-        return createRenderContext(this.ctx, this.canvas, camera, this.systems, this.settings);
+        const settings = this.settings != null ? this.settings : {};
+        return createRenderContext(this.ctx, this.canvas, camera, this.systems, settings);
     }
 
     /** Draw world + non-depth obstacles only. Depth-sort obstacles (trees, etc.) are drawn with entities in renderEntities. */

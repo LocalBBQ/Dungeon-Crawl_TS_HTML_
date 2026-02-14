@@ -23,9 +23,5 @@
         }
     };
 
-    function createAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime) {
-        return new SkeletonAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime);
-    }
-
-    window.EnemySkeleton = EnemyType.fromConfig(config, createAttack);
+    window.EnemySkeleton = EnemyType.fromConfig(config);
 })();

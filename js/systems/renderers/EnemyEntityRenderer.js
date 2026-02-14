@@ -391,7 +391,7 @@ const EnemyEntityRenderer = {
             }
             this.drawWeapon(context, 'goblin', screenX, screenY, movement ? movement.facingAngle : 0, r, h, combat);
         } else if (enemyType === 'bandit') {
-            // Player-like humanoid: torso, hood, pauldrons, then mace (same proportions as player)
+            // Knight-like: same silhouette as player (torso, steel pauldrons, helmet with visor), tarnished steel to read as enemy
             const lw = Math.max(1, 2 / camera.zoom);
             ctx.fillStyle = bodyColor;
             ctx.strokeStyle = strokeColor;
@@ -408,18 +408,34 @@ const EnemyEntityRenderer = {
             const paulOffsetY = helmetRy * 0.72;
             const paulRx = r * 0.22;
             const paulRy = h * 0.28;
-            ctx.fillStyle = '#5a4a3a';
-            ctx.strokeStyle = '#2a2218';
+            const steel = combat && combat.isAttacking ? '#7a6b6b' : '#6a6a78';
+            const steelDark = '#4a4a58';
+            const steelDarker = '#3a3a48';
+            ctx.fillStyle = steel;
+            ctx.strokeStyle = steelDarker;
+            ctx.lineWidth = lw;
             ctx.beginPath();
             ctx.ellipse(0, paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
             ctx.ellipse(0, -paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = '#4a3d32';
-            ctx.strokeStyle = '#2a2218';
+            ctx.fillStyle = steelDark;
+            ctx.strokeStyle = steelDarker;
             ctx.beginPath();
             ctx.ellipse(0, 0, helmetRx, helmetRy, 0, 0, Math.PI * 2);
             ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = Math.max(1.5, lw * 1.2);
+            ctx.beginPath();
+            ctx.moveTo(helmetRx * 0.35, 0);
+            ctx.lineTo(helmetRx * 0.95, 0);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = lw * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(-helmetRx * 0.5, 0);
+            ctx.lineTo(helmetRx * 0.5, 0);
             ctx.stroke();
             ctx.restore();
             // Mace swipe arc: during wind-up (telegraph) and during active swing
@@ -439,6 +455,7 @@ const EnemyEntityRenderer = {
                 PlayerCombatRenderer.drawMace(ctx, screenX, screenY, transform, movement, combat, camera);
             }
         } else if (enemyType === 'banditDagger') {
+            // Knight-like: same silhouette as player (torso, steel pauldrons, helmet with visor), tarnished steel to read as enemy
             const lw = Math.max(1, 2 / camera.zoom);
             ctx.fillStyle = bodyColor;
             ctx.strokeStyle = strokeColor;
@@ -455,18 +472,34 @@ const EnemyEntityRenderer = {
             const paulOffsetY = helmetRy * 0.72;
             const paulRx = r * 0.22;
             const paulRy = h * 0.28;
-            ctx.fillStyle = '#5a4a3a';
-            ctx.strokeStyle = '#2a2218';
+            const steel = combat && combat.isAttacking ? '#7a6b6b' : '#6a6a78';
+            const steelDark = '#4a4a58';
+            const steelDarker = '#3a3a48';
+            ctx.fillStyle = steel;
+            ctx.strokeStyle = steelDarker;
+            ctx.lineWidth = lw;
             ctx.beginPath();
             ctx.ellipse(0, paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
             ctx.ellipse(0, -paulOffsetY, paulRx, paulRy, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = '#4a3d32';
-            ctx.strokeStyle = '#2a2218';
+            ctx.fillStyle = steelDark;
+            ctx.strokeStyle = steelDarker;
             ctx.beginPath();
             ctx.ellipse(0, 0, helmetRx, helmetRy, 0, 0, Math.PI * 2);
             ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.lineWidth = Math.max(1.5, lw * 1.2);
+            ctx.beginPath();
+            ctx.moveTo(helmetRx * 0.35, 0);
+            ctx.lineTo(helmetRx * 0.95, 0);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = lw * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(-helmetRx * 0.5, 0);
+            ctx.lineTo(helmetRx * 0.5, 0);
             ctx.stroke();
             ctx.restore();
             // Dagger swipe arc and weapon: use handler sweep each frame so attack redraws

@@ -37,5 +37,5 @@
         attackStaminaCost: 25
     };
 
-    window.EnemyBandit = EnemyType.fromConfig(config, null);
+    window.EnemyBandit = EnemyType.fromConfig(config);
 })();

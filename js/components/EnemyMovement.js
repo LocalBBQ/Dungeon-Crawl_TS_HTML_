@@ -178,11 +178,51 @@ class EnemyMovement extends Movement {
         }
         
         // Type-specific movement behaviors can be added here
-        // For now, all types use standard path following
         this.updateTypeSpecificMovement(deltaTime, systems);
         
         // Call parent for path following
         super.updateMovement(deltaTime, systems);
+
+        // Separation: steer away from nearby enemies so they don't cluster
+        this.applySeparation(systems);
+    }
+
+    /** Steer away from nearby enemies to keep packs dispersed; cap speed after blending. */
+    applySeparation(systems) {
+        const transform = this.entity.getComponent(Transform);
+        if (!transform) return;
+        const entityManager = systems && systems.get ? systems.get('entities') : null;
+        const entities = entityManager && typeof entityManager.getEntities === 'function' ? entityManager.getEntities() : null;
+        if (!entities || !entities.length) return;
+
+        const SEPARATION_RADIUS = 85;
+        const SEPARATION_STRENGTH = 2.0;
+        let sx = 0, sy = 0;
+        for (const e of entities) {
+            if (e === this.entity || !e.active) continue;
+            const r = e.getComponent && e.getComponent(Renderable);
+            if (!r || r.type !== 'enemy') continue;
+            const t = e.getComponent && e.getComponent(Transform);
+            if (!t) continue;
+            const dx = transform.x - t.x;
+            const dy = transform.y - t.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 1 || dist > SEPARATION_RADIUS) continue;
+            const strength = (1 - dist / SEPARATION_RADIUS) * SEPARATION_STRENGTH;
+            const inv = 1 / dist;
+            sx += dx * inv * strength;
+            sy += dy * inv * strength;
+        }
+        if (sx !== 0 || sy !== 0) {
+            this.velocityX += sx;
+            this.velocityY += sy;
+            const mag = Math.sqrt(this.velocityX * this.velocityX + this.velocityY * this.velocityY);
+            if (mag > this.speed && mag > 0) {
+                const scale = this.speed / mag;
+                this.velocityX *= scale;
+                this.velocityY *= scale;
+            }
+        }
     }
     
     // Override in subclasses or extend here for type-specific movement behaviors

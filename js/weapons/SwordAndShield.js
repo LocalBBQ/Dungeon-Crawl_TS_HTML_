@@ -63,18 +63,19 @@
         }
     }
 
-    // Balancing: attackSpeed < 1 = slower swings, cooldown = seconds between attacks, cooldownMultiplier = scale cooldown
+    // Config options: see weaponBehavior.js for full reference (top-level, stages, block).
     const config = {
         name: 'swordAndShield',
         baseRange: 80,
         baseDamage: 15,
         baseArcDegrees: 60,
         cooldown: 0.46,
-        attackSpeed: .6 ,
-        cooldownMultiplier: .5,
-        comboWindow: 1.5                                                                                                                                                                                                                ,
+        attackSpeed: 0.6,
+        cooldownMultiplier: 0.5,
+        comboWindow: 1.5,
         baseStunBuildup: 25,
         weaponLength: 55,
+        // block: arcDegrees = block cone; damageReduction 0–1; staminaCost per block; shieldBash = attack while blocking
         block: {
             enabled: true,
             arcDegrees: 180,

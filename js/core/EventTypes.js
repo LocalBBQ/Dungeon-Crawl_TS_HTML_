@@ -12,6 +12,7 @@ const EventTypes = {
     // Combat / damage events
     DAMAGE_TAKEN: 'damage:taken',
     PLAYER_HIT_ENEMY: 'combat:playerHitEnemy',
+    PLAYER_KILLED_ENEMY: 'combat:playerKilledEnemy',
     PLAYER_DASH_ATTACK: 'combat:playerDashAttack'
 };
 

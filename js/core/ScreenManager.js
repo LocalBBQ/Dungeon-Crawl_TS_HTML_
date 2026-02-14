@@ -661,11 +661,27 @@ class ScreenManager {
                 y: startY + 7 * 40
             },
             {
+                key: 'playerHealthBarAlways',
+                label: 'Player Health Bar Always',
+                value: settings.showPlayerHealthBarAlways,
+                type: 'toggle',
+                x: cx - rowWidth / 2,
+                y: startY + 8 * 40
+            },
+            {
+                key: 'enemyHealthBars',
+                label: 'Enemy Health Bars',
+                value: settings.showEnemyHealthBars,
+                type: 'toggle',
+                x: cx - rowWidth / 2,
+                y: startY + 9 * 40
+            },
+            {
                 key: 'controls',
                 label: 'Controls',
                 type: 'link',
                 x: cx - rowWidth / 2,
-                y: startY + 8 * 40
+                y: startY + 10 * 40
             }
         ];
 
