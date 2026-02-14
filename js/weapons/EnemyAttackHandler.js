@@ -1,4 +1,4 @@
-// Single enemy attack handler: weapon + behavior type. Replaces GoblinAttack, ChieftainAttack, DemonAttack, SkeletonAttack, EnemyAttack.
+// Single enemy attack handler: weapon + behavior type. Used by registry; EnemyAttack is fallback for unknown types.
 // Behavior types: slashOnly, slashAndLeap, chargeRelease, rangedOnly.
 class EnemyAttackHandler {
     constructor(weaponOrAttackDef, behaviorType, options = {}) {

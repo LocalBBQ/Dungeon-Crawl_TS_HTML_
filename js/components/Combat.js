@@ -20,6 +20,8 @@ class Combat {
             this.attackHandler = HandlerClass ? new HandlerClass(weapon || Weapons.swordAndShield, { isPlayer: true }) : new PlayerAttack(weapon || Weapons.swordAndShield);
             this.playerAttack = this.attackHandler;
         } else {
+            this.attackHandler = (Enemies.createAttackHandler && Enemies.createAttackHandler(enemyType))
+                || new EnemyAttack(attackRange, attackDamage, attackArc, cooldown, windUpTime);
             this.attackHandler = (Enemies.createAttackHandler && Enemies.createAttackHandler(enemyType)) || Combat._noOpAttackHandler(attackRange, attackDamage, attackArc);
             this.enemyAttackHandler = this.attackHandler;
         }

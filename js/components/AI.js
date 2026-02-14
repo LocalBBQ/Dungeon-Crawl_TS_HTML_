@@ -7,7 +7,7 @@ class AI {
         this.idleTimer = 0;
         this.wanderTargetX = 0;
         this.wanderTargetY = 0;
-        this.pathUpdateTimer = 0;
+        this.pathUpdateTimer = Utils.randomInt(0, 29); // Stagger so pack doesn't all recalc path the same frame
         this.pathUpdateInterval = 30;
         this.entity = null;
         this.enemyType = null; // Will be set by EnemyManager
@@ -42,6 +42,23 @@ class AI {
         this.patrolTargetY = null;
         this.patrolDirection = 1; // 1 = going to end, -1 = going to start
         this.patrolReachedThreshold = 10; // Distance threshold to consider reached
+        this.patrolPhase = Math.random(); // 0..1: position along segment so each enemy starts at a different point
+
+        // Chase path variation: each enemy paths to a different point near the player so they don't all take the same route
+        this._chaseOffsetAngle = Math.random() * Math.PI * 2;
+        this._chaseOffsetDist = 35 + Math.random() * 45; // 35..80 px from player center
+
+        // Roam area: when set, idle wander picks targets inside this circle (scene tile / pack area)
+        this.roamCenterX = null;
+        this.roamCenterY = null;
+        this.roamRadius = null;
+
+        // Idle behavior: 'patrol' | 'guard' | 'wander' | 'loiter' | 'sleep' | 'circularPatrol' | 'packFollow'
+        // Set by spawn; default inferred from patrolConfig (patrol) or wander (wander)
+        this.idleBehavior = null;
+        this.idleBehaviorConfig = null;
+        this._circularPatrolWaypointIndex = 0;
+        this._guardTurnAngle = 0;
 
         // Stamina back-off: goblins and bandits back off when exhausted until 50% recovered
         this.staminaExhausted = false;
@@ -324,14 +341,35 @@ class AI {
             } else {
                 this.backOffFromPlayer(playerTransform, movement, systems);
             }
+        } else if (this.idleBehavior === 'sleep' && this.idleBehaviorConfig && this.idleBehaviorConfig.wakeRadius != null && distToPlayer > this.idleBehaviorConfig.wakeRadius) {
+            this.state = 'sleep';
+            this.sleep(transform, movement);
         } else if (distToPlayer < effectiveDetectionRange) {
-            // Chase player (this includes when lunge is on cooldown)
             this.state = 'chase';
             this.chasePlayer(playerTransform, movement, systems);
-        } else if (this.patrolConfig) {
-            // Use patrol behavior if configured
+        } else {
+            this.runIdleBehavior(transform, movement, systems);
+        }
+    }
+
+    runIdleBehavior(transform, movement, systems) {
+        const behavior = this.idleBehavior || (this.patrolConfig ? 'patrol' : 'wander');
+        const config = this.idleBehaviorConfig;
+        if (behavior === 'patrol' && this.patrolConfig) {
             this.state = 'patrol';
             this.patrol(transform, movement, systems);
+        } else if (behavior === 'guard' && config && config.type === 'guard') {
+            this.state = 'guard';
+            this.guard(transform, movement, systems);
+        } else if (behavior === 'circularPatrol' && config && config.type === 'circularPatrol') {
+            this.state = 'circularPatrol';
+            this.circularPatrol(transform, movement, systems);
+        } else if (behavior === 'packFollow' && config && config.type === 'packFollow') {
+            this.state = 'packFollow';
+            this.packFollow(transform, movement, systems);
+        } else if (behavior === 'sleep' && config && config.type === 'sleep') {
+            this.state = 'sleep';
+            this.sleep(transform, movement);
         } else {
             this.state = 'idle';
             this.wander(transform, movement, systems);
@@ -347,9 +385,11 @@ class AI {
         
         if (pathfinding && movement) {
             if (!movement.hasPath() || this.pathUpdateTimer <= 0) {
+                const destX = playerTransform.x + Math.cos(this._chaseOffsetAngle) * this._chaseOffsetDist;
+                const destY = playerTransform.y + Math.sin(this._chaseOffsetAngle) * this._chaseOffsetDist;
                 const path = pathfinding.findPath(
                     transform.x, transform.y,
-                    playerTransform.x, playerTransform.y,
+                    destX, destY,
                     transform.width, transform.height
                 );
                 if (path && path.length > 0) {
@@ -361,13 +401,12 @@ class AI {
                 this.pathUpdateTimer = this.pathUpdateInterval;
             }
         } else if (movement) {
-            // Fallback to direct movement with obstacle awareness
-            const dx = playerTransform.x - transform.x;
-            const dy = playerTransform.y - transform.y;
+            const destX = playerTransform.x + Math.cos(this._chaseOffsetAngle) * this._chaseOffsetDist;
+            const destY = playerTransform.y + Math.sin(this._chaseOffsetAngle) * this._chaseOffsetDist;
+            const dx = destX - transform.x;
+            const dy = destY - transform.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
             if (distance > 0) {
-                // Move towards player - obstacle avoidance will handle collisions
                 movement.setVelocity(dx, dy);
             }
         }
@@ -389,26 +428,19 @@ class AI {
     }
 
     handlePathfindingFailure(transform, playerTransform, movement, obstacleManager) {
-        if (!obstacleManager) {
-            // No obstacle manager, just move directly
-            const dx = playerTransform.x - transform.x;
-            const dy = playerTransform.y - transform.y;
-            movement.setVelocity(dx, dy);
-            return;
-        }
-
-        // Try to find a direction towards player that's not blocked
-        const dx = playerTransform.x - transform.x;
-        const dy = playerTransform.y - transform.y;
+        const destX = playerTransform.x + Math.cos(this._chaseOffsetAngle) * this._chaseOffsetDist;
+        const destY = playerTransform.y + Math.sin(this._chaseOffsetAngle) * this._chaseOffsetDist;
+        const dx = destX - transform.x;
+        const dy = destY - transform.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
         if (distance < 5) {
             movement.stop();
             return;
         }
-
-        // Try moving in the general direction of the player
-        // The Movement component's obstacle avoidance will handle getting around obstacles
+        if (!obstacleManager) {
+            movement.setVelocity(dx, dy);
+            return;
+        }
         movement.setVelocity(dx, dy);
     }
 
@@ -417,11 +449,17 @@ class AI {
 
         if (this.idleTimer <= 0) {
             this.idleTimer = Utils.randomInt(60, 180);
-            const wanderRadius = 40;
-            this.wanderTargetX = transform.x + Utils.random(-wanderRadius, wanderRadius);
-            this.wanderTargetY = transform.y + Utils.random(-wanderRadius, wanderRadius);
-            
             const worldConfig = GameConfig.world;
+            if (this.roamCenterX != null && this.roamCenterY != null && this.roamRadius != null && this.roamRadius > 0) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * this.roamRadius;
+                this.wanderTargetX = this.roamCenterX + Math.cos(angle) * dist;
+                this.wanderTargetY = this.roamCenterY + Math.sin(angle) * dist;
+            } else {
+                const wanderRadius = 40;
+                this.wanderTargetX = transform.x + Utils.random(-wanderRadius, wanderRadius);
+                this.wanderTargetY = transform.y + Utils.random(-wanderRadius, wanderRadius);
+            }
             this.wanderTargetX = Utils.clamp(this.wanderTargetX, 0, worldConfig.width);
             this.wanderTargetY = Utils.clamp(this.wanderTargetY, 0, worldConfig.height);
             
@@ -460,12 +498,15 @@ class AI {
     patrol(transform, movement, systems) {
         if (!this.patrolConfig) return;
 
-        // Initialize patrol targets if not set
+        // Initialize patrol targets if not set: spread along segment so enemies don't march in lockstep
         if (this.patrolTargetX === null || this.patrolTargetY === null) {
-            // Start by going to the end point
-            this.patrolTargetX = this.patrolConfig.endX;
-            this.patrolTargetY = this.patrolConfig.endY;
-            this.patrolDirection = 1;
+            const sx = this.patrolConfig.startX;
+            const sy = this.patrolConfig.startY;
+            const ex = this.patrolConfig.endX;
+            const ey = this.patrolConfig.endY;
+            this.patrolTargetX = sx + (ex - sx) * this.patrolPhase;
+            this.patrolTargetY = sy + (ey - sy) * this.patrolPhase;
+            this.patrolDirection = 1; // head towards end first
         }
 
         // Calculate distance to current patrol target
@@ -495,10 +536,78 @@ class AI {
             const newDist = Math.sqrt(newDx * newDx + newDy * newDy);
 
             if (newDist > this.patrolReachedThreshold) {
-                // Use direct movement for straight line patrol
                 movement.setVelocity(newDx, newDy);
             } else {
-                // Close enough, stop briefly before turning around
+                movement.stop();
+            }
+        }
+    }
+
+    guard(transform, movement, systems) {
+        const config = this.idleBehaviorConfig;
+        if (!config || config.type !== 'guard') return;
+        const cx = config.centerX;
+        const cy = config.centerY;
+        const radius = config.radius != null ? config.radius : 60;
+        const dist = Math.sqrt((transform.x - cx) ** 2 + (transform.y - cy) ** 2);
+        if (dist > radius && movement) {
+            const dx = cx - transform.x;
+            const dy = cy - transform.y;
+            movement.setVelocity(dx, dy);
+        } else {
+            if (movement) movement.stop();
+            if (this._guardTurnAngle == null && config.faceAngle != null) this._guardTurnAngle = config.faceAngle;
+            if (this._guardTurnAngle == null && movement) this._guardTurnAngle = movement.facingAngle;
+            if (config.turnSpeed && config.turnSpeed !== 0) {
+                this._guardTurnAngle += config.turnSpeed * (1/60);
+                if (movement) movement.facingAngle = this._guardTurnAngle;
+            } else if (config.faceAngle != null && movement) {
+                movement.facingAngle = config.faceAngle;
+            }
+        }
+    }
+
+    sleep(transform, movement, systems) {
+        if (movement) movement.stop();
+    }
+
+    circularPatrol(transform, movement, systems) {
+        const config = this.idleBehaviorConfig;
+        if (!config || config.type !== 'circularPatrol' || !config.waypoints || !config.waypoints.length) return;
+        const waypoints = config.waypoints;
+        const idx = this._circularPatrolWaypointIndex != null ? this._circularPatrolWaypointIndex : 0;
+        const threshold = config.reachedThreshold != null ? config.reachedThreshold : 12;
+        const wx = waypoints[idx].x;
+        const wy = waypoints[idx].y;
+        const dx = wx - transform.x;
+        const dy = wy - transform.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < threshold) {
+            this._circularPatrolWaypointIndex = (idx + 1) % waypoints.length;
+        }
+        if (movement && dist >= threshold) {
+            movement.setVelocity(dx, dy);
+        } else if (movement && dist < threshold) {
+            movement.stop();
+        }
+    }
+
+    packFollow(transform, movement, systems) {
+        const config = this.idleBehaviorConfig;
+        if (!config || config.type !== 'packFollow') return;
+        const cx = config.centerX;
+        const cy = config.centerY;
+        const followRadius = config.followRadius != null ? config.followRadius : 50;
+        const angle = config.offsetAngle != null ? config.offsetAngle : 0;
+        const targetX = cx + Math.cos(angle) * followRadius * 0.6;
+        const targetY = cy + Math.sin(angle) * followRadius * 0.6;
+        const dx = targetX - transform.x;
+        const dy = targetY - transform.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (movement) {
+            if (dist > 8) {
+                movement.setVelocity(dx, dy);
+            } else {
                 movement.stop();
             }
         }

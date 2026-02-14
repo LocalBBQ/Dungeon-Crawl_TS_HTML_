@@ -41,6 +41,14 @@ class Game {
             this.equippedWeaponKey = (GameConfig.player && GameConfig.player.defaultWeapon) ? GameConfig.player.defaultWeapon : 'swordAndShield';
             // Most recent enemy hit by player (for tooltip)
             this.lastHitEnemyId = null;
+            // Gold (from gatherables; for future upgrades)
+            this.gold = 0;
+            // Kills this life (resets when player dies)
+            this.killsThisLife = 0;
+            // Set by GatherableManager each frame: true when player overlaps a gatherable (suppress attack on click)
+            this.playerInGatherableRange = false;
+            // Inventory/equipment panel (Tab to toggle)
+            this.inventoryOpen = false;
 
             // Game-wide settings (toggled from pause/settings screen)
             this.settings = {
@@ -51,7 +59,9 @@ class Game {
                 useEnvironmentSprites: false, // Trees/rocks/houses etc use sprite images vs procedural shapes
                 showPlayerHitboxIndicators: true,  // Player attack arc, thrust rect
                 showEnemyHitboxIndicators: true,   // Enemy cones, wind-up, attack indicator, lunge telegraph
-                showEnemyStaminaBars: false        // Enemy stamina bars (e.g. goblins)
+                showEnemyStaminaBars: false,      // Enemy stamina bars (e.g. goblins)
+                showPlayerHealthBarAlways: false, // Floating health (and stamina) bar above player
+                showEnemyHealthBars: false        // Floating health bars above all enemies
             };
             
             // Initialize screen manager
@@ -123,15 +133,18 @@ class Game {
         const spriteManager = new SpriteManager();
         this.systems.register('sprites', spriteManager);
 
-        // Register core systems in order
+        // Register core systems in order (do not register Game as a system — SystemManager.update would call Game.update recursively)
         this.systems
             .register('input', new InputSystem(this.canvas))
             .register('camera', new CameraSystem(initialWorldWidth, initialWorldHeight))
             .register('collision', new CollisionSystem())
-            .register('obstacles', new ObstacleManager());
+            .register('obstacles', new ObstacleManager())
+            .register('gatherables', new GatherableManager(this));
+
+        const obstacleManager = this.systems.get('obstacles');
+        if (obstacleManager && obstacleManager.init) obstacleManager.init(this.systems);
 
         // Generate world before pathfinding (use level 1 config and dimensions)
-        const obstacleManager = this.systems.get('obstacles');
         const level1Obstacles = level1Config && level1Config.obstacles ? level1Config.obstacles : GameConfig.obstacles;
         const portalConfig = GameConfig.portal || { x: 2400, y: 1400, width: 80, height: 80 };
         obstacleManager.generateWorld(initialWorldWidth, initialWorldHeight, level1Obstacles, {
@@ -155,11 +168,10 @@ class Game {
             .register('healthOrbs', new HealthOrbManager())
             .register('render', new RenderSystem(this.canvas, this.ctx));
 
-        // Initialize render system with systems reference
+        // Initialize render system with systems reference and game settings (needed for attack/hitbox rendering)
         const renderSystem = this.systems.get('render');
-        if (renderSystem && renderSystem.init) {
-            renderSystem.init(this.systems);
-            // Expose live settings so render system can respect sprite toggles
+        if (renderSystem) {
+            if (renderSystem.init) renderSystem.init(this.systems);
             renderSystem.settings = this.settings;
         }
     }
@@ -252,6 +264,26 @@ class Game {
                 console.log(`Loaded Knight_8_D_Attk2: same frame size as idle (${knightFrameWidth}x${knightFrameHeight}, ${knightRows}×${knightCols})`);
             } catch (error) {
                 console.warn('Failed to load Knight_8_D_Attk2.png:', error);
+            }
+        }
+
+        // Load knight 8-direction overhead chop (greatsword) — same frame size and layout as idle (e.g. 1×8 or 8×1)
+        const knightChopPath = 'assets/sprites/player/Knight_8_D_Chop.png';
+        if (knightFrameWidth > 0 && knightFrameHeight > 0) {
+            try {
+                await spriteManager.loadSprite(knightChopPath);
+                await spriteManager.loadSpriteSheet(
+                    knightChopPath,
+                    knightFrameWidth,
+                    knightFrameHeight,
+                    knightRows,
+                    knightCols
+                );
+                const chopSheetKey = `${knightChopPath}_${knightFrameWidth}_${knightFrameHeight}_${knightRows}_${knightCols}`;
+                loadedKnightSheets.meleeChop = chopSheetKey;
+                console.log(`Loaded Knight_8_D_Chop: same frame size as idle (${knightFrameWidth}x${knightFrameHeight}, ${knightRows}×${knightCols})`);
+            } catch (error) {
+                console.warn('Failed to load Knight_8_D_Chop.png:', error);
             }
         }
 
@@ -351,7 +383,7 @@ class Game {
             spriteManager.goblin8DLungeSheetKey = null;
         }
 
-        // Load legacy goblin sprite sheet (5×4) as fallback when 8D is not used
+        // Fallback goblin sprite sheet (5×4) when 8D lunge sheet is not used
         try {
             const goblinSpritePath = 'assets/sprites/enemies/Goblin.png';
             const goblinRows = 5;
@@ -551,7 +583,24 @@ class Game {
                 };
             }
         }
-        
+
+        if (knightSheets.meleeChop) {
+            const meleeChopSheet = spriteManager.getSpriteSheet(knightSheets.meleeChop);
+            if (meleeChopSheet) {
+                const is8DirSingleFrame = (meleeChopSheet.rows === 8 && meleeChopSheet.cols === 1) || (meleeChopSheet.rows === 1 && meleeChopSheet.cols === 8);
+                const meleeChopUseDirectionAsColumn = meleeChopSheet.rows === 1 && meleeChopSheet.cols === 8;
+                const meleeChopFrames = is8DirSingleFrame ? [0] : Array.from({length: meleeChopSheet.totalFrames || (meleeChopSheet.rows * meleeChopSheet.cols)}, (_, i) => i);
+                animationConfig.animations.meleeChop = {
+                    spriteSheetKey: knightSheets.meleeChop,
+                    frames: meleeChopFrames,
+                    frameDuration: 0.1,
+                    loop: false,
+                    useDirection: is8DirSingleFrame,
+                    useDirectionAsColumn: meleeChopUseDirectionAsColumn
+                };
+            }
+        }
+
         if (knightSheets.meleeSpin) {
             const meleeSpinSheet = spriteManager.getSpriteSheet(knightSheets.meleeSpin);
             if (meleeSpinSheet) {
@@ -729,6 +778,10 @@ class Game {
                     this.settings.showEnemyHitboxIndicators = !this.settings.showEnemyHitboxIndicators;
                 } else if (item === 'enemyStaminaBars') {
                     this.settings.showEnemyStaminaBars = !this.settings.showEnemyStaminaBars;
+                } else if (item === 'playerHealthBarAlways') {
+                    this.settings.showPlayerHealthBarAlways = !this.settings.showPlayerHealthBarAlways;
+                } else if (item === 'enemyHealthBars') {
+                    this.settings.showEnemyHealthBars = !this.settings.showEnemyHealthBars;
                 } else if (item === 'controls') {
                     this.screenManager.setScreen('settings-controls');
                 } else if (item === 'back') {
@@ -754,6 +807,16 @@ class Game {
             const isStartKey = key === ' ' || key === 'enter';
             const isEscapeKey = key === 'escape' || key === 'esc';
 
+            // Tab: toggle inventory/equipment (only when playing or in hub)
+            if (key === 'tab') {
+                if (this.screenManager.isScreen('playing') || this.screenManager.isScreen('hub')) {
+                    this.inventoryOpen = !this.inventoryOpen;
+                    this.setInventoryPanelVisible(this.inventoryOpen);
+                    if (this.inventoryOpen) this.refreshInventoryPanel();
+                }
+                return;
+            }
+
             if (isStartKey) {
                 if (this.screenManager.isScreen('title')) {
                     this.screenManager.selectedStartLevel = 0;
@@ -766,6 +829,12 @@ class Game {
                     this.startGame();
                 }
             } else if (isEscapeKey) {
+                // Close inventory first if open, then other overlays/pause
+                if (this.inventoryOpen) {
+                    this.inventoryOpen = false;
+                    this.setInventoryPanelVisible(false);
+                    return;
+                }
                 // Toggle pause when in-game or in sanctuary (hub), or close overlays
                 if (this.screenManager.isScreen('playing')) {
                     this.screenBeforePause = 'playing';
@@ -814,6 +883,9 @@ class Game {
             });
         }
 
+        this.systems.eventBus.on(EventTypes.PLAYER_KILLED_ENEMY, () => {
+            this.killsThisLife++;
+        });
     }
 
     clearAllEntitiesAndProjectiles() {
@@ -984,6 +1056,10 @@ class Game {
         const uiOverlay = document.getElementById('ui-overlay');
         if (uiOverlay) {
             uiOverlay.style.display = visible ? 'flex' : 'none';
+        }
+        if (!visible) {
+            this.inventoryOpen = false;
+            this.setInventoryPanelVisible(false);
         }
     }
 
@@ -1238,6 +1314,10 @@ class Game {
         if (healthOrbManager) {
             healthOrbManager.update(deltaTime, this.systems);
         }
+        const gatherableManager = this.systems.get('gatherables');
+        if (gatherableManager) {
+            gatherableManager.update(deltaTime, this.systems);
+        }
         
         // Update all entities
         this.entities.update(deltaTime, this.systems);
@@ -1264,6 +1344,7 @@ class Game {
             // Check for player death
             const health = player.getComponent(Health);
             if (health && health.isDead && this.screenManager.isScreen('playing')) {
+                this.killsThisLife = 0; // reset for next life
                 this.screenManager.setScreen('death');
                 this.updateUIVisibility(false);
             }
@@ -1289,6 +1370,7 @@ class Game {
 
     updateUI(player) {
         if (!player) return;
+        if (this.inventoryOpen) this.refreshInventoryPanel();
 
         const health = player.getComponent(Health);
         const stamina = player.getComponent(Stamina);
@@ -1345,6 +1427,84 @@ class Game {
                 stunDurationRow.style.display = 'none';
             }
         }
+    }
+
+    setInventoryPanelVisible(visible) {
+        const el = document.getElementById('inventory-screen');
+        if (el) el.classList.toggle('hidden', !visible);
+    }
+
+    refreshInventoryPanel() {
+        const player = this.entities.get('player');
+        if (!player) return;
+        const health = player.getComponent(Health);
+        const stamina = player.getComponent(Stamina);
+        const combat = player.getComponent(Combat);
+        const healing = player.getComponent(PlayerHealing);
+
+        const healthEl = document.getElementById('inventory-stat-health');
+        const staminaEl = document.getElementById('inventory-stat-stamina');
+        const healthBarEl = document.getElementById('inventory-bar-health');
+        const staminaBarEl = document.getElementById('inventory-bar-stamina');
+        const damageEl = document.getElementById('inventory-stat-damage');
+        const weaponEl = document.getElementById('inventory-equip-weapon');
+        const healChargesEl = document.getElementById('inventory-stat-heal');
+        const killsEl = document.getElementById('inventory-stat-kills');
+        if (healthEl && health) healthEl.textContent = Math.floor(health.currentHealth) + ' / ' + health.maxHealth;
+        if (staminaEl && stamina) staminaEl.textContent = Math.floor(stamina.currentStamina) + ' / ' + stamina.maxStamina;
+        if (healthBarEl && health) healthBarEl.style.width = (health.percent * 100) + '%';
+        if (staminaBarEl && stamina) staminaBarEl.style.width = (stamina.percent * 100) + '%';
+        if (healChargesEl && healing) healChargesEl.textContent = healing.charges + ' / ' + healing.maxCharges;
+        if (damageEl && combat && combat.attackHandler) {
+            const dmg = combat.attackHandler.attackDamage != null ? Math.floor(combat.attackHandler.attackDamage) : '—';
+            damageEl.textContent = String(dmg);
+        }
+        if (weaponEl) weaponEl.textContent = this.getWeaponDisplayName(this.equippedWeaponKey);
+        if (killsEl) killsEl.textContent = String(this.killsThisLife);
+
+        this.drawInventoryPlayerPortrait();
+    }
+
+    /** Draw front-facing player sprite into the inventory portrait canvas. */
+    drawInventoryPlayerPortrait() {
+        const canvas = document.getElementById('inventory-player-portrait');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const spriteManager = this.systems && this.systems.get('sprites');
+        if (!spriteManager) return;
+        const knightSheets = spriteManager.knightSheets || {};
+        const idleKey = knightSheets.idle || knightSheets.walk || null;
+        if (!idleKey) return;
+        const sheet = spriteManager.getSpriteSheet(idleKey);
+        if (!sheet || !sheet.image) return;
+
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        const frontFrameCol = 0;
+        const frontFrameRow = 0;
+        const frameCoords = SpriteUtils.getFrameCoords(sheet, frontFrameRow, frontFrameCol);
+        if (!frameCoords || frameCoords.sourceWidth <= 0 || frameCoords.sourceHeight <= 0) return;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(
+            sheet.image,
+            frameCoords.sourceX, frameCoords.sourceY, frameCoords.sourceWidth, frameCoords.sourceHeight,
+            0, 0, w, h
+        );
+    }
+
+    getWeaponDisplayName(key) {
+        if (!key) return '—';
+        const names = {
+            swordAndShield: 'Sword & Shield',
+            greatsword: 'Greatsword',
+            mace: 'Mace',
+            dagger: 'Dagger',
+            crossbow: 'Crossbow'
+        };
+        return names[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
     }
 
     /** Get enemy entity at screen position (for hover tooltip). Returns null if none. */
@@ -1445,11 +1605,22 @@ class Game {
                         renderSystem.renderPortalInteractionPrompt(this.portal, cameraSystem, this.playerNearPortal);
                     }
                 }
+                const gatherableManager = this.systems.get('gatherables');
+                if (gatherableManager) {
+                    gatherableManager.render(this.ctx, cameraSystem);
+                }
                 const entities = this.entities.getAll();
                 if (entities.length === 0) {
                     console.warn('No entities to render');
                 }
                 renderSystem.renderEntities(entities, cameraSystem, obstacleManager, currentLevel);
+                if (gatherableManager) {
+                    const playerEntity = this.entities.get('player');
+                    if (playerEntity) {
+                        gatherableManager.renderInteractPrompt(this.ctx, cameraSystem, playerEntity);
+                        gatherableManager.renderGatherRing(this.ctx, cameraSystem, playerEntity);
+                    }
+                }
                 const projectileManager = this.systems.get('projectiles');
                 if (projectileManager) {
                     projectileManager.render(this.ctx, cameraSystem);

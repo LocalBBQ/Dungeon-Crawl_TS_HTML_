@@ -25,9 +25,5 @@
         }
     };
 
-    function createAttack() {
-        return new DemonAttack();
-    }
-
-    window.EnemyGreaterDemon = EnemyType.fromConfig(config, createAttack);
+    window.EnemyGreaterDemon = EnemyType.fromConfig(config);
 })();

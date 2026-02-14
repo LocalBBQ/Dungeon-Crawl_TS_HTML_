@@ -56,5 +56,5 @@
         attackStaminaCost: 12
     };
 
-    window.EnemyGoblin = EnemyType.fromConfig(config, null);
+    window.EnemyGoblin = EnemyType.fromConfig(config);
 })();

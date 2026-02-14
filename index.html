@@ -51,6 +51,96 @@
                 </div>
             </div>
         </div>
+
+        <!-- Inventory & Equipment (Tab to open, Escape to close) -->
+        <div id="inventory-screen" class="inventory-screen hidden">
+            <div class="inventory-panel">
+                <header class="inventory-header">
+                    <h2 class="inventory-title">Character</h2>
+                    <div class="inventory-portrait-wrap">
+                        <canvas id="inventory-player-portrait" class="inventory-portrait" width="96" height="96" aria-hidden="true"></canvas>
+                    </div>
+                </header>
+                <div class="inventory-stats">
+                    <div class="inventory-stats-bars">
+                        <div class="inventory-stat-with-bar">
+                            <span class="inventory-stat-label">Health</span>
+                            <div class="inventory-bar-container">
+                                <div id="inventory-bar-health" class="inventory-bar-fill health" style="width: 100%;"></div>
+                            </div>
+                            <span id="inventory-stat-health" class="inventory-stat-value">100 / 100</span>
+                        </div>
+                        <div class="inventory-stat-with-bar">
+                            <span class="inventory-stat-label">Stamina</span>
+                            <div class="inventory-bar-container">
+                                <div id="inventory-bar-stamina" class="inventory-bar-fill stamina" style="width: 100%;"></div>
+                            </div>
+                            <span id="inventory-stat-stamina" class="inventory-stat-value">50 / 50</span>
+                        </div>
+                    </div>
+                    <div class="inventory-stats-right">
+                        <div class="inventory-stat"><span class="inventory-stat-label">Damage</span><span id="inventory-stat-damage" class="inventory-stat-value">—</span></div>
+                        <div class="inventory-stat"><span class="inventory-stat-label">Heal</span><span id="inventory-stat-heal" class="inventory-stat-value">3 / 3</span></div>
+                        <div class="inventory-stat"><span class="inventory-stat-label">Kills</span><span id="inventory-stat-kills" class="inventory-stat-value">0</span></div>
+                    </div>
+                </div>
+                <div class="inventory-body">
+                    <div class="inventory-main">
+                        <div class="inventory-grid-label">Inventory</div>
+                        <div id="inventory-grid" class="inventory-grid" aria-label="Inventory grid">
+                            <!-- 4 columns x 6 rows = 24 slots -->
+                            <div class="inventory-slot" data-slot="0"></div>
+                            <div class="inventory-slot" data-slot="1"></div>
+                            <div class="inventory-slot" data-slot="2"></div>
+                            <div class="inventory-slot" data-slot="3"></div>
+                            <div class="inventory-slot" data-slot="4"></div>
+                            <div class="inventory-slot" data-slot="5"></div>
+                            <div class="inventory-slot" data-slot="6"></div>
+                            <div class="inventory-slot" data-slot="7"></div>
+                            <div class="inventory-slot" data-slot="8"></div>
+                            <div class="inventory-slot" data-slot="9"></div>
+                            <div class="inventory-slot" data-slot="10"></div>
+                            <div class="inventory-slot" data-slot="11"></div>
+                            <div class="inventory-slot" data-slot="12"></div>
+                            <div class="inventory-slot" data-slot="13"></div>
+                            <div class="inventory-slot" data-slot="14"></div>
+                            <div class="inventory-slot" data-slot="15"></div>
+                            <div class="inventory-slot" data-slot="16"></div>
+                            <div class="inventory-slot" data-slot="17"></div>
+                            <div class="inventory-slot" data-slot="18"></div>
+                            <div class="inventory-slot" data-slot="19"></div>
+                            <div class="inventory-slot" data-slot="20"></div>
+                            <div class="inventory-slot" data-slot="21"></div>
+                            <div class="inventory-slot" data-slot="22"></div>
+                            <div class="inventory-slot" data-slot="23"></div>
+                        </div>
+                    </div>
+                    <aside class="inventory-equipment">
+                        <div class="inventory-equipment-label">Equipment</div>
+                        <div class="equipment-slot" data-slot="weapon">
+                            <span class="equipment-slot-label">Weapon</span>
+                            <span id="inventory-equip-weapon" class="equipment-slot-value">—</span>
+                        </div>
+                        <div class="equipment-slot" data-slot="head">
+                            <span class="equipment-slot-label">Head</span>
+                            <span class="equipment-slot-value">—</span>
+                        </div>
+                        <div class="equipment-slot" data-slot="chest">
+                            <span class="equipment-slot-label">Chest</span>
+                            <span class="equipment-slot-value">—</span>
+                        </div>
+                        <div class="equipment-slot" data-slot="hands">
+                            <span class="equipment-slot-label">Hands</span>
+                            <span class="equipment-slot-value">—</span>
+                        </div>
+                        <div class="equipment-slot" data-slot="feet">
+                            <span class="equipment-slot-label">Feet</span>
+                            <span class="equipment-slot-value">—</span>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Game Scripts -->
@@ -80,10 +170,6 @@
     <script src="js/weapons/PlayerAttack.js"></script>
     <script src="js/weapons/WeaponAttackHandler.js"></script>
     <script src="js/weapons/EnemyAttack.js"></script>
-    <script src="js/weapons/GoblinAttack.js"></script>
-    <script src="js/weapons/SkeletonAttack.js"></script>
-    <script src="js/weapons/DemonAttack.js"></script>
-    <script src="js/weapons/ChieftainAttack.js"></script>
     <script src="js/weapons/ChieftainClubWeapon.js"></script>
     <script src="js/weapons/EnemyWeaponsRegistry.js"></script>
     <script src="js/weapons/EnemyAttackHandler.js"></script>
@@ -98,6 +184,13 @@
     <script src="js/enemies/Bandit.js"></script>
     <script src="js/enemies/BanditDagger.js"></script>
     <script src="js/enemies/EnemiesRegistry.js"></script>
+    
+    <!-- Behaviors (AI/entity behavior modules) -->
+    <script src="js/behaviors/PatrolBehavior.js"></script>
+    <script src="js/behaviors/GuardBehavior.js"></script>
+    <script src="js/behaviors/CircularPatrolBehavior.js"></script>
+    <script src="js/behaviors/SleepBehavior.js"></script>
+    <script src="js/behaviors/PackFollowBehavior.js"></script>
     
     <!-- Components -->
     <script src="js/components/Transform.js"></script>
@@ -155,6 +248,7 @@
     <script src="js/managers/DamageNumberManager.js"></script>
     <script src="js/managers/ProjectileManager.js"></script>
     <script src="js/managers/HealthOrbManager.js"></script>
+    <script src="js/managers/GatherableManager.js"></script>
     
     <!-- Controllers -->
     <script src="js/controllers/PlayerInputController.js"></script>
@@ -166,7 +260,7 @@
     <script>
         window.addEventListener('load', () => {
             const game = new Game();
-            console.log('Dungeon Crawler initialized!');
+            console.log('Dungeon Crawl initialized!');
         });
     </script>
 </body>

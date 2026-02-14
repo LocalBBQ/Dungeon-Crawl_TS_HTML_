@@ -20,6 +20,10 @@
                 { type: 'rock', x: 180, y: 440, width: 55, height: 55 },
                 { type: 'rock', x: 580, y: 300, width: 50, height: 50 },
                 { type: 'swampPool', x: 640, y: 580, width: 90, height: 70 }
+            ],
+            gatherables: [
+                { type: 'herb', x: 380, y: 380, width: 32, height: 32 },
+                { type: 'ore', x: 340, y: 320, width: 40, height: 40 }
             ]
         },
 
@@ -166,6 +170,10 @@
                 { type: 'rock', x: 300, y: 450, width: 60, height: 60 },
                 { type: 'rock', x: 500, y: 420, width: 58, height: 58 },
                 { type: 'rock', x: 200, y: 320, width: 55, height: 55 }
+            ],
+            gatherables: [
+                { type: 'shrineBlessing', x: 360, y: 400, width: 48, height: 48 },
+                { type: 'herb', x: 340, y: 360, width: 32, height: 32 }
             ]
         },
 
@@ -202,6 +210,10 @@
                 { type: 'grave', x: 350, y: 500, width: 46, height: 56 },
                 { type: 'rock', x: 180, y: 440, width: 58, height: 58 },
                 { type: 'rock', x: 560, y: 300, width: 55, height: 55 }
+            ],
+            gatherables: [
+                { type: 'ore', x: 320, y: 400, width: 40, height: 40 },
+                { type: 'herb', x: 450, y: 350, width: 32, height: 32 }
             ]
         }
     };

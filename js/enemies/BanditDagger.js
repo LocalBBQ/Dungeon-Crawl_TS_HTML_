@@ -55,5 +55,5 @@
         attackStaminaCost: 10
     };
 
-    window.EnemyBanditDagger = EnemyType.fromConfig(config, null);
+    window.EnemyBanditDagger = EnemyType.fromConfig(config);
 })();

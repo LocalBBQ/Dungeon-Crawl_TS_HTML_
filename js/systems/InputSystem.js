@@ -22,27 +22,34 @@ class InputSystem {
 
     setupEventListeners() {
         window.addEventListener('keydown', (e) => {
-            // Block Ctrl/Cmd + key so browser shortcuts don't fire (e.g. Ctrl+S, Ctrl+W close tab)
+            // Tab: open/close inventory; emit so Game can toggle, do not set keys
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                if (this.systems && this.systems.eventBus) {
+                    this.systems.eventBus.emit(EventTypes.INPUT_KEYDOWN, 'tab');
+                }
+                return;
+            }
+            // Block Ctrl/Cmd + any key: no browser shortcuts, no focus change, no game input
             const isCtrlOrCmd = e.ctrlKey || e.metaKey;
             const isModifierKey = e.key === 'Control' || e.key === 'Meta';
             if (isCtrlOrCmd || isModifierKey) {
                 e.preventDefault();
-            }
-            // Explicitly block Ctrl+W / Cmd+W (close tab) in case browser handles it early
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'W')) {
-                e.preventDefault();
+                return;
             }
             this.keys[e.key.toLowerCase()] = true;
             this.systems.eventBus.emit(EventTypes.INPUT_KEYDOWN, e.key.toLowerCase());
         }, { capture: true });
 
         window.addEventListener('keyup', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                return;
+            }
             const isCtrlOrCmd = e.ctrlKey || e.metaKey;
             if (isCtrlOrCmd || e.key === 'Control' || e.key === 'Meta') {
                 e.preventDefault();
-            }
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'W')) {
-                e.preventDefault();
+                return;
             }
             this.keys[e.key.toLowerCase()] = false;
             this.systems.eventBus.emit(EventTypes.INPUT_KEYUP, e.key.toLowerCase());

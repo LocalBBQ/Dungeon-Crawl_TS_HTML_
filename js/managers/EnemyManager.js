@@ -15,7 +15,7 @@ class EnemyManager {
         this.systems = systems;
     }
 
-    spawnEnemy(x, y, type = 'goblin', entityManager, patrolConfig = null, packModifierOverride = null, packHasNoModifier = false) {
+    spawnEnemy(x, y, type = 'goblin', entityManager, patrolConfig = null, packModifierOverride = null, packHasNoModifier = false, roamConfig = null, idleBehavior = null, idleBehaviorConfig = null) {
         const config = GameConfig.enemy.types[type] || GameConfig.enemy.types.goblin;
         
         const enemy = new Entity(x, y, `enemy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
@@ -24,6 +24,13 @@ class EnemyManager {
         if (!AIClass) throw new Error('AI component (AI.js) must load before EnemyManager. Check script order in index.html.');
         const ai = new AIClass(config.detectionRange, config.attackRange, patrolConfig);
         ai.enemyType = type; // Store enemy type for lunge detection
+        if (roamConfig && typeof roamConfig.centerX === 'number' && typeof roamConfig.centerY === 'number' && typeof roamConfig.radius === 'number' && roamConfig.radius > 0) {
+            ai.roamCenterX = roamConfig.centerX;
+            ai.roamCenterY = roamConfig.centerY;
+            ai.roamRadius = roamConfig.radius;
+        }
+        if (idleBehavior != null) ai.idleBehavior = idleBehavior;
+        if (idleBehaviorConfig != null) ai.idleBehaviorConfig = idleBehaviorConfig;
         
         // Pack modifier: only when this spawn is from a pack that rolled a modifier (modifierChance in config)
         const validOverride = packModifierOverride != null && GameConfig.packModifiers && GameConfig.packModifiers[packModifierOverride];
@@ -131,17 +138,26 @@ class EnemyManager {
 
     generateEnemyPacks(worldWidth, worldHeight, packDensity = 0.008, packSize = { min: 2, max: 5 }, entityManager, obstacleManager, enemyTypes = null, options = null, playerSpawn = null) {
         const tileSize = GameConfig.world.tileSize;
-        const numPacks = Math.floor(worldWidth * worldHeight * packDensity / (tileSize * tileSize));
+        let numPacks = Math.floor(worldWidth * worldHeight * packDensity / (tileSize * tileSize));
         const usePatrol = options && options.patrol === true;
+        const packSpread = options && options.packSpread && typeof options.packSpread.min === 'number' && typeof options.packSpread.max === 'number' ? options.packSpread : null;
+        const packCountVariance = typeof (options && options.packCountVariance) === 'number' ? Math.max(0, Math.min(1, options.packCountVariance)) : 0;
+        const minPackDistance = typeof (options && options.minPackDistance) === 'number' && options.minPackDistance > 0 ? options.minPackDistance : 0;
+
+        if (packCountVariance > 0) {
+            const factor = 1 - packCountVariance + Math.random() * 2 * packCountVariance;
+            numPacks = Math.max(1, Math.floor(numPacks * factor));
+        }
 
         // Exclude area: use actual player spawn when provided so packs don't land on spawn; otherwise world center
         const excludeArea = playerSpawn && typeof playerSpawn.x === 'number' && typeof playerSpawn.y === 'number'
             ? { x: playerSpawn.x, y: playerSpawn.y, radius: 300 }
             : { x: worldWidth / 2, y: worldHeight / 2, radius: 200 };
 
+        const placedPackCenters = [];
         let packsPlaced = 0;
         let attempts = 0;
-        const maxAttempts = numPacks * 3;
+        const maxAttempts = numPacks * 4;
 
         while (packsPlaced < numPacks && attempts < maxAttempts) {
             attempts++;
@@ -154,12 +170,46 @@ class EnemyManager {
                 continue;
             }
 
+            if (minPackDistance > 0) {
+                let tooClose = false;
+                for (const c of placedPackCenters) {
+                    if (Utils.distance(packCenterX, packCenterY, c.x, c.y) < minPackDistance) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                if (tooClose) continue;
+            }
+
             const enemiesInPack = Utils.randomInt(packSize.min, packSize.max);
-            const packRadius = 35; // How spread out enemies are within a pack
+            const packRadius = packSpread
+                ? packSpread.min + Math.random() * (packSpread.max - packSpread.min)
+                : 35;
 
             const patrolConfig = usePatrol && typeof PatrolBehavior !== 'undefined'
                 ? PatrolBehavior.createPatrolConfigForPack(packCenterX, packCenterY, packRadius)
                 : null;
+
+            let idleBehavior = (options && options.idleBehavior) || null;
+            let idleBehaviorConfig = (options && options.idleBehaviorConfig) || null;
+            if (idleBehavior && !idleBehaviorConfig) {
+                if (idleBehavior === 'guard' && typeof GuardBehavior !== 'undefined') {
+                    idleBehaviorConfig = GuardBehavior.createGuardConfig(packCenterX, packCenterY, packRadius);
+                } else if (idleBehavior === 'circularPatrol' && typeof CircularPatrolBehavior !== 'undefined') {
+                    idleBehaviorConfig = CircularPatrolBehavior.createCircularPatrolConfig(packCenterX, packCenterY, packRadius);
+                } else if (idleBehavior === 'sleep' && typeof SleepBehavior !== 'undefined') {
+                    idleBehaviorConfig = SleepBehavior.createSleepConfig(packRadius * 2);
+                } else if (idleBehavior === 'packFollow' && typeof PackFollowBehavior !== 'undefined') {
+                    idleBehaviorConfig = PackFollowBehavior.createPackFollowConfig(packCenterX, packCenterY, packRadius);
+                } else if (idleBehavior === 'patrol') {
+                    idleBehavior = null;
+                    idleBehaviorConfig = null;
+                }
+            }
+            if (idleBehavior === 'patrol' || (!idleBehavior && usePatrol)) {
+                idleBehavior = null;
+                idleBehaviorConfig = null;
+            }
 
             const packConfig = GameConfig.enemy.pack || {};
             const modifierChance = typeof packConfig.modifierChance === 'number' ? packConfig.modifierChance : 0.5;
@@ -167,6 +217,10 @@ class EnemyManager {
             const packGetsModifier = allModifierNames.length > 0 && Math.random() < modifierChance;
             const packModifier = packGetsModifier ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)] : null;
             const packHasNoModifier = !packGetsModifier;
+
+            // One type per pack so bandit packs and goblin packs stay separate (no mixed packs)
+            const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin', 'goblin', 'skeleton', 'greaterDemon'];
+            const packType = types[Utils.randomInt(0, types.length - 1)];
 
             let enemiesSpawnedInPack = 0;
             const packMaxAttempts = enemiesInPack * 5;
@@ -176,23 +230,26 @@ class EnemyManager {
                 packAttempts++;
 
                 const angle = Math.random() * Math.PI * 2;
-                const distance = Utils.random(0, packRadius);
+                const distance = Math.random() * packRadius;
                 const x = packCenterX + Math.cos(angle) * distance;
                 const y = packCenterY + Math.sin(angle) * distance;
 
                 const clampedX = Utils.clamp(x, 0, worldWidth);
                 const clampedY = Utils.clamp(y, 0, worldHeight);
 
+                const roamConfig = { centerX: packCenterX, centerY: packCenterY, radius: packRadius };
+                const finalIdleConfig = (idleBehavior === 'packFollow' && typeof PackFollowBehavior !== 'undefined')
+                    ? PackFollowBehavior.createPackFollowConfig(packCenterX, packCenterY, packRadius, { offsetAngle: Math.random() * Math.PI * 2 })
+                    : idleBehaviorConfig;
                 if (!obstacleManager || obstacleManager.canMoveTo(clampedX, clampedY, 25, 25)) {
-                    const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin', 'goblin', 'skeleton', 'greaterDemon'];
-                    const randomType = types[Utils.randomInt(0, types.length - 1)];
-                    this.spawnEnemy(clampedX, clampedY, randomType, entityManager, patrolConfig, packModifier, packHasNoModifier);
+                    this.spawnEnemy(clampedX, clampedY, packType, entityManager, patrolConfig, packModifier, packHasNoModifier, roamConfig, idleBehavior, finalIdleConfig);
                     enemiesSpawnedInPack++;
                 }
             }
 
             if (enemiesSpawnedInPack > 0) {
                 packsPlaced++;
+                placedPackCenters.push({ x: packCenterX, y: packCenterY });
             }
         }
     }
@@ -205,7 +262,10 @@ class EnemyManager {
         const size = typeof packSize === 'object'
             ? Utils.randomInt(packSize.min || 2, packSize.max || 4)
             : Math.max(1, packSize);
-        const packRadius = Math.min(radius, 80);
+        const packSpread = options && options.packSpread && typeof options.packSpread.min === 'number' && typeof options.packSpread.max === 'number' ? options.packSpread : null;
+        const packRadius = packSpread
+            ? packSpread.min + Math.random() * (packSpread.max - packSpread.min)
+            : Math.min(radius, 80);
         const usePatrol = options && options.patrol === true;
         const patrolConfig = usePatrol && typeof PatrolBehavior !== 'undefined'
             ? PatrolBehavior.createPatrolConfigForPack(centerX, centerY, packRadius)
@@ -216,17 +276,19 @@ class EnemyManager {
         const packGetsModifier = allModifierNames.length > 0 && Math.random() < modifierChance;
         const packModifier = packGetsModifier ? allModifierNames[Utils.randomInt(0, allModifierNames.length - 1)] : null;
         const packHasNoModifier = !packGetsModifier;
+        // One type per pack so bandit packs and goblin packs stay separate (no mixed packs)
+        const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin'];
+        const packType = types[Utils.randomInt(0, types.length - 1)];
         let spawned = 0;
         const maxAttempts = size * 8;
+        const roamConfig = { centerX: centerX, centerY: centerY, radius: packRadius };
         for (let a = 0; a < maxAttempts && spawned < size; a++) {
             const angle = Math.random() * Math.PI * 2;
-            const dist = Utils.random(0, packRadius);
+            const dist = Math.random() * packRadius;
             const x = centerX + Math.cos(angle) * dist;
             const y = centerY + Math.sin(angle) * dist;
             if (!obstacleManager || obstacleManager.canMoveTo(x, y, 25, 25)) {
-                const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin'];
-                const type = types[Utils.randomInt(0, types.length - 1)];
-                this.spawnEnemy(x, y, type, entityManager, patrolConfig, packModifier, packHasNoModifier);
+                this.spawnEnemy(x, y, packType, entityManager, patrolConfig, packModifier, packHasNoModifier, roamConfig);
                 spawned++;
             }
         }
@@ -248,7 +310,14 @@ class EnemyManager {
         const worldHeight = (levelConfig.worldHeight != null) ? levelConfig.worldHeight : worldConfig.height;
         const packConfig = levelConfig.packSpawn;
         const enemyTypes = levelConfig.enemyTypes || null;
-        const packOptions = packConfig.patrol ? { patrol: true } : null;
+        const packOptions = {
+            patrol: !!packConfig.patrol,
+            packSpread: packConfig.packSpread || null,
+            packCountVariance: packConfig.packCountVariance,
+            minPackDistance: packConfig.minPackDistance,
+            idleBehavior: packConfig.idleBehavior || null,
+            idleBehaviorConfig: packConfig.idleBehaviorConfig || null
+        };
         this.generateEnemyPacks(
             worldWidth,
             worldHeight,
@@ -278,7 +347,10 @@ class EnemyManager {
                     if (Utils.distance(centerX, centerY, playerSpawn.x, playerSpawn.y) < SPAWN_EXCLUDE_RADIUS) continue;
                 }
                 const count = (tile.spawn.count != null && tile.spawn.count > 0) ? tile.spawn.count : 1;
-                const packOptions = packConfig.patrol ? { patrol: true } : null;
+                const tilePackOptions = {
+                    patrol: !!packConfig.patrol,
+                    packSpread: packConfig.packSpread || null
+                };
                 const tileEnemyTypes = (tile.spawn.enemyTypes && tile.spawn.enemyTypes.length > 0) ? tile.spawn.enemyTypes : enemyTypes;
                 for (let i = 0; i < count; i++) {
                     this.spawnPackAt(
@@ -288,7 +360,7 @@ class EnemyManager {
                         entityManager,
                         obstacleManager,
                         tileEnemyTypes,
-                        packOptions
+                        tilePackOptions
                     );
                 }
             }
@@ -314,6 +386,9 @@ class EnemyManager {
             const health = enemy.getComponent(Health);
             if (health && health.isDead) {
                 this.enemiesKilledThisLevel++;
+                if (this.systems && this.systems.eventBus) {
+                    this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, {});
+                }
                 if (entityManager) {
                     entityManager.remove(enemy.id);
                 }
@@ -448,15 +523,6 @@ class EnemyManager {
                     if (enemyStatus) enemyStatus.addStunBuildup(combat.currentAttackStunBuildup || 0);
                     if (this.systems && this.systems.eventBus) {
                         this.systems.eventBus.emit(EventTypes.PLAYER_HIT_ENEMY, { killed: died });
-                    }
-                    if (died && this.systems) {
-                        const dropChance = GameConfig.player.healthOrbDropChance ?? 0.25;
-                        if (Math.random() < dropChance) {
-                            const healthOrbManager = this.systems.get('healthOrbs');
-                            if (healthOrbManager) {
-                                healthOrbManager.createOrb(enemyTransform.x, enemyTransform.y);
-                            }
-                        }
                     }
                     hitEnemies.push(enemy);
                     

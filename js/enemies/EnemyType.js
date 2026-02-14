@@ -1,10 +1,10 @@
-// Minimal helper for enemy type definitions (config + createAttack) used by EnemiesRegistry
-function EnemyType(config, createAttack) {
-    return { config, createAttack };
+// Minimal helper for enemy type definitions (config) used by EnemiesRegistry
+function EnemyType(config) {
+    return { config };
 }
 
-EnemyType.fromConfig = function (config, createAttack) {
-    return { config, createAttack };
+EnemyType.fromConfig = function (config) {
+    return { config };
 };
 
 if (typeof window !== 'undefined') {

@@ -1,4 +1,51 @@
 // Shared weapon behavior: config parsing and attack/charge resolution. No base class; each weapon delegates here.
+//
+// WEAPON CONFIG OPTIONS (parseWeaponConfig):
+//   Top-level:
+//     name              - Weapon id (e.g. 'greatsword').
+//     twoHanded         - true = two-handed (no block by convention).
+//     baseRange         - Default reach in world units; stages can override with range or rangeMultiplier.
+//     baseDamage        - Base damage; each stage uses baseDamage * damageMultiplier.
+//     baseArcDegrees    - Default cone angle in degrees; stages can override with arcDegrees.
+//     cooldown          - Seconds between attacks (base; cooldownMultiplier scales it).
+//     cooldownMultiplier - Multiplier for cooldown (e.g. 0.5 = half cooldown).
+//     attackSpeed       - Scale for swing duration: stage duration is duration/attackSpeed (< 1 = slower).
+//     comboWindow       - Seconds after an attack to chain the next combo hit before reset.
+//     maxComboStage     - Max combo step (e.g. 3 = slash1, slash2, chop); if null, uses stages.length.
+//     rangeMultiplier   - Global multiplier applied to all stage ranges.
+//     weaponLength      - Used for visuals/grip (e.g. sweep origin).
+//     stages            - Array of combo/dash stage configs (see STAGE OPTIONS below).
+//     dashAttack        - Optional special stage for dash (e.g. move+attack); same shape as a stage.
+//     chargeAttack      - Optional { minChargeTime, maxChargeTime, damageMultiplier, rangeMultiplier,
+//                          staminaCostMultiplier, chargedStageIndex [, chargedThrustDashSpeed, ...] }.
+//     block             - Optional block config (see BLOCK OPTIONS); null = no block.
+//     knockback         - Optional { force } fallback for stages without knockbackForce.
+//     attackVisual      - Optional visual/effect key.
+//
+// STAGE OPTIONS (each entry in stages or dashAttack):
+//     name, animationKey - Identifier and animation to play.
+//     arcDegrees         - Hit cone angle (degrees). 360+ = full circle. Ignored for thrust.
+//     arcOffsetDegrees   - Rotate cone center (e.g. for alternating slashes).
+//     range              - Reach in world units (or use rangeMultiplier of baseRange).
+//     rangeMultiplier    - Alternative: baseRange * rangeMultiplier.
+//     duration           - Attack duration in ms (divided by weapon attackSpeed).
+//     staminaCost        - Stamina consumed for this hit.
+//     damageMultiplier   - damage = baseDamage * damageMultiplier.
+//     stunBuildup        - Stun added per hit.
+//     knockbackForce     - Push force (world units); optional.
+//     reverseSweep       - true = sweep direction reversed for visuals.
+//     thrust             - true = thin rectangle hitbox (forward) instead of arc.
+//     thrustWidth        - Width of thrust rectangle (small = thin strip); used when thrust is true.
+//     dashSpeed          - Optional: movement speed during attack (dash attacks).
+//     dashDuration       - Optional: seconds the dash lasts (dash attacks).
+//
+// BLOCK OPTIONS (when block is set):
+//     enabled, animationKey - Enable block and animation key.
+//     arcDegrees         - Block cone (e.g. 180 = front half).
+//     damageReduction    - 0–1; 1 = full block, 0.5 = 50% damage through.
+//     staminaCost        - Stamina per successful block.
+//     shieldBash         - Optional { knockback, dashSpeed, dashDuration, staminaCost, range, arcDegrees }.
+//
 (function () {
     const CHARGE_TIME_TOLERANCE = 0.05;
 

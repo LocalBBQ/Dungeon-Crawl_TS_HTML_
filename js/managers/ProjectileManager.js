@@ -52,16 +52,6 @@ class ProjectileManager {
                                 const died = enemyHealth.takeDamage(projectile.damage);
                                 const enemyStatus = enemy.getComponent(StatusEffects);
                                 if (enemyStatus) enemyStatus.addStunBuildup(projectile.stunBuildup || 0);
-                                if (died && systems) {
-                                    const dropChance = GameConfig.player.healthOrbDropChance ?? 0.25;
-                                    if (Math.random() < dropChance && enemyTransform) {
-                                        const healthOrbManager = systems.get('healthOrbs');
-                                        if (healthOrbManager) {
-                                            healthOrbManager.createOrb(enemyTransform.x, enemyTransform.y);
-                                        }
-                                    }
-                                }
-                                
                                 // Apply knockback
                                 const enemyMovement = enemy.getComponent(Movement);
                                 if (enemyMovement && enemyTransform) {

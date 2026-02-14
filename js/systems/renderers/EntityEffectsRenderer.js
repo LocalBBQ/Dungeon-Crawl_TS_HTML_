@@ -142,7 +142,10 @@ const EntityEffectsRenderer = {
             ctx.fillRect(barX, stunDurationBarY, barWidth * statusEffects.stunDurationPercentRemaining, stunDurationBarHeight);
         }
 
-        if (health && health.percent < 1) {
+        const showHealthBar = (isPlayer && settings && settings.showPlayerHealthBarAlways) ||
+            (!isPlayer && settings && settings.showEnemyHealthBars) ||
+            (health && health.percent < 1);
+        if (health && showHealthBar) {
             ctx.fillStyle = '#333';
             ctx.fillRect(barX, barY, barWidth, barHeight);
             const healthPercent = health.percent;

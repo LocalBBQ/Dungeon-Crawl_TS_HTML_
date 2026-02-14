@@ -20,6 +20,10 @@
                 { type: 'lavaRock', x: 680, y: 540, width: 46, height: 46 },
                 { type: 'crumblingWall', x: 260, y: 620, width: 80, height: 24 },
                 { type: 'crumblingWall', x: 460, y: 100, width: 24, height: 70 }
+            ],
+            gatherables: [
+                { type: 'ore', x: 380, y: 520, width: 40, height: 40 },
+                { type: 'herb', x: 340, y: 360, width: 32, height: 32 }
             ]
         },
 
@@ -55,6 +59,10 @@
                 { type: 'stoneDebris', x: 440, y: 330, width: 35, height: 35 },
                 { type: 'crumblingWall', x: 120, y: 340, width: 100, height: 24 },
                 { type: 'crumblingWall', x: 580, y: 420, width: 24, height: 90 }
+            ],
+            gatherables: [
+                { type: 'ore', x: 320, y: 320, width: 40, height: 40 },
+                { type: 'chest', x: 430, y: 400, width: 36, height: 36 }
             ]
         },
 
@@ -82,6 +90,10 @@
                 { type: 'wall', x: 432, y: 540, width: 20, height: 20 },
                 { type: 'wall', x: 452, y: 540, width: 20, height: 20 },
                 { type: 'wall', x: 472, y: 540, width: 20, height: 20 }
+            ],
+            gatherables: [
+                { type: 'shrineBlessing', x: 370, y: 420, width: 48, height: 48 },
+                { type: 'ore', x: 330, y: 460, width: 40, height: 40 }
             ]
         },
 
@@ -272,6 +284,10 @@
                 { type: 'wall', x: 480, y: 280, width: 20, height: 20 },
                 { type: 'wall', x: 380, y: 520, width: 20, height: 20 },
                 { type: 'wall', x: 400, y: 520, width: 20, height: 20 }
+            ],
+            gatherables: [
+                { type: 'chest', x: 350, y: 480, width: 36, height: 36 },
+                { type: 'ore', x: 450, y: 320, width: 40, height: 40 }
             ]
         }
     };

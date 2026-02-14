@@ -13,6 +13,11 @@ class ObstacleManager {
         this.systems = systems;
     }
 
+    /** Optional: call after systems are registered so placeSceneTile can register gatherables and clearWorld can clear them. */
+    getGatherableManager() {
+        return this.systems && this.systems.get ? this.systems.get('gatherables') : null;
+    }
+
     addObstacle(x, y, width, height, type, spritePath = null, customProps = null) {
         const obstacle = new Obstacle(x, y, width, height, type);
         if (spritePath) {
@@ -125,6 +130,8 @@ class ObstacleManager {
         this.exclusionZones = [];
         this.lastPlacedTiles = [];
         this.suggestedPlayerStart = null;
+        const gm = this.getGatherableManager();
+        if (gm && typeof gm.clear === 'function') gm.clear();
     }
 
     generateForest(worldWidth, worldHeight, density = 0.02) {
@@ -802,6 +809,15 @@ class ObstacleManager {
             for (const seg of segments) {
                 const r = this.rotateObstacleInTile(seg.x, seg.y, seg.width, seg.height, tileSize, rotation);
                 this.addObstacle(originX + r.x, originY + r.y, r.width, r.height, fenceType, spritePath, customProps);
+            }
+        }
+        if (tile.gatherables && tile.gatherables.length) {
+            const gm = this.getGatherableManager();
+            if (gm) {
+                for (const g of tile.gatherables) {
+                    const r = this.rotateObstacleInTile(g.x, g.y, g.width || 32, g.height || 32, tileSize, rotation);
+                    gm.add(originX + r.x, originY + r.y, r.width, r.height, g.type || 'herb');
+                }
             }
         }
     }

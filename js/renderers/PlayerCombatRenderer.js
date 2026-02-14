@@ -105,6 +105,7 @@ const PlayerCombatRenderer = {
         const sweepProgress = (options && typeof options.sweepProgress === 'number') ? options.sweepProgress : (isTelegraph ? 0 : this.getSweepProgress(combat));
         const pullBackOverride = (options && typeof options.pullBack === 'number');
         const useComboColors = options && options.comboColors;
+        const animKey = (combat && (combat.currentAttackAnimationKey || 'melee')) || 'melee';
         const lw = 3 / camera.zoom;
         const lwCombo = 4 / camera.zoom;
         // Medieval palette: steel edge, shadow/vellum fill; combo = bronze/gold; telegraph = dimmer
@@ -112,7 +113,6 @@ const PlayerCombatRenderer = {
         let edgeHighlight = 'rgba(180, 175, 165, 0.9)';
         let fillStyle = isTelegraph ? 'rgba(50, 45, 40, 0.18)' : 'rgba(40, 35, 30, 0.22)';
         if (!isTelegraph && useComboColors) {
-            const animKey = combat.currentAttackAnimationKey || 'melee';
             if (combat.currentAttackIsDashAttack) {
                 edgeColor = '#c99830';
                 edgeHighlight = 'rgba(255, 220, 100, 0.9)';
@@ -125,6 +125,10 @@ const PlayerCombatRenderer = {
                 edgeColor = '#6b5b4a';
                 edgeHighlight = 'rgba(200, 160, 100, 0.85)';
                 fillStyle = 'rgba(60, 45, 30, 0.24)';
+            } else if (animKey === 'meleeChop') {
+                edgeColor = '#4a3a2a';
+                edgeHighlight = 'rgba(180, 120, 60, 0.9)';
+                fillStyle = 'rgba(50, 35, 20, 0.28)';
             }
         }
         const facingAngle = movement ? movement.facingAngle : 0;
@@ -142,6 +146,39 @@ const PlayerCombatRenderer = {
             ctx.lineWidth = Math.max(1, (useComboColors ? lwCombo : lw) * 0.45);
             ctx.beginPath();
             ctx.arc(screenX, screenY, currentRadius - 2 / camera.zoom, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (animKey === 'meleeChop') {
+            // Overhead chop: canvas-drawn blade sweeping from raised to down (no thrust rectangle)
+            const chopLength = range * sweepProgress;
+            const chopHalfWidth = ((combat.currentAttackThrustWidth || 28) * camera.zoom) / 2;
+            // Blade angle: from raised (facingAngle - 90°) to down/forward (facingAngle)
+            const chopAngle = facingAngle - (1 - sweepProgress) * (Math.PI / 2);
+            const cosA = Math.cos(chopAngle);
+            const sinA = Math.sin(chopAngle);
+            const backLeftX = screenX - chopHalfWidth * sinA;
+            const backLeftY = screenY + chopHalfWidth * cosA;
+            const backRightX = screenX + chopHalfWidth * sinA;
+            const backRightY = screenY - chopHalfWidth * cosA;
+            const frontLeftX = screenX + chopLength * cosA - chopHalfWidth * sinA;
+            const frontLeftY = screenY + chopLength * sinA + chopHalfWidth * cosA;
+            const frontRightX = screenX + chopLength * cosA + chopHalfWidth * sinA;
+            const frontRightY = screenY + chopLength * sinA - chopHalfWidth * cosA;
+            ctx.lineWidth = useComboColors ? lwCombo : lw;
+            ctx.fillStyle = fillStyle;
+            ctx.beginPath();
+            ctx.moveTo(backLeftX, backLeftY);
+            ctx.lineTo(frontLeftX, frontLeftY);
+            ctx.lineTo(frontRightX, frontRightY);
+            ctx.lineTo(backRightX, backRightY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = edgeColor;
+            ctx.stroke();
+            ctx.strokeStyle = edgeHighlight;
+            ctx.lineWidth = Math.max(1, (useComboColors ? lwCombo : lw) * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(screenX, screenY);
+            ctx.lineTo(screenX + chopLength * cosA, screenY + chopLength * sinA);
             ctx.stroke();
         } else if (combat.currentAttackIsThrust) {
             // Thrust: rectangle thrust forward from player (stab)
@@ -228,10 +265,18 @@ const PlayerCombatRenderer = {
         let gripY = screenY + Math.sin(facingAngle + Math.PI / 2) * gripOrbitRadius;
         const animKey = combat.currentAttackAnimationKey || 'melee';
         const isMeleeSpinWithPlayer = animKey === 'meleeSpin';
-        const isThrust = combat.currentAttackIsThrust === true;
+        const isChop = animKey === 'meleeChop';
+        const isThrust = combat.currentAttackIsThrust === true && !isChop;
         let swordAngle = facingAngle;
         if (combat.isAttacking && combat.attackDuration > 0 && !isMeleeSpinWithPlayer) {
-            if (isThrust) {
+            if (isChop) {
+                // Overhead chop: blade sweeps from raised (-90°) to forward (0°); pull-back during anticipation
+                const weaponSweep = this.getWeaponSweepProgress(combat);
+                const pullBack = this.getAnticipationPullBack(combat) || 0;
+                swordAngle = facingAngle - (1 - weaponSweep) * (Math.PI / 2) + pullBack;
+                gripX = screenX + Math.cos(facingAngle + Math.PI / 2) * gripOrbitRadius;
+                gripY = screenY + Math.sin(facingAngle + Math.PI / 2) * gripOrbitRadius;
+            } else if (isThrust) {
                 swordAngle = facingAngle;
                 const thrustOffset = this.getThrustGripOffset(combat);
                 gripX = screenX + thrustOffset * Math.cos(facingAngle) * camera.zoom;

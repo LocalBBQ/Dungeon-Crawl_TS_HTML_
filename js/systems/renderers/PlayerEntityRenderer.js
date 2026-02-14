@@ -41,8 +41,10 @@ const PlayerEntityRenderer = {
             ctx.translate(screenX, screenY);
             ctx.rotate(outerRotation);
             ctx.translate(-screenX, -screenY);
-            if (showPlayerHitboxIndicators && combat && combat.isAttacking) {
-                PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement, camera, { comboColors: true });
+            if (showPlayerHitboxIndicators && combat && combat.isAttacking && combat.currentAttackAnimationKey !== 'meleeSpin' && !combat.currentAttackIsCircular) {
+                const arcX = outerRotation !== 0 ? 0 : screenX;
+                const arcY = outerRotation !== 0 ? 0 : screenY;
+                PlayerCombatRenderer.drawAttackArc(ctx, arcX, arcY, combat, movement, camera, { comboColors: true });
             }
             ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
             ctx.beginPath();
@@ -105,6 +107,10 @@ const PlayerEntityRenderer = {
                     PlayerCombatRenderer.drawSword(ctx, screenX, screenY, transform, movement, combat, camera, { part: 'blade' });
                     PlayerCombatRenderer.drawShield(ctx, screenX, screenY, transform, movement, combat, camera);
                 }
+            }
+            // Draw spin attack arc on top of body/weapon so it is visible. Arc center must be (screenX, screenY): after rotate-around-player, that point is still the player center.
+            if (showPlayerHitboxIndicators && combat && combat.isAttacking && (combat.currentAttackAnimationKey === 'meleeSpin' || combat.currentAttackIsCircular)) {
+                PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement, camera, { comboColors: true });
             }
         } finally {
             ctx.restore();

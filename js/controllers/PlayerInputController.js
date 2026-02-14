@@ -42,6 +42,7 @@ class PlayerInputController {
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
             if (key !== 'q' && key !== 'Q') return;
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
             const player = this.player;
             if (!player || !inputSystem) return;
 
@@ -60,8 +61,11 @@ class PlayerInputController {
         this.eventBus.on(EventTypes.INPUT_MOUSEDOWN, (data) => {
             // Only allow attack input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
             const player = this.player;
             if (!player || !cameraSystem) return;
+            // In range of a gatherable: click starts gather, don't start attack
+            if (this.game.playerInGatherableRange) return;
 
             const combat = player.getComponent(Combat);
             const worldPos = cameraSystem.screenToWorld(data.x, data.y);
@@ -92,6 +96,7 @@ class PlayerInputController {
         this.eventBus.on(EventTypes.INPUT_MOUSEUP, (data) => {
             // Only allow attack input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
             const player = this.player;
             if (!player || !cameraSystem) return;
 
@@ -217,6 +222,7 @@ class PlayerInputController {
         this.eventBus.on(EventTypes.INPUT_RIGHTCLICK, (data) => {
             // Only allow block input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
             const player = this.player;
             if (!player) return;
 
@@ -254,6 +260,7 @@ class PlayerInputController {
         this.eventBus.on(EventTypes.INPUT_RIGHTCLICK_UP, () => {
             // Only allow block input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
             const player = this.player;
             if (!player) return;
 
@@ -277,6 +284,7 @@ class PlayerInputController {
 
             // Only allow projectile input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
 
             const player = this.player;
             if (!player || !inputSystem || !cameraSystem) return;
@@ -345,6 +353,7 @@ class PlayerInputController {
 
             // Only allow dodge input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
 
             const player = this.player;
             if (!player || !inputSystem) return;
@@ -385,6 +394,7 @@ class PlayerInputController {
 
             // Only allow sprint input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
 
             const player = this.player;
             if (!player || !inputSystem) return;
@@ -417,6 +427,7 @@ class PlayerInputController {
 
             // Only allow sprint input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
 
             const player = this.player;
             if (!player || !inputSystem) return;
@@ -455,6 +466,7 @@ class PlayerInputController {
 
             // Only allow movement input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
 
             const player = this.player;
             if (!player || !inputSystem) return;
@@ -491,6 +503,7 @@ class PlayerInputController {
 
             // Only allow movement input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
+            if (this.game.inventoryOpen || this.game.chestOpen || this.game.boardOpen) return;
 
             const player = this.player;
             if (!player || !inputSystem) return;

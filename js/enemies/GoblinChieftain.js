@@ -42,9 +42,5 @@
         },
     };
 
-    function createAttack() {
-        return new ChieftainAttack();
-    }
-
-    window.EnemyGoblinChieftain = EnemyType.fromConfig(config, createAttack);
+    window.EnemyGoblinChieftain = EnemyType.fromConfig(config);
 })();
