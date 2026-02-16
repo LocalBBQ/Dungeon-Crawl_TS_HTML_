@@ -1,0 +1,30 @@
+{
+  "name": "topdownarpg-html-css-js",
+  "version": "1.0.0",
+  "description": "A browser-based action RPG with top-down combat and dungeon-crawling. Vanilla JavaScript and HTML5 Canvas.",
+  "main": "index.js",
+  "type": "module",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LocalBBQ/TopDownARPG-HTML-CSS-JS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LocalBBQ/TopDownARPG-HTML-CSS-JS/issues"
+  },
+  "homepage": "https://github.com/LocalBBQ/TopDownARPG-HTML-CSS-JS#readme",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^5.4.0"
+  }
+}

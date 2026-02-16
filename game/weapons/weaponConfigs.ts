@@ -1,0 +1,223 @@
+// All weapon configs and instances (including chieftain club for enemies).
+import { Weapon } from './Weapon.js';
+import type { WeaponConfigInput } from './Weapon.js';
+import type { StageConfigInput } from './weaponBehavior.js';
+
+const swordAndShieldConfig: WeaponConfigInput = {
+    name: 'swordAndShield',
+    baseRange: 80,
+    baseDamage: 15,
+    baseArcDegrees: 60,
+    cooldown: 0.23,
+    attackSpeed: 1.2,
+    cooldownMultiplier: 0.5,
+    comboWindow: 1.5,
+    baseStunBuildup: 25,
+    weaponLength: 55,
+    block: {
+        enabled: true,
+        arcDegrees: 180,
+        damageReduction: 1.0,
+        staminaCost: 25,
+        animationKey: 'block',
+        shieldBash: {
+            knockback: 1500,
+            dashSpeed: 380,
+            dashDuration: 0.11,
+            staminaCost: 14,
+            range: 100,
+            arcDegrees: 120
+        }
+    },
+    stages: [
+        { name: 'slash', arcDegrees: 90, duration: 450, staminaCost: 10, range: 92, damageMultiplier: 1.2, animationKey: 'melee', knockbackForce: 100, stunBuildup: 28 },
+        { name: 'slash', arcDegrees: 90, duration: 450, staminaCost: 10, range: 92, damageMultiplier: 1.2, animationKey: 'melee', knockbackForce: 100, stunBuildup: 28, reverseSweep: true },
+        { name: 'stab', arcDegrees: 24, duration: 340, staminaCost: 12, range: 120, damageMultiplier: 1.0, animationKey: 'melee2', stunBuildup: 22, thrust: true, thrustWidth: 44 }
+    ],
+    dashAttack: { name: 'spin', arcDegrees: 360, duration: 740, staminaCost: 25, range: 72, damageMultiplier: 1.5, animationKey: 'meleeSpin', dashSpeed: 350, dashDuration: 0.25, stunBuildup: 50 },
+    chargeAttack: {
+        minChargeTime: 0.125,
+        maxChargeTime: 2.0,
+        damageMultiplier: 2.0,
+        rangeMultiplier: 1.2,
+        staminaCostMultiplier: 1.5,
+        chargedThrustDashSpeed: 380,
+        chargedThrustDashDistanceMin: 50,
+        chargedThrustDashDistanceMax: 170
+    },
+    attackVisual: {
+        thrustLungeForwardWorld: 32,
+        thrustAnticipationRatio: 0.32
+    }
+};
+
+const greatswordConfig: WeaponConfigInput = {
+    name: 'greatsword',
+    twoHanded: true,
+    baseRange: 120,
+    baseDamage: 20,
+    baseArcDegrees: 100,
+    cooldown: 0.2,
+    attackSpeed: 1.0,
+    cooldownMultiplier: 0.5,
+    comboWindow: 1.5,
+    baseStunBuildup: 35,
+    weaponLength: 52,
+    maxComboStage: 3,
+    stages: [
+        { name: 'slash1', arcDegrees: 120, duration: 480, staminaCost: 16, range: 100, damageMultiplier: 1.0, animationKey: 'melee', stunBuildup: 35 },
+        { name: 'slash2', arcDegrees: 110, duration: 520, staminaCost: 18, range: 100, damageMultiplier: 1.4, animationKey: 'melee2', stunBuildup: 42, reverseSweep: true },
+        { name: 'chop', arcDegrees: 24, duration: 420, staminaCost: 20, range: 70, damageMultiplier: 2.0, animationKey: 'meleeChop', stunBuildup: 55, knockbackForce: 200, thrust: true, thrustWidth: 28 },
+        { name: 'spin360', arcDegrees: 360, duration: 1000, staminaCost: 24, range: 120, damageMultiplier: 1.8, animationKey: 'meleeSpin', stunBuildup: 50 }
+    ],
+    chargeAttack: {
+        minChargeTime: 0.15,
+        maxChargeTime: 2.0,
+        damageMultiplier: 2.0,
+        rangeMultiplier: 1.1,
+        staminaCostMultiplier: 1.5,
+        chargedStageIndex: 4
+    },
+    dashAttack: {
+        name: 'stab',
+        arcDegrees: 24,
+        duration: 320,
+        staminaCost: 14,
+        range: 140,
+        damageMultiplier: 1.3,
+        animationKey: 'melee2',
+        thrust: true,
+        thrustWidth: 42,
+        stunBuildup: 28,
+        dashSpeed: 340,
+        dashDuration: 0.14
+    }
+};
+
+const daggerConfig: WeaponConfigInput = {
+    name: 'dagger',
+    baseRange: 40,
+    baseDamage: 5,
+    baseArcDegrees: 90,
+    cooldown: 0.125,
+    comboWindow: 1.2,
+    attackSpeed: 2,
+    baseStunBuildup: 18,
+    weaponLength: 35,
+    stages: [
+        { name: 'slash', arcDegrees: 90, duration: 280, staminaCost: 6, range: 42, damageMultiplier: 1.0, animationKey: 'melee', knockbackForce: 80, stunBuildup: 18 },
+        { name: 'slash', arcDegrees: 90, duration: 280, staminaCost: 6, range: 42, damageMultiplier: 1.0, animationKey: 'melee', knockbackForce: 80, stunBuildup: 18, reverseSweep: true },
+        { name: 'slash', arcDegrees: 100, duration: 320, staminaCost: 8, range: 44, damageMultiplier: 1.2, animationKey: 'melee', knockbackForce: 100, stunBuildup: 22 }
+    ],
+    dashAttack: {
+        name: 'leap',
+        arcDegrees: 90,
+        duration: 400,
+        staminaCost: 14,
+        range: 55,
+        damageMultiplier: 1.6,
+        animationKey: 'melee',
+        dashSpeed: 380,
+        dashDuration: 0.16,
+        knockbackForce: 240,
+        stunBuildup: 28
+    }
+};
+
+const crossbowConfig: WeaponConfigInput = {
+    name: 'crossbow',
+    twoHanded: true,
+    baseRange: 600,
+    baseDamage: 22,
+    baseArcDegrees: 0,
+    cooldown: 0,
+    comboWindow: 0,
+    stages: [],
+    isRanged: true
+};
+
+const maceConfig: WeaponConfigInput = {
+    name: 'mace',
+    twoHanded: true,
+    baseRange: 95,
+    baseDamage: 22,
+    baseArcDegrees: 90,
+    cooldown: 0.175,
+    attackSpeed: 0.8,
+    cooldownMultiplier: 2,
+    comboWindow: 1.0,
+    knockback: { force: 1200 },
+    weaponLength: 60,
+    stages: [
+        { name: 'sweep1', arcDegrees: 220, duration: 460, staminaCost: 20, range: 95, damageMultiplier: 1.0, animationKey: 'melee', stunBuildup: 40 },
+        { name: 'sweep2', arcDegrees: 220, duration: 500, staminaCost: 22, range: 100, damageMultiplier: 1.3, animationKey: 'melee2', stunBuildup: 45, reverseSweep: true },
+        { name: 'sweep3', arcDegrees: 240, duration: 580, staminaCost: 26, range: 105, damageMultiplier: 1.6, animationKey: 'melee', stunBuildup: 55 }
+    ],
+    chargeAttack: {
+        minChargeTime: 0.25,
+        maxChargeTime: 2.0,
+        damageMultiplier: 2.0,
+        rangeMultiplier: 1.0,
+        staminaCostMultiplier: 1.5
+    }
+};
+
+const chieftainClubConfig: WeaponConfigInput = {
+    name: 'Chieftain Club',
+    visual: 'maceClub',
+    baseRange: 97,
+    baseDamage: 16,
+    baseArcDegrees: 360,
+    cooldown: 1.2,
+    comboWindow: 0.5,
+    stages: [] as StageConfigInput[],
+    chargeRelease: {
+        chargeTime: 1.15,
+        releaseDuration: 0.22,
+        damage: 16,
+        knockbackForce: 280,
+        aoeInFront: true,
+        aoeOffset: 55,
+        aoeRadius: 42
+    }
+};
+
+const goblinDaggerConfig: WeaponConfigInput = {
+    name: 'Goblin Shiv',
+    baseRange: 36,
+    baseDamage: 4,
+    baseArcDegrees: 90,
+    cooldown: 1.5,
+    attackSpeed: 0.85,
+    cooldownMultiplier: 1.2,
+    comboWindow: 0.5,
+    baseStunBuildup: 16,
+    weaponLength: 30,
+    visual: 'goblinDagger',
+    stages: [
+        { name: 'slash', arcDegrees: 90, duration: 280, staminaCost: 6, range: 38, damageMultiplier: 1.0, animationKey: 'melee', knockbackForce: 72, stunBuildup: 16 },
+        { name: 'slash', arcDegrees: 90, duration: 280, staminaCost: 6, range: 38, damageMultiplier: 1.0, animationKey: 'melee', knockbackForce: 72, stunBuildup: 16, reverseSweep: true },
+        { name: 'slash', arcDegrees: 100, duration: 320, staminaCost: 8, range: 40, damageMultiplier: 1.15, animationKey: 'melee', knockbackForce: 90, stunBuildup: 20 }
+    ] as StageConfigInput[],
+    dashAttack: {
+        name: 'leap',
+        arcDegrees: 90,
+        duration: 400,
+        staminaCost: 14,
+        range: 52,
+        damageMultiplier: 1.5,
+        animationKey: 'melee',
+        dashSpeed: 380,
+        dashDuration: 0.32,
+        knockbackForce: 220,
+        stunBuildup: 26
+    }
+};
+
+export const SwordAndShieldWeapon = Weapon.fromConfig(swordAndShieldConfig);
+export const GreatswordWeaponInstance = Weapon.fromConfig(greatswordConfig);
+export const DaggerWeaponInstance = Weapon.fromConfig(daggerConfig);
+export const CrossbowWeaponInstance = Weapon.fromConfig(crossbowConfig);
+export const MaceWeaponInstance = Weapon.fromConfig(maceConfig);
+export const ChieftainClubWeaponInstance = Weapon.fromConfig(chieftainClubConfig);
+export const GoblinDaggerWeaponInstance = Weapon.fromConfig(goblinDaggerConfig);

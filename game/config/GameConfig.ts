@@ -1,0 +1,296 @@
+// Centralized game configuration
+import type { GameConfigShape } from '../types/config.js';
+
+const GameConfig: GameConfigShape = {
+  world: {
+    width: 4800,
+    height: 2800,
+    tileSize: 50,
+  },
+
+  entityCollision: {
+    buffer: 12,
+  },
+
+  groundTextures: {
+    grass: 'assets/sprites/environment/Grass1.png',
+  },
+
+  player: {
+    startX: 2400,
+    startY: 1400,
+    width: 34.5,
+    height: 34.5,
+    speed: 200,
+    maxHealth: 100,
+    maxStamina: 100,
+    staminaRegen: 16,
+    color: '#8b8b9a',
+    defaultWeapon: 'swordAndShield',
+    sprint: { multiplier: 1.66, staminaCost: 12 },
+    dodge: { speed: 800, duration: 0.15, cooldown: 0.5, staminaCost: 15 },
+    knockback: {
+      force: 1100,
+      decay: 0.85,
+      receivedMultiplier: 3.0,
+      knockbackResist: 0,
+    },
+    projectile: {
+      enabled: false,
+      speed: 800,
+      damage: 10,
+      range: 500,
+      cooldown: 0.125,
+      staminaCost: 8,
+      stunBuildup: 20,
+    },
+    crossbow: {
+      damage: 22,
+      speed: 1100,
+      range: 600,
+      staminaCost: 12,
+      stunBuildup: 25,
+      reloadTime: 0.35,
+      perfectWindowStart: 0.62,
+      perfectWindowEnd: 0.78,
+      perfectReloadDamageMultiplier: 1.5,
+    },
+    heal: {
+      maxCharges: 3,
+      drinkTime: 1,
+      regenRate: 50,
+      regenDuration: 1,
+      chargeRegenTime: 15,
+    },
+    stun: {
+      threshold: 100,
+      duration: 0.5,
+      decayPerSecond: 30,
+      decayCooldown: 2,
+      blockedMultiplier: 0.5,
+    },
+  },
+
+  statusEffects: {
+    enemyStunThreshold: 100,
+    enemyStunDuration: 0.5,
+    enemyStunDecayPerSecond: 40,
+    enemyStunDecayCooldown: 2,
+  },
+
+  enemy: {
+    types: {} as Record<string, unknown>,
+    pack: { radius: 180, minAllies: 2, modifierChance: 0.5 },
+    spawn: { maxEnemies: 20 },
+  },
+
+  packModifiers: {
+    fierce: { damageMultiplier: 1.4, healthMultiplier: 1.25, color: '#cc2222' },
+    swift: { speedMultiplier: 1.3, damageMultiplier: 1.05, color: '#ffcc00' },
+    stalwart: { healthMultiplier: 1.6, knockbackResist: 0.5, damageMultiplier: 1.0, color: '#228822' },
+    relentless: { attackCooldownMultiplier: 0.65, damageMultiplier: 1.15, color: '#6666ff' },
+    vicious: { stunBuildupPerHitMultiplier: 1.5, damageMultiplier: 1.15, color: '#cc44cc' },
+    inspiring: { speedMultiplier: 1.15, damageMultiplier: 1.2, healthMultiplier: 1.3, color: '#00aacc' },
+  },
+
+  portal: { x: 2400, y: 1400, width: 80, height: 80 },
+
+  hub: {
+    name: 'Sanctuary',
+    tileSize: 50,
+    width: 1600,
+    height: 1600,
+    playerStart: { x: 800, y: 800 },
+    board: { x: 750, y: 765, width: 100, height: 70 },
+    weaponChest: { x: 340, y: 780, width: 80, height: 60 },
+    theme: {
+      ground: { r: 42, g: 38, b: 32, variation: 6 },
+      sky: 'rgba(100, 90, 80, 0.06)',
+    },
+    walls: [
+      { x: 200, y: 200, width: 1200, height: 50 },
+      { x: 200, y: 1350, width: 1200, height: 50 },
+      { x: 200, y: 200, width: 50, height: 1200 },
+      { x: 1350, y: 200, width: 50, height: 1200 },
+    ],
+  },
+
+  levels: {
+    0: {
+      name: 'Sanctuary',
+      tileSize: 50,
+      width: 1600,
+      height: 1600,
+      playerStart: { x: 800, y: 800 },
+      board: { x: 750, y: 765, width: 100, height: 70 },
+      weaponChest: { x: 340, y: 780, width: 80, height: 60 },
+      theme: {
+        ground: { r: 42, g: 38, b: 32, variation: 6 },
+        sky: 'rgba(100, 90, 80, 0.06)',
+      },
+      walls: [
+        { x: 200, y: 200, width: 1200, height: 50 },
+        { x: 200, y: 1350, width: 1200, height: 50 },
+        { x: 200, y: 200, width: 50, height: 1200 },
+        { x: 1350, y: 200, width: 50, height: 1200 },
+      ],
+    },
+    1: {
+      name: 'Village Outskirts',
+      packSpawn: {
+        density: 0.008,
+        packSize: { min: 2, max: 4 },
+        patrol: false,
+        packSpread: { min: 40, max: 95 },
+        packCountVariance: 0.35,
+        minPackDistance: 220,
+      },
+      enemyTypes: ['goblin', 'goblin', 'goblin', 'goblin', 'goblinChieftain', 'bandit'],
+      killsToUnlockPortal: 10,
+      theme: {
+        ground: { r: 38, g: 48, b: 38, variation: 8, texture: 'grass' },
+        sky: 'rgba(135, 206, 235, 0.05)',
+      },
+      worldWidth: 4800,
+      worldHeight: 2400,
+      obstacles: {
+        border: { spacing: 50 },
+        useSceneTiles: true,
+        sceneTileLayout: {
+          tileSize: 800,
+          cols: 6,
+          rows: 3,
+          pool: [
+            { id: 'clearing', weight: 5 },
+            { id: 'crossroads', weight: 4 },
+            { id: 'orchardEdge', weight: 3 },
+            { id: 'thickGrove', weight: 3 },
+            { id: 'waysideShrine', weight: 2 },
+            { id: 'woodcutterClearing', weight: 2 },
+            { id: 'lumberMill', weight: 1 },
+            { id: 'lumberMillB', weight: 1 },
+            { id: 'smallFarm', weight: 1 },
+            { id: 'goblinCamp', weight: 1 },
+            { id: 'goblinCampB', weight: 1 },
+            { id: 'banditAmbush', weight: 0.4 },
+          ],
+        },
+      },
+    },
+    2: {
+      name: 'Cursed Wilds',
+      packSpawn: {
+        density: 0.012,
+        packSize: { min: 3, max: 5 },
+        patrol: false,
+        packSpread: { min: 45, max: 100 },
+        packCountVariance: 0.35,
+        minPackDistance: 240,
+      },
+      enemyTypes: ['goblin', 'goblin', 'goblinChieftain', 'skeleton', 'skeleton'],
+      killsToUnlockPortal: 15,
+      theme: {
+        ground: { r: 28, g: 26, b: 24, variation: 10 },
+        sky: 'rgba(60, 55, 70, 0.08)',
+      },
+      worldWidth: 4800,
+      worldHeight: 2400,
+      obstacles: {
+        border: { spacing: 50, type: 'deadTree' },
+        useSceneTiles: true,
+        sceneTileLayout: {
+          tileSize: 800,
+          cols: 6,
+          rows: 3,
+          pool: [
+            { id: 'cursedWilds.clearing', weight: 5 },
+            { id: 'cursedWilds.crossroads', weight: 4 },
+            { id: 'cursedWilds.bogClearing', weight: 3 },
+            { id: 'cursedWilds.swampEdge', weight: 3 },
+            { id: 'cursedWilds.ruinedShrine', weight: 2 },
+            { id: 'cursedWilds.thickMushroomGrove', weight: 2 },
+            { id: 'cursedWilds.ruinFragment', weight: 1 },
+            { id: 'cursedWilds.graveyard', weight: 1 },
+            { id: 'cursedWilds.graveyardB', weight: 1 },
+            { id: 'cursedWilds.skeletonCamp', weight: 0.5 },
+          ],
+        },
+      },
+    },
+    3: {
+      name: 'Demon Approach',
+      packSpawn: {
+        density: 0.016,
+        packSize: { min: 4, max: 6 },
+        packSpread: { min: 50, max: 110 },
+        packCountVariance: 0.4,
+        minPackDistance: 260,
+      },
+      enemyTypes: ['skeleton', 'skeleton', 'lesserDemon', 'lesserDemon'],
+      killsToUnlockPortal: 20,
+      theme: {
+        ground: { r: 34, g: 16, b: 18, variation: 12 },
+        sky: 'rgba(80, 20, 30, 0.12)',
+      },
+      worldWidth: 4800,
+      worldHeight: 2400,
+      obstacles: {
+        border: { spacing: 50, type: 'lavaRock' },
+        useSceneTiles: true,
+        sceneTileLayout: {
+          tileSize: 800,
+          cols: 6,
+          rows: 3,
+          pool: [
+            { id: 'demonApproach.clearing', weight: 5 },
+            { id: 'demonApproach.crossroads', weight: 4 },
+            { id: 'demonApproach.pillarRing', weight: 3 },
+            { id: 'demonApproach.lavaRockField', weight: 3 },
+            { id: 'demonApproach.demonShrine', weight: 2 },
+            { id: 'demonApproach.brazierCourt', weight: 2 },
+            { id: 'demonApproach.ashenPlaza', weight: 2 },
+            { id: 'demonApproach.ruinedGate', weight: 1 },
+            { id: 'demonApproach.ruinFragment', weight: 1 },
+            { id: 'demonApproach.demonCamp', weight: 1 },
+            { id: 'demonApproach.skeletonCamp', weight: 0.5 },
+          ],
+        },
+      },
+    },
+  },
+
+  obstacles: {
+    forest: { density: 0.025 },
+    rocks: { density: 0.022 },
+    border: { spacing: 50 },
+    structures: {
+      houses: { enabled: true, count: 3 },
+      woodClusters: { enabled: true, count: 3, treesPerCluster: 6 },
+      settlements: { enabled: true, count: 1 },
+      firepits: { enabled: true, count: 2 },
+      sheds: { enabled: true, count: 2 },
+      wells: { enabled: true, count: 1 },
+      ruins: {
+        enabled: true,
+        rubblePiles: 12,
+        pillarClusters: 6,
+        ruinedWalls: 8,
+        ruinedStructures: 4,
+        brokenArches: 5,
+        statueRemnants: 6,
+      },
+    },
+  },
+
+  pathfinding: { cellSize: 25 },
+
+  camera: {
+    smoothing: 0.1,
+    fastFollowSmoothing: 0.35,
+    minZoom: 1.0,
+    maxZoom: 2.0,
+    zoomSpeed: 0.1,
+  },
+};
+
+export { GameConfig };

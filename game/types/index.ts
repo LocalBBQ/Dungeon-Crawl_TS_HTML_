@@ -1,0 +1,12 @@
+export type { Component } from './component.js';
+export type { EventName } from './events.js';
+export type { GameRef } from './gameRef.js';
+export type { GameConfigShape, WorldConfig, PlayerConfig } from './config.js';
+export type { EntityShape } from './entity.js';
+export type { TransformShape } from './transform.js';
+export type { HealthShape } from './health.js';
+export type { MovementShape } from './movement.js';
+export type { CombatShape } from './combat.js';
+export type { RenderableShape } from './renderable.js';
+export type { CameraShape } from './camera.js';
+export type { SystemsMap } from './systems.js';
