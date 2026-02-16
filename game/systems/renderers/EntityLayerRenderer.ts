@@ -24,7 +24,12 @@ export class EntityLayerRenderer {
         const isCharacter = renderable.type === 'enemy';
         try {
             if (renderable.type === 'player') {
-                PlayerEntityRenderer.render(context, entity, screenX, screenY);
+                if (sprite && spriteManager && useCharacterSprites) {
+                    if (!this._spriteRenderer) this._spriteRenderer = new EntitySpriteRenderer();
+                    this._spriteRenderer.render(context, entity, screenX, screenY);
+                } else {
+                    PlayerEntityRenderer.render(context, entity, screenX, screenY);
+                }
                 return;
             }
             if (sprite && spriteManager && (useCharacterSprites || !isCharacter)) {
@@ -65,7 +70,7 @@ export class EntityLayerRenderer {
             if (screenX < -50 || screenX > canvas.width + 50 || screenY < -50 || screenY > canvas.height + 50) continue;
 
             if (renderable.type === 'player') {
-                playerDraw = { entity, screenX, screenY };
+                playerDraw = { entity, screenX, screenY, useSprite: !!(spriteManager && entity.getComponent(Sprite) && useCharacterSprites) };
                 continue;
             }
 
@@ -84,9 +89,14 @@ export class EntityLayerRenderer {
         }
 
         if (playerDraw) {
-            const { entity, screenX, screenY } = playerDraw;
+            const { entity, screenX, screenY, useSprite } = playerDraw;
             try {
-                PlayerEntityRenderer.render(context, entity, screenX, screenY);
+                if (useSprite) {
+                    if (!this._spriteRenderer) this._spriteRenderer = new EntitySpriteRenderer();
+                    this._spriteRenderer.render(context, entity, screenX, screenY);
+                } else {
+                    PlayerEntityRenderer.render(context, entity, screenX, screenY);
+                }
             } catch (err) {
                 console.warn('Render entity failed (skipping):', entity.id || 'player', err);
             }

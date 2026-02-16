@@ -66,7 +66,7 @@ class Game {
                 musicEnabled: true,
                 sfxEnabled: true,
                 showMinimap: true,
-                useCharacterSprites: false,  // Player + enemies use sprite sheets vs procedural canvas knight
+                useCharacterSprites: true,   // Player + enemies use sprite sheets vs procedural canvas knight
                 useEnvironmentSprites: false, // Trees/rocks/houses etc use sprite images vs procedural shapes
                 showPlayerHitboxIndicators: true,  // Player attack arc, thrust rect
                 showEnemyHitboxIndicators: true,   // Enemy cones, wind-up, attack indicator, lunge telegraph
@@ -224,31 +224,21 @@ class Game {
         const spriteManager = this.systems.get('sprites');
         if (!spriteManager) return;
 
-        // Load knight 8-direction sprite sheet (single frame per direction)
-        // Auto-detect layout: horizontal strip (1 row × 8 cols) vs vertical (8 rows × 1 col)
         const loadedKnightSheets = {};
         let knightRows = 1, knightCols = 8, knightFrameWidth = 0, knightFrameHeight = 0;
-        const knight8DirPath = 'assets/sprites/player/Knight_8_Direction.png';
-        try {
-            const knightImg = await spriteManager.loadSprite(knight8DirPath);
-            const isHorizontalStrip = knightImg.width >= knightImg.height;
-            knightRows = isHorizontalStrip ? 1 : 8;
-            knightCols = isHorizontalStrip ? 8 : 1;
-            knightFrameWidth = knightImg.width / knightCols;
-            knightFrameHeight = knightImg.height / knightRows;
-            await spriteManager.loadSpriteSheet(
-                knight8DirPath,
-                knightFrameWidth,
-                knightFrameHeight,
-                knightRows,
-                knightCols
-            );
-            const knightSheetKey = `${knight8DirPath}_${knightFrameWidth}_${knightFrameHeight}_${knightRows}_${knightCols}`;
-            loadedKnightSheets.idle = knightSheetKey;
-            loadedKnightSheets._8DirLayout = isHorizontalStrip ? '1x8' : '8x1'; // for createPlayer
-            console.log(`Loaded Knight_8_Direction: ${knightImg.width}x${knightImg.height}, frame ${knightFrameWidth}x${knightFrameHeight} (${knightRows} rows × ${knightCols})`);
-        } catch (error) {
-            console.warn('Failed to load Knight_8_Direction.png:', error);
+
+        // Directory-based Idle (Player/Idle/E_Idle, N_Idle, ... with sprite0.png, sprite1.png, ...)
+        const playerIdleBasePath = 'assets/sprites/Player/Idle';
+        const multiDirIdle = await spriteManager.loadMultiDirFrames(playerIdleBasePath, 'Idle');
+        if (multiDirIdle) {
+            const idleKey = `${playerIdleBasePath}_Idle_multidir`;
+            loadedKnightSheets.idle = idleKey;
+            loadedKnightSheets._idleMultiDir = true;
+            const firstImg = multiDirIdle.directions[0]?.[0];
+            if (firstImg) {
+                knightFrameWidth = firstImg.naturalWidth || firstImg.width;
+                knightFrameHeight = firstImg.naturalHeight || firstImg.height;
+            }
         }
 
         // Load knight 8-direction block sprite sheet — use same frame size and layout as idle so one frame per direction

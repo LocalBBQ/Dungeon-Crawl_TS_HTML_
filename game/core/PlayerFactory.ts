@@ -62,19 +62,15 @@ export function createPlayer(
 
     if (knightSheets.idle) {
         const idleSheet = spriteManager.getSpriteSheet?.(knightSheets.idle);
-        if (idleSheet) {
-            const is8DirSingleFrame = (idleSheet.rows === 8 && idleSheet.cols === 1) || (idleSheet.rows === 1 && idleSheet.cols === 8);
-            const useDirectionAsColumn = idleSheet.rows === 1 && idleSheet.cols === 8;
-            const idleFrames = is8DirSingleFrame
-                ? [0]
-                : Array.from({ length: idleSheet.totalFrames || (idleSheet.rows * idleSheet.cols) }, (_, i) => i);
+        if (idleSheet && (idleSheet as { type?: string }).type === 'multiDirFrames') {
+            const frameCount = (idleSheet as { frameCount?: number }).frameCount ?? 6;
             animationConfig.animations.idle = {
                 spriteSheetKey: knightSheets.idle,
-                frames: idleFrames,
+                frames: Array.from({ length: frameCount }, (_, i) => i),
                 frameDuration: 0.15,
                 loop: true,
-                useDirection: is8DirSingleFrame,
-                useDirectionAsColumn
+                useDirection: true,
+                useMultiDirFrames: true
             };
         }
     }
@@ -234,7 +230,7 @@ export function createPlayer(
         .addComponent(new PlayerMovement(config.speed))
         .addComponent(new Combat(initialRange, initialDamage, initialArc, initialCooldown, 0, true, weapon))
         .addComponent(new Renderable('player', { color: config.color }))
-        .addComponent(new Sprite(defaultSheetKey, config.width * 3, config.height * 3))
+        .addComponent(new Sprite(defaultSheetKey, config.width * 12, config.height * 12))
         .addComponent(new Animation(animationConfig));
 
     return player;

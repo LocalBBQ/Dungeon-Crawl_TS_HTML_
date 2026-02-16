@@ -121,10 +121,54 @@ export class MinimapRenderer {
                 : (required > 0 ? `Foes felled: ${kills}` : '');
         })();
         if (objectiveText) {
+            const objectiveY = minimapY + minimapSize + 10;
+            const lineHeight = 16;
+            const maxLines = 3;
+            const objectiveHeight = lineHeight * maxLines;
+            const objectiveWidth = minimapSize;
+            const objectiveLeft = minimapX;
+            const textPadding = panelPadding;
+            const maxTextWidth = objectiveWidth - textPadding * 2;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(objectiveLeft, objectiveY, objectiveWidth, objectiveHeight);
+            ctx.clip();
+
             ctx.fillStyle = '#c4a574';
             ctx.font = '600 13px Cinzel, Georgia, serif';
             ctx.textAlign = 'left';
-            ctx.fillText(objectiveText, minimapX + panelPadding, minimapY + minimapSize + 14);
+            ctx.textBaseline = 'middle';
+
+            const lines: string[] = [];
+            const words = objectiveText.split(/\s+/);
+            let line = '';
+            for (const word of words) {
+                const candidate = line ? line + ' ' + word : word;
+                if (ctx.measureText(candidate).width <= maxTextWidth) {
+                    line = candidate;
+                } else {
+                    if (line) lines.push(line);
+                    line = '';
+                    let remainder = word;
+                    while (remainder && ctx.measureText(remainder).width > maxTextWidth) {
+                        let i = 1;
+                        while (i <= remainder.length && ctx.measureText(remainder.slice(0, i)).width <= maxTextWidth) i++;
+                        lines.push(remainder.slice(0, i - 1));
+                        remainder = remainder.slice(i - 1);
+                    }
+                    if (remainder) line = remainder;
+                }
+            }
+            if (line) lines.push(line);
+
+            const clampedLines = lines.slice(0, maxLines);
+            for (let i = 0; i < clampedLines.length; i++) {
+                const y = objectiveY + lineHeight * (i + 0.5);
+                ctx.fillText(clampedLines[i], objectiveLeft + textPadding, y);
+            }
+
+            ctx.restore();
         }
     }
 }

@@ -9,6 +9,7 @@ import { Renderable } from '../../components/Renderable.ts';
 import { AI } from '../../components/AI.ts';
 import { SpriteUtils } from '../../utils/SpriteUtils.ts';
 import { Utils } from '../../utils/Utils.ts';
+import type { MultiDirFrameSet } from '../../managers/SpriteManager.ts';
 import { PlayerCombatRenderer } from '../../renderers/PlayerCombatRenderer.ts';
 import { EnemyEntityRenderer } from './EnemyEntityRenderer.ts';
 import { EntityEffectsRenderer } from './EntityEffectsRenderer.ts';
@@ -35,13 +36,106 @@ export class EntitySpriteRenderer {
             if (spinSheet && spinSheet.image) spriteSheet = spinSheet;
         }
 
-        if (!spriteSheet || !spriteSheet.image) {
+        const isMultiDirSet = spriteSheet && (spriteSheet as MultiDirFrameSet).type === 'multiDirFrames';
+        if (!spriteSheet || (!spriteSheet.image && !isMultiDirSet)) {
             if (renderable) {
                 if (renderable.type === 'player') PlayerEntityRenderer.render(context, entity, screenX, screenY);
                 else if (renderable.type === 'enemy') EnemyEntityRenderer.render(context, entity, screenX, screenY);
             }
             return;
         }
+
+        // Multi-dir frame set: one image per (direction, frame) — draw that image directly
+        if (isMultiDirSet && animation && movement) {
+            const multiSet = spriteSheet as MultiDirFrameSet;
+            const anim = animation.currentAnimation ? animation.animations[animation.currentAnimation] : null;
+            const useMultiDir = anim?.useMultiDirFrames === true;
+            if (useMultiDir && multiSet.directions.length > 0) {
+                const direction = SpriteUtils.angleTo8Direction(movement.facingAngle);
+                // Game angles: 0=E, π/2=S (sectors E,SE,S,SW,W,NW,N,NE). Folder order: E,NE,N,NW,W,SW,S,SE.
+                const MULTI_DIR_TO_FOLDER: number[] = [0, 7, 6, 5, 4, 3, 2, 1];
+                const dirIndex = Math.max(0, Math.min(MULTI_DIR_TO_FOLDER[direction] ?? direction, multiSet.directions.length - 1));
+                const frameIndex = animation.getCurrentFrameIndex();
+                const dirFrames = multiSet.directions[dirIndex];
+                const frame = Math.max(0, Math.min(frameIndex, dirFrames.length - 1));
+                const img = dirFrames[frame];
+                if (img && img.complete) {
+                    if (renderable && renderable.type === 'enemy' && typeof EntityEffectsRenderer !== 'undefined') {
+                        EntityEffectsRenderer.drawPackModifierGlow(context, entity, screenX, screenY);
+                    }
+                    const drawX = screenX + sprite.offsetX * camera.zoom;
+                    const drawY = screenY + sprite.offsetY * camera.zoom;
+                    const baseSize = sprite.width * camera.zoom * sprite.scaleX;
+                    const drawWidth = baseSize;
+                    const drawHeight = (baseSize / (img.naturalWidth / img.naturalHeight)) || baseSize;
+                    ctx.save();
+                    try {
+                        ctx.translate(drawX, drawY);
+                        ctx.scale(sprite.scaleX * (sprite.flipX ? -1 : 1), sprite.scaleY);
+                        ctx.rotate(sprite.rotation);
+                        const oldSmoothing = ctx.imageSmoothingEnabled;
+                        ctx.imageSmoothingEnabled = false;
+                        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+                        ctx.imageSmoothingEnabled = oldSmoothing;
+                        if (sprite.tint) {
+                            ctx.globalCompositeOperation = 'multiply';
+                            ctx.fillStyle = sprite.tint;
+                            ctx.fillRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+                            ctx.globalCompositeOperation = 'source-over';
+                        }
+                    } finally {
+                        ctx.restore();
+                    }
+                    if (typeof EntityEffectsRenderer !== 'undefined') {
+                        EntityEffectsRenderer.drawShadow(ctx, screenX, screenY, transform, camera);
+                        EntityEffectsRenderer.drawHealingVial(context, entity, screenX, screenY);
+                    }
+                    if (renderable && renderable.type === 'enemy') {
+                        const ai = entity.getComponent(AI);
+                        const showEnemyHitboxIndicators = settings && settings.showEnemyHitboxIndicators !== false;
+                        const needsWeaponOverlay = ai && (ai.enemyType === 'goblin' || ai.enemyType === 'goblinChieftain' || ai.enemyType === 'banditDagger' || ai.enemyType === 'bandit');
+                        if (needsWeaponOverlay) {
+                            const r = (transform.width / 2) * camera.zoom;
+                            const h = (transform.height / 2) * camera.zoom;
+                            if (ai.enemyType === 'goblin' && combat && combat.isAttacking && !combat.isWindingUp && typeof PlayerCombatRenderer !== 'undefined') {
+                                PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement || { facingAngle: 0 }, camera, {
+                                    sweepProgress: combat.enemySlashSweepProgress,
+                                    pullBack: 0,
+                                    comboColors: false
+                                });
+                            }
+                            if (ai.enemyType === 'banditDagger' && combat && typeof PlayerCombatRenderer !== 'undefined') {
+                                if (combat.isWindingUp) {
+                                    PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement || { facingAngle: 0 }, camera, { telegraph: true, sweepProgress: 0, pullBack: 0, comboColors: false });
+                                }
+                                if (combat.isAttacking && !combat.isWindingUp) {
+                                    const slashSweep = (combat.enemyAttackHandler && typeof combat.enemyAttackHandler.getSlashSweepProgress === 'function') ? combat.enemyAttackHandler.getSlashSweepProgress() : combat.enemySlashSweepProgress;
+                                    PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement || { facingAngle: 0 }, camera, { sweepProgress: slashSweep, pullBack: 0, comboColors: false });
+                                }
+                            }
+                            if (ai.enemyType === 'bandit' && combat && combat.weapon && combat.weapon.name === 'mace' && typeof PlayerCombatRenderer !== 'undefined') {
+                                if (showEnemyHitboxIndicators && combat.isAttacking && movement) {
+                                    PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement, camera, { comboColors: false });
+                                }
+                                PlayerCombatRenderer.drawMace(ctx, screenX, screenY, transform, movement || { facingAngle: 0 }, combat, camera);
+                            }
+                            if (ai.enemyType !== 'bandit') {
+                                EnemyEntityRenderer.drawWeapon(context, ai.enemyType, screenX, screenY, movement ? movement.facingAngle : 0, r, h, combat);
+                            }
+                        }
+                    }
+                    if (typeof EntityEffectsRenderer !== 'undefined') {
+                        EntityEffectsRenderer.renderBarsAndEffects(context, entity, screenX, screenY, { isPlayer: renderable && renderable.type === 'player' });
+                    }
+                    if (renderable && renderable.type === 'player') {
+                        PlayerEntityRenderer.drawWeaponAndMetersForSpritePath(context, entity, screenX, screenY);
+                    }
+                    return;
+                }
+            }
+        }
+
+        if (!spriteSheet.image) return;
 
         let row = 0, col = 0;
         if (useSpinSheetForPlayer && combat && (combat.playerAttack || combat.attackHandler) && combat.attackDuration > 0) {

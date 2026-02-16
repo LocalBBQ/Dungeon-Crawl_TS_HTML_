@@ -11,6 +11,8 @@ export interface AnimationDef {
   loop?: boolean;
   row?: number;
   spriteSheetKey?: string;
+  /** When true, sheet is a MultiDirFrameSet: direction index + frame index select a single image. */
+  useMultiDirFrames?: boolean;
 }
 
 export interface AnimationConfig {

@@ -1,17 +1,30 @@
 // Sprite Manager - handles loading and caching of sprite sheets
 import { GameConfig } from '../config/GameConfig.ts';
 
+/** 8-direction frame set: directions[dirIndex][frameIndex] = image. Dir order: E, NE, N, NW, W, SW, S, SE. */
+export interface MultiDirFrameSet {
+    type: 'multiDirFrames';
+    directions: HTMLImageElement[][];
+    frameCount: number;
+}
+
 export class SpriteManager {
     sprites: Map<string, HTMLImageElement>;
     spriteSheets: Map<string, unknown>;
     loadingPromises: Map<string, Promise<HTMLImageElement>>;
     groundTextures: Map<string, HTMLImageElement>;
+    /** Multi-direction frame sets (e.g. Player/Idle with E_Idle, N_Idle, ... folders). */
+    multiDirFrameSheets: Map<string, MultiDirFrameSet>;
+
+    /** Direction folder names in 8-dir order (E, NE, N, NW, W, SW, S, SE) matching angleTo8Direction. */
+    static readonly MULTI_DIR_NAMES = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'] as const;
 
     constructor() {
         this.sprites = new Map();
         this.spriteSheets = new Map();
         this.loadingPromises = new Map();
         this.groundTextures = new Map();
+        this.multiDirFrameSheets = new Map();
     }
 
     async loadSprite(path: string): Promise<HTMLImageElement> {
@@ -231,21 +244,86 @@ export class SpriteManager {
         return Promise.all(spritePaths.map(path => this.loadSprite(path)));
     }
 
-    // Get a sprite sheet by key
+    /**
+     * Load a multi-direction frame set from folder layout:
+     * basePath/E_AnimName/sprite0.png, sprite1.png, ... and same for NE, N, NW, W, SW, S, SE.
+     * Returns a MultiDirFrameSet or null if the first direction folder cannot be loaded.
+     */
+    async loadMultiDirFrames(basePath: string, animName: string): Promise<MultiDirFrameSet | null> {
+        const key = `${basePath}_${animName}_multidir`;
+        if (this.multiDirFrameSheets.has(key)) {
+            return this.multiDirFrameSheets.get(key)!;
+        }
+
+        const dirNames = SpriteManager.MULTI_DIR_NAMES;
+        const firstDir = `${dirNames[0]}_${animName}`;
+
+        // Discover frame count by loading first direction's sprite0, sprite1, ...
+        let frameCount = 0;
+        for (let i = 0; ; i++) {
+            const path = `${basePath}/${firstDir}/sprite${i}.png`;
+            try {
+                await this.loadSprite(path);
+                frameCount++;
+            } catch {
+                break;
+            }
+        }
+        if (frameCount === 0) return null;
+
+        const directions: HTMLImageElement[][] = [];
+        for (const dir of dirNames) {
+            const dirFrames: HTMLImageElement[] = [];
+            const dirFolder = `${dir}_${animName}`;
+            for (let i = 0; i < frameCount; i++) {
+                const path = `${basePath}/${dirFolder}/sprite${i}.png`;
+                try {
+                    const img = await this.loadSprite(path);
+                    dirFrames.push(img);
+                } catch (e) {
+                    console.warn(`Missing ${path}:`, e);
+                    break;
+                }
+            }
+            if (dirFrames.length === 0) {
+                console.warn(`No frames for direction ${dir} in ${basePath}`);
+                return null;
+            }
+            directions.push(dirFrames);
+        }
+
+        const set: MultiDirFrameSet = {
+            type: 'multiDirFrames',
+            directions,
+            frameCount,
+        };
+        this.multiDirFrameSheets.set(key, set);
+        console.log(`Loaded multi-dir frames: ${basePath}/${animName}, ${dirNames.length} dirs × ${frameCount} frames`);
+        return set;
+    }
+
+    getMultiDirFrameSet(key: string): MultiDirFrameSet | null {
+        return this.multiDirFrameSheets.get(key) ?? null;
+    }
+
+    // Get a sprite sheet by key (may be a traditional sheet or a multi-dir key for getMultiDirFrameSet)
     getSpriteSheet(key) {
+        const multi = this.multiDirFrameSheets.get(key);
+        if (multi) return multi;
+
         // First try direct lookup
         if (this.spriteSheets.has(key)) {
             const sheet = this.spriteSheets.get(key);
             return sheet;
         }
-        
+
         // If key is just a path, try to find sprite sheet by path prefix
         for (const [sheetKey, sheet] of this.spriteSheets.entries()) {
             if (sheetKey.startsWith(key)) {
                 return sheet;
             }
         }
-        
+
         return null;
     }
 
