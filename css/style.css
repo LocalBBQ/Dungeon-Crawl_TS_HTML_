@@ -191,15 +191,8 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
-/* Inventory & Equipment screen (Tab to open) – responsive auto layout */
+/* Inventory & Equipment screen (Tab to open) */
 .inventory-screen {
-    --inv-panel-width: min(44%, 460px);
-    --inv-panel-min-w: 280px;
-    --inv-panel-max-w: 460px;
-    --inv-pad: clamp(10px, 2.5vw, 18px);
-    --inv-gap: clamp(8px, 1.5vw, 16px);
-    --inv-slot-min: 36px;
-    --inv-slot-max: 48px;
     position: absolute;
     inset: 0;
     z-index: 100;
@@ -216,38 +209,34 @@ body {
 .inventory-panel {
     display: flex;
     flex-direction: column;
-    width: var(--inv-panel-width);
-    min-width: var(--inv-panel-min-w);
-    max-width: var(--inv-panel-max-w);
+    width: 44%;
+    max-width: 460px;
+    min-width: 340px;
     max-height: 100vh;
-    margin: clamp(8px, 2vw, 16px);
     pointer-events: auto;
-    background: linear-gradient(165deg, rgba(30, 22, 16, 0.98) 0%, rgba(20, 14, 10, 0.98) 50%, rgba(16, 11, 7, 0.98) 100%);
-    border: 1px solid rgba(80, 55, 35, 0.85);
-    border-top-color: rgba(120, 90, 60, 0.25);
-    border-radius: 10px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(140, 110, 70, 0.08);
+    background: linear-gradient(180deg, rgba(28, 20, 14, 0.98) 0%, rgba(18, 12, 8, 0.98) 100%);
+    border: 2px solid rgba(61, 40, 23, 0.7);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(120, 90, 60, 0.15);
     overflow: hidden;
 }
 
 .inventory-header {
     display: flex;
     align-items: center;
-    gap: var(--inv-gap);
-    padding: var(--inv-pad);
+    gap: 16px;
+    padding: 12px 18px;
     border-bottom: 1px solid rgba(61, 40, 23, 0.5);
     background: rgba(15, 10, 6, 0.5);
-    flex-shrink: 0;
 }
 
 .inventory-title {
-    font-size: clamp(14px, 2.2vw, 18px);
+    font-size: 18px;
     font-weight: 700;
     color: #c9a227;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin: 0;
-    min-width: 0;
 }
 
 .inventory-portrait-wrap {
@@ -257,8 +246,8 @@ body {
 
 .inventory-portrait {
     display: block;
-    width: clamp(64px, 12vw, 96px);
-    height: clamp(64px, 12vw, 96px);
+    width: 96px;
+    height: 96px;
     border-radius: 6px;
     border: 2px solid rgba(61, 40, 23, 0.6);
     background: rgba(20, 14, 10, 0.9);
@@ -268,28 +257,24 @@ body {
 .inventory-stats {
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: var(--inv-gap);
-    padding: var(--inv-pad);
+    gap: 20px;
+    padding: 14px 18px;
     background: linear-gradient(180deg, rgba(44, 28, 18, 0.4) 0%, rgba(26, 18, 10, 0.3) 100%);
     border-bottom: 1px solid rgba(61, 40, 23, 0.4);
-    flex-shrink: 0;
 }
 
 .inventory-stats-bars {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-    flex: 1 1 120px;
+    gap: 12px;
 }
 
 .inventory-stats-right {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
@@ -321,8 +306,8 @@ body {
 
 .inventory-bar-container {
     width: 100%;
-    max-width: min(140px, 100%);
-    height: clamp(14px, 2.5vw, 18px);
+    max-width: 140px;
+    height: 18px;
     background: #0f0a06;
     border: 2px solid #3d2817;
     border-radius: 3px;
@@ -348,69 +333,44 @@ body {
 
 .inventory-body {
     display: flex;
-    flex: 1 1 0;
+    flex: 1;
     min-height: 0;
     gap: 0;
 }
 
 .inventory-main {
-    flex: 1 1 0;
+    flex: 1;
     display: flex;
     flex-direction: column;
-    padding: var(--inv-pad);
+    padding: 14px 18px 18px;
     min-width: 0;
-    overflow: auto;
 }
 
-.inventory-grid-label {
-    font-size: clamp(10px, 1.5vw, 12px);
+.inventory-grid-label,
+.inventory-equipment-label {
+    font-size: 12px;
     font-weight: 700;
     color: #8a7048;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 6px;
-    flex-shrink: 0;
+    margin-bottom: 8px;
 }
 
-.inventory-equipment-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #a08050;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-}
-
-.inventory-equipment-subtitle {
-    font-size: 10px;
-    font-weight: 500;
-    color: #6a5840;
-    letter-spacing: 0.04em;
-    margin-top: -6px;
-    margin-bottom: 12px;
-}
-
-/* Auto layout: 6×4 grid with square cells that scale with container */
 .inventory-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    grid-template-rows: repeat(4, minmax(0, 1fr));
-    gap: clamp(4px, 1vw, 8px);
-    aspect-ratio: 6 / 4;
-    width: 100%;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 8px;
     max-width: 100%;
-    min-height: 0;
 }
 
 .inventory-slot {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-    min-height: 0;
-    box-sizing: border-box;
+    aspect-ratio: 1;
+    max-width: 58px;
+    max-height: 58px;
     background: rgba(15, 10, 6, 0.6);
-    border: 1px solid rgba(61, 40, 23, 0.5);
-    border-radius: 6px;
+    border: 2px solid rgba(61, 40, 23, 0.5);
+    border-radius: 4px;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
@@ -420,280 +380,37 @@ body {
 }
 
 .inventory-equipment {
-    flex: 0 1 auto;
-    min-width: clamp(120px, 18vw, 172px);
-    width: clamp(140px, 22vw, 172px);
-    padding: var(--inv-pad);
-    border-left: 1px solid rgba(61, 40, 23, 0.45);
-    background: linear-gradient(90deg, rgba(18, 12, 8, 0.5) 0%, rgba(14, 10, 6, 0.35) 100%);
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    overflow: auto;
-}
-
-/* Gold in equipment sheet */
-.equipment-slot-gold {
-    margin-bottom: 10px;
-}
-.equipment-slot-gold .equipment-slot-value {
-    color: #c9a227;
-    font-variant-numeric: tabular-nums;
-}
-
-/* Equipment block: weapons (primary) */
-.inventory-equipment-weapons {
+    width: 150px;
+    flex-shrink: 0;
+    padding: 14px 16px 18px;
+    border-left: 1px solid rgba(61, 40, 23, 0.5);
+    background: rgba(12, 8, 5, 0.4);
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-bottom: 18px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid rgba(61, 40, 23, 0.4);
 }
 
 .equipment-slot {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
     padding: 10px 12px;
-    background: rgba(18, 12, 8, 0.55);
-    border: 1px solid rgba(61, 40, 23, 0.45);
-    border-radius: 6px;
-    box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.3);
-    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-}
-
-.equipment-slot:hover {
-    border-color: rgba(201, 162, 39, 0.4);
-    background: rgba(32, 24, 16, 0.6);
-}
-
-.equipment-slot-primary {
-    border-color: rgba(61, 40, 23, 0.55);
-    background: rgba(22, 16, 10, 0.6);
-}
-
-.equipment-slot-primary:hover {
-    border-color: rgba(201, 162, 39, 0.5);
-    transform: translateY(-1px);
-}
-
-.equipment-slot.equipped {
-    border-color: rgba(201, 162, 39, 0.5);
-    background: rgba(201, 162, 39, 0.08);
-    box-shadow: inset 0 1px 0 rgba(201, 162, 39, 0.06), 0 0 0 1px rgba(201, 162, 39, 0.15);
+    background: rgba(15, 10, 6, 0.5);
+    border: 2px solid rgba(61, 40, 23, 0.4);
+    border-radius: 4px;
 }
 
 .equipment-slot-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     color: #8a7048;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-}
-
-.equipment-slot-primary .equipment-slot-label {
-    color: #a08050;
 }
 
 .equipment-slot-value {
-    font-size: 13px;
-    font-weight: 600;
-    color: #c9a86a;
-    letter-spacing: 0.02em;
-}
-
-.equipment-slot-value.empty {
-    color: #5a4a38;
-    font-weight: 500;
-}
-
-/* Locked / coming-soon slots */
-.equipment-slot-locked {
-    opacity: 0.65;
-    pointer-events: none;
-    border-style: dashed;
-}
-
-.equipment-slot-locked .equipment-slot-value {
-    color: #4a3a28;
-    font-size: 11px;
-    font-style: italic;
-}
-
-/* Weapon chest overlay (hub: E at chest) */
-.weapon-chest-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: auto;
-    background: rgba(10, 8, 6, 0.75);
-}
-
-.weapon-chest-overlay.hidden {
-    display: none;
-    pointer-events: none;
-}
-
-.weapon-chest-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
-    padding: 24px 28px 28px;
-    min-width: 280px;
-    background: linear-gradient(180deg, rgba(28, 20, 14, 0.98) 0%, rgba(18, 12, 8, 0.98) 100%);
-    border: 2px solid rgba(61, 40, 23, 0.7);
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(120, 90, 60, 0.15);
-}
-
-.weapon-chest-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #c9a227;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin: 0;
-}
-
-.weapon-chest-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    max-width: 100%;
-}
-
-.weapon-chest-slot {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 64px;
-    min-height: 52px;
-    padding: 8px;
-    background: rgba(15, 10, 6, 0.6);
-    border: 2px solid rgba(61, 40, 23, 0.5);
-    border-radius: 4px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
-    font-size: 22px;
-    font-weight: 600;
-    color: #e0c8a0;
-    text-align: center;
-    cursor: grab;
-    user-select: none;
-}
-
-.weapon-chest-slot:active {
-    cursor: grabbing;
-}
-
-.weapon-chest-slot:hover {
-    border-color: rgba(201, 162, 39, 0.5);
-    background: rgba(44, 32, 20, 0.6);
-}
-
-.weapon-chest-slot.equipped {
-    border-color: rgba(201, 162, 39, 0.8);
-    background: rgba(201, 162, 39, 0.15);
-    color: #e8dcc8;
-}
-
-.weapon-chest-slot.drag-over {
-    border-color: rgba(201, 162, 39, 0.8);
-    background: rgba(201, 162, 39, 0.12);
-}
-
-.weapon-chest-equipment {
-    display: flex;
-    gap: 14px;
-    width: 100%;
-    justify-content: center;
-    padding: 14px 0 4px;
-    border-top: 1px solid rgba(61, 40, 23, 0.4);
-    margin-top: 4px;
-}
-
-.weapon-chest-equipment .equipment-slot {
-    min-width: 110px;
-}
-
-.equipment-drop-target {
-    min-width: 100px;
-    min-height: 48px;
-}
-
-.equipment-drop-target.drag-over {
-    border-color: rgba(201, 162, 39, 0.75);
-    background: rgba(201, 162, 39, 0.14);
-    box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.2);
-}
-
-.inventory-slot[data-weapon-key] {
-    cursor: grab;
-    user-select: none;
-    font-size: 22px;
-    font-weight: 600;
-    color: #e0c8a0;
-}
-
-.inventory-slot.drag-over {
-    border-color: rgba(201, 162, 39, 0.8);
-    background: rgba(201, 162, 39, 0.12);
-}
-
-.inventory-slot[data-weapon-key]:active {
-    cursor: grabbing;
-}
-
-@media (max-width: 480px) {
-    .inventory-screen {
-        justify-content: center;
-    }
-    .inventory-panel {
-        width: calc(100vw - 16px);
-        min-width: 0;
-        max-width: 100%;
-    }
-    .inventory-body {
-        flex-direction: column;
-    }
-    .inventory-equipment {
-        flex-direction: row;
-        flex-wrap: wrap;
-        width: 100%;
-        min-width: 0;
-        border-left: none;
-        border-top: 1px solid rgba(61, 40, 23, 0.45);
-        justify-content: flex-start;
-        gap: 8px;
-    }
-    .inventory-equipment-weapons {
-        flex-direction: row;
-        margin-bottom: 12px;
-        padding-bottom: 12px;
-        width: 100%;
-    }
-}
-
-.weapon-chest-back {
-    padding: 10px 24px;
-    font-family: inherit;
     font-size: 14px;
     font-weight: 600;
-    color: #a08060;
-    background: #1a1008;
-    border: 2px solid #4a3020;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.weapon-chest-back:hover {
     color: #c9a86a;
-    border-color: #6a4030;
-    background: #241810;
 }
-
 
