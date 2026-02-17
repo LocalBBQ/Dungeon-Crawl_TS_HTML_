@@ -306,11 +306,11 @@ if (zombieWeapon) {
 
 const zombieConfig = {
   maxHealth: 55,
-  moveSpeed: 18,
+  moveSpeed: 72,
   weaponId: 'zombieClaw',
   attackRange: zombieAttackRange,
   attackDamage: zombieAttackDamage,
-  detectionRange: 200,
+  detectionRange: 800,
   color: '#3d5c3d',
   attackCooldown: zombieAttackCooldown,
   windUpTime: 0.4,
@@ -323,6 +323,22 @@ const zombieConfig = {
   goldDrop: 3
 };
 
+// Training dummy: immobile, never attacks, high health, no gold, resets health on "death" (handled in EnemyManager)
+const trainingDummyConfig = {
+  maxHealth: 500,
+  moveSpeed: 0,
+  attackRange: 0,
+  attackDamage: 0,
+  detectionRange: 0,
+  color: '#6b5344',
+  attackCooldown: 999,
+  windUpTime: 0,
+  stunBuildupPerHit: 0,
+  knockbackResist: 1,
+  knockback: { force: 0, decay: 1 },
+  goldDrop: 0
+};
+
 export const EnemyGoblin = EnemyType.fromConfig(goblinConfig);
 export const EnemySkeleton = EnemyType.fromConfig(skeletonConfig);
 export const EnemyLesserDemon = EnemyType.fromConfig(lesserDemonConfig);
@@ -333,3 +349,4 @@ export const EnemyBanditDagger = EnemyType.fromConfig(banditDaggerConfig);
 export const EnemyGoblinBrute = EnemyType.fromConfig(goblinBruteConfig);
 export const EnemySkeletonVeteran = EnemyType.fromConfig(skeletonVeteranConfig);
 export const EnemyZombie = EnemyType.fromConfig(zombieConfig);
+export const EnemyTrainingDummy = EnemyType.fromConfig(trainingDummyConfig);

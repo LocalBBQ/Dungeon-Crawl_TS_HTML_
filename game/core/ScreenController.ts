@@ -15,7 +15,6 @@ export interface ScreenControllerContext {
         getLevelSelectAt(x: number, y: number): number | null;
         getQuestSelectAt(x: number, y: number, questList: { level: number; difficultyId: string; difficulty?: { label?: string } }, levelNames: Record<number, string>): number | null;
         getHubBoardButtonAt(x: number, y: number, questCount?: number): 'start' | 'reroll' | 'back' | null;
-        getHubSpawnPortalButtonAt(x: number, y: number): boolean;
         getPauseButtonAt(x: number, y: number): string | null;
         getHelpBackButtonAt(x: number, y: number): boolean;
         getSettingsItemAt(x: number, y: number, settings: SettingsLike): string | null;
@@ -88,7 +87,7 @@ export class ScreenController {
                         sm.selectedStartLevel = quest.level;
                     }
                     ps.boardOpen = false;
-                    ctx.startGame();
+                    // Stay in hub; a quest portal will spawn for the player to enter
                 } else if (btn === 'reroll') {
                     const REROLL_COST = 200;
                     const currentGold = ps.gold ?? 0;
@@ -101,16 +100,6 @@ export class ScreenController {
                 } else if (btn === 'back') {
                     ps.boardOpen = false;
                 }
-            }
-        } else if (sm.isScreen('hub') && !ps.boardOpen) {
-            if (sm.getHubSpawnPortalButtonAt(x, y) && ps.questList.length > 0) {
-                const quest = ps.questList[ps.hubSelectedQuestIndex];
-                if (quest) {
-                    ps.activeQuest = quest;
-                    ps.questGoldMultiplier = quest.difficulty?.goldMultiplier ?? 1;
-                    sm.selectedStartLevel = quest.level;
-                }
-                ctx.startGame();
             }
         } else if (sm.isScreen('death')) {
             if (sm.checkButtonClick(x, y, 'death')) {

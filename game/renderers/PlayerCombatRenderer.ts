@@ -737,8 +737,8 @@ export const PlayerCombatRenderer = {
         ctx.restore();
     },
 
-    /** Draw Defender offhand as a simple small dagger (not the shield rect). */
-    drawDefenderDagger(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, transform: { width: number; height: number }, movement: { facingAngle: number }, combat: { isBlocking: boolean }, camera: { zoom: number }) {
+    /** Draw Defender offhand as a simple small dagger (not the shield rect). Uses offhand weapon tier color when present. */
+    drawDefenderDagger(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, transform: { width: number; height: number }, movement: { facingAngle: number }, combat: { isBlocking: boolean; offhandWeapon?: { color?: string } }, camera: { zoom: number }) {
         const off = (transform.width / 2 + 6) * camera.zoom;
         const bladeLen = 14 * camera.zoom;
         const guardW = 4 * camera.zoom;
@@ -753,12 +753,17 @@ export const PlayerCombatRenderer = {
             y = screenY + Math.sin(leftAngle) * (transform.height / 2 + 2) * camera.zoom;
             angle = leftAngle + Math.PI / 2;
         }
+        const weaponColor = combat.offhandWeapon?.color;
+        const bladeFill = (weaponColor && typeof weaponColor === 'string') ? weaponColor : '#7a7a88';
+        const m = weaponColor && typeof weaponColor === 'string' && weaponColor.match(/^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
+        const bladeStroke = m ? `#${Math.max(0, Math.floor(parseInt(m[1], 16) * 0.55)).toString(16).padStart(2, '0')}${Math.max(0, Math.floor(parseInt(m[2], 16) * 0.55)).toString(16).padStart(2, '0')}${Math.max(0, Math.floor(parseInt(m[3], 16) * 0.55)).toString(16).padStart(2, '0')}` : '#4a4a52';
+        const guardFill = m ? `#${Math.max(0, Math.floor(parseInt(m[1], 16) * 0.7)).toString(16).padStart(2, '0')}${Math.max(0, Math.floor(parseInt(m[2], 16) * 0.7)).toString(16).padStart(2, '0')}${Math.max(0, Math.floor(parseInt(m[3], 16) * 0.7)).toString(16).padStart(2, '0')}` : '#5a5a62';
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
         if (!combat.isBlocking) ctx.globalAlpha = 0.85;
-        ctx.strokeStyle = '#4a4a52';
-        ctx.fillStyle = '#7a7a88';
+        ctx.strokeStyle = bladeStroke;
+        ctx.fillStyle = bladeFill;
         ctx.lineWidth = Math.max(1, 1.5 / camera.zoom);
         ctx.beginPath();
         ctx.moveTo(0, -guardW);
@@ -769,7 +774,8 @@ export const PlayerCombatRenderer = {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#5a5a62';
+        ctx.fillStyle = guardFill;
+        ctx.strokeStyle = bladeStroke;
         ctx.fillRect(-3, -guardW * 0.5, 4, guardW);
         ctx.strokeRect(-3, -guardW * 0.5, 4, guardW);
         ctx.globalAlpha = 1;
@@ -781,7 +787,7 @@ export const PlayerCombatRenderer = {
         if (!isBlockable(combat.offhandWeapon)) return;
         if (combat.weapon && combat.weapon.twoHanded) return;
         const offhandName = combat.offhandWeapon && (combat.offhandWeapon as { name?: string }).name;
-        if (offhandName === 'Defender') {
+        if (offhandName?.includes('Defender')) {
             PlayerCombatRenderer.drawDefenderDagger(ctx, screenX, screenY, transform, movement, combat, camera);
             return;
         }

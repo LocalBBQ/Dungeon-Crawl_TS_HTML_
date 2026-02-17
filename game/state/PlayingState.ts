@@ -55,6 +55,9 @@ export interface PlayingStateShape {
   boardOpen: boolean;
   boardUseCooldown: number;
   playerNearBoard: boolean;
+  /** In hub: player is within quest portal bounds (when activeQuest is set). */
+  playerNearQuestPortal: boolean;
+  questPortalUseCooldown: number;
   chest: ChestState | null;
   chestOpen: boolean;
   chestUseCooldown: number;
@@ -95,11 +98,14 @@ export interface PlayingStateShape {
   /** Gold multiplier from active quest difficulty; 1 when no quest. */
   questGoldMultiplier: number;
   screenBeforePause: 'playing' | 'hub' | null;
+  /** When transitioning from level to sanctuary: health/stamina to restore on the new player entity. */
+  savedSanctuaryHealth?: number;
+  savedSanctuaryStamina?: number;
 }
 
-/** Initial chest weapon keys (one of each base at Rusty tier; shield and defender have no tier). */
+/** Initial chest weapon keys (one of each base at Rusty tier; shield has no tier). */
 const INITIAL_CHEST_WEAPON_KEYS = [
-  'sword_rusty', 'shield', 'defender', 'dagger_rusty', 'greatsword_rusty', 'crossbow_rusty', 'mace_rusty'
+  'sword_rusty', 'shield', 'defender_rusty', 'dagger_rusty', 'greatsword_rusty', 'crossbow_rusty', 'mace_rusty'
 ] as const;
 
 /** Initial chest contents: one instance of each, full durability. */
@@ -123,6 +129,8 @@ const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, ch
   boardOpen: false,
   boardUseCooldown: 0,
   playerNearBoard: false,
+  playerNearQuestPortal: false,
+  questPortalUseCooldown: 0,
   chest: null,
   chestOpen: false,
   chestUseCooldown: 0,
@@ -163,6 +171,8 @@ export class PlayingState implements PlayingStateShape {
   boardOpen = false;
   boardUseCooldown = 0;
   playerNearBoard = false;
+  playerNearQuestPortal = false;
+  questPortalUseCooldown = 0;
   chest: ChestState | null = null;
   chestOpen = false;
   chestUseCooldown = 0;

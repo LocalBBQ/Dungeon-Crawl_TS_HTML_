@@ -184,6 +184,50 @@ body {
     box-shadow: inset 0 1px 0 rgba(255, 220, 150, 0.3);
 }
 
+/* Potion bottle – fill shows remaining charges */
+.potion-bottle {
+    position: relative;
+    width: 36px;
+    height: 52px;
+    flex-shrink: 0;
+    border-radius: 6px 6px 4px 4px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(20, 12, 8, 0.95) 0%, rgba(12, 8, 4, 0.98) 100%);
+    border: 2px solid rgba(80, 50, 30, 0.7);
+    box-shadow:
+        inset 0 -4px 10px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(120, 80, 50, 0.2),
+        0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.potion-bottle-frame {
+    position: absolute;
+    inset: 0;
+    border-radius: 6px 6px 4px 4px;
+    border: 1px solid rgba(100, 65, 40, 0.4);
+    pointer-events: none;
+    z-index: 2;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.potion-fill {
+    position: absolute;
+    bottom: 0;
+    left: 2px;
+    right: 2px;
+    width: calc(100% - 4px);
+    border-radius: 0 0 2px 2px;
+    transition: height 0.25s ease;
+    z-index: 1;
+    background: linear-gradient(180deg, #c03030 0%, #902020 35%, #601818 70%, #381010 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 180, 180, 0.25);
+}
+
+.potion-bottle.drinking .potion-fill {
+    transition: height 0.15s ease;
+}
+
+.stat-bar.heal-charges .heal-charges-text,
 .stat-bar.heal-charges span {
     font-size: 18px;
     font-weight: 600;

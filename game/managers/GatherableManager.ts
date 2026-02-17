@@ -22,7 +22,6 @@ export interface GatherableItem {
 
 interface GatheringState {
     item: GatherableItem;
-    sweetSpot: number;
 }
 
 interface GameRefLike {
@@ -37,10 +36,7 @@ interface InputSystemLike {
 }
 
 export class GatherableManager {
-    static GATHER_DURATION = 3;
-    static QUICK_TIME_HALF_WIDTH = 0.03;
-    static SWEET_SPOT_MIN = 0.25;
-    static SWEET_SPOT_MAX = 0.85;
+    static GATHER_DURATION = 0.35;
     static INTERACT_RANGE = 30;
 
     items: GatherableItem[] = [];
@@ -140,27 +136,13 @@ export class GatherableManager {
                 this.gathering = null;
                 this.gatherProgress = 0;
             } else {
-                const sweetSpot = this.gathering.sweetSpot;
-                const hw = GatherableManager.QUICK_TIME_HALF_WIDTH;
-                const zoneMin = Math.max(0, sweetSpot - hw);
-                const zoneMax = Math.min(1, sweetSpot + hw);
-                const inQuickTimeZone = this.gatherProgress >= zoneMin && this.gatherProgress <= zoneMax;
-                if ((clicked || ePressed) && inQuickTimeZone) {
+                this.gatherProgress += deltaTime / GatherableManager.GATHER_DURATION;
+                if (this.gatherProgress >= 1) {
                     item.collected = true;
                     this.useCooldown = 0.4;
                     this.applyReward(item.type, player, systems);
                     this.gathering = null;
                     this.gatherProgress = 0;
-                    if (clicked && inputSystem.clearClick) inputSystem.clearClick();
-                } else {
-                    this.gatherProgress += deltaTime / GatherableManager.GATHER_DURATION;
-                    if (this.gatherProgress >= 1) {
-                        item.collected = true;
-                        this.useCooldown = 0.4;
-                        this.applyReward(item.type, player, systems);
-                        this.gathering = null;
-                        this.gatherProgress = 0;
-                    }
                 }
                 if (clicked && inputSystem.clearClick) inputSystem.clearClick();
             }
@@ -174,8 +156,7 @@ export class GatherableManager {
                 if (this.useCooldown > 0) continue;
                 if (this.gathering) continue;
                 if (!ePressed) continue;
-                const sweetSpot = GatherableManager.SWEET_SPOT_MIN + Math.random() * (GatherableManager.SWEET_SPOT_MAX - GatherableManager.SWEET_SPOT_MIN);
-                this.gathering = { item, sweetSpot };
+                this.gathering = { item };
                 this.gatherProgress = 0;
                 break;
             }
@@ -208,8 +189,6 @@ export class GatherableManager {
         const radius = 14;
         const lineWidth = 5;
         const progress = Math.min(1, this.gatherProgress);
-        const sweetSpot = this.gathering.sweetSpot;
-        const highlightRadius = Math.min(3.5, lineWidth * 0.65);
         ctx.save();
         ctx.beginPath();
         ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
@@ -226,16 +205,6 @@ export class GatherableManager {
             ctx.lineCap = 'round';
             ctx.stroke();
         }
-        const highlightAngle = -Math.PI / 2 + Math.PI * 2 * sweetSpot;
-        const hx = screenX + Math.cos(highlightAngle) * radius;
-        const hy = screenY + Math.sin(highlightAngle) * radius;
-        ctx.beginPath();
-        ctx.arc(hx, hy, highlightRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 180, 0.98)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
         ctx.restore();
     }
 

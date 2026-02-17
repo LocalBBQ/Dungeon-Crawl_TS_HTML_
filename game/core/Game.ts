@@ -17,6 +17,7 @@ import { HazardManager } from '../managers/HazardManager.ts';
 import { DamageNumberManager } from '../managers/DamageNumberManager.ts';
 import { ProjectileManager } from '../managers/ProjectileManager.ts';
 import { HealthOrbManager } from '../managers/HealthOrbManager.ts';
+import { GoldPickupManager } from '../managers/GoldPickupManager.ts';
 import { RenderSystem } from '../systems/RenderSystem.ts';
 import { Entity } from '../entities/Entity.ts';
 import { Transform } from '../components/Transform.ts';
@@ -252,6 +253,7 @@ class Game {
             .register('damageNumbers', new DamageNumberManager())
             .register('projectiles', new ProjectileManager())
             .register('healthOrbs', new HealthOrbManager())
+            .register('goldPickups', new GoldPickupManager())
             .register('render', new RenderSystem(this.canvas, this.ctx));
 
         // Initialize render system with systems reference and game settings (needed for attack/hitbox rendering)
@@ -264,7 +266,7 @@ class Game {
         // Explicit update order: input first, then logic/managers, then entities, then render last
         this.systems.setUpdateOrder([
             'input', 'camera', 'collision', 'obstacles', 'gatherables', 'pathfinding',
-            'enemies', 'hazards', 'damageNumbers', 'projectiles', 'healthOrbs',
+            'enemies', 'hazards', 'damageNumbers', 'projectiles', 'healthOrbs', 'goldPickups',
             'entities', 'render'
         ]);
     }
@@ -531,6 +533,19 @@ class Game {
         const player = this.createPlayer(playerStart);
         this.entities.add(player, 'player');
 
+        if (isHub && (this.playingState.savedSanctuaryHealth != null || this.playingState.savedSanctuaryStamina != null)) {
+            const health = player.getComponent(Health);
+            const stamina = player.getComponent(Stamina);
+            if (health != null && this.playingState.savedSanctuaryHealth != null) {
+                health.currentHealth = Math.min(health.maxHealth, Math.max(0, this.playingState.savedSanctuaryHealth));
+            }
+            if (stamina != null && this.playingState.savedSanctuaryStamina != null) {
+                stamina.currentStamina = Math.min(stamina.maxStamina, Math.max(0, this.playingState.savedSanctuaryStamina));
+            }
+            this.playingState.savedSanctuaryHealth = undefined;
+            this.playingState.savedSanctuaryStamina = undefined;
+        }
+
         const transform = player.getComponent(Transform);
         const cameraSystem = this.systems.get('camera');
         if (transform && cameraSystem) {
@@ -544,6 +559,10 @@ class Game {
         const playerSpawn = transform ? { x: transform.x, y: transform.y } : null;
         if (enemyManager && obstacleManager) {
             enemyManager.spawnLevelEnemies(initialLevel, this.entities, obstacleManager, playerSpawn);
+        }
+        if (isHub && hubLevel?.trainingDummy && enemyManager) {
+            const td = hubLevel.trainingDummy;
+            enemyManager.spawnEnemy(td.x, td.y, 'trainingDummy', this.entities);
         }
 
         if (!isHub) {
@@ -641,16 +660,25 @@ class Game {
             });
         }
 
-        this.systems.eventBus.on(EventTypes.PLAYER_KILLED_ENEMY, (data: { goldDrop?: number }) => {
+        this.systems.eventBus.on(EventTypes.PLAYER_KILLED_ENEMY, () => {
             this.playingState.killsThisLife++;
-            const mult = this.playingState.questGoldMultiplier ?? 1;
-            this.playingState.gold += (data?.goldDrop ?? 0) * mult;
         });
+
+        const goldPickupManager = this.systems.get<GoldPickupManager>('goldPickups');
+        if (goldPickupManager) {
+            goldPickupManager.onCollected = (amount: number) => {
+                const mult = this.playingState.questGoldMultiplier ?? 1;
+                this.playingState.gold += amount * mult;
+            };
+        }
 
         this.systems.eventBus.on(EventTypes.PLAYER_HIT_ENEMY, () => {
             const ps = this.playingState;
             if (ps.equippedMainhandDurability > 0) {
                 ps.equippedMainhandDurability = Math.max(0, ps.equippedMainhandDurability - 1);
+                if (ps.equippedMainhandDurability === 0 && ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') {
+                    unequipToInventory(ps, 'mainhand', undefined, 0, () => this.syncPlayerWeaponsFromState());
+                }
             }
         });
 
@@ -659,9 +687,12 @@ class Game {
             const ps = this.playingState;
             if (ps.equippedOffhandDurability > 0) {
                 ps.equippedOffhandDurability = Math.max(0, ps.equippedOffhandDurability - 1);
+                if (ps.equippedOffhandDurability === 0 && ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none') {
+                    unequipToInventory(ps, 'offhand', undefined, 0, () => this.syncPlayerWeaponsFromState());
+                }
             }
             // Rally: when player has defender equipped, add blocked damage to rally pool
-            if (ps.equippedOffhandKey === 'defender' && (data.damage ?? 0) > 0) {
+            if (ps.equippedOffhandKey?.startsWith('defender') && (data.damage ?? 0) > 0) {
                 const player = this.entities.get('player');
                 const rally = player?.getComponent(Rally);
                 if (rally) rally.addToPool(data.damage!);
@@ -699,6 +730,12 @@ class Game {
         const healthOrbManager = this.systems.get('healthOrbs');
         if (healthOrbManager) {
             healthOrbManager.clear();
+        }
+
+        // Clear gold pickups
+        const goldPickupManager = this.systems.get('goldPickups');
+        if (goldPickupManager && goldPickupManager.clear) {
+            goldPickupManager.clear();
         }
     }
 
@@ -767,6 +804,14 @@ class Game {
         const worldConfig = this.config.world;
         const levels = this.config.levels || {};
         const hubLevel = levels[0];
+
+        if (selectedLevel === 0 && this.screenManager.currentScreen === 'playing') {
+            const player = this.entities.get('player');
+            const health = player?.getComponent(Health);
+            const stamina = player?.getComponent(Stamina);
+            if (health != null) this.playingState.savedSanctuaryHealth = health.currentHealth;
+            if (stamina != null) this.playingState.savedSanctuaryStamina = stamina.currentStamina;
+        }
 
         this.clearAllEntitiesAndProjectiles();
 
@@ -885,13 +930,38 @@ class Game {
                     const layout = getShopLayout(
                         this.canvas,
                         this.playingState.shopScrollOffset,
-                        this.playingState.shopExpandedWeapons
+                        this.playingState.shopExpandedWeapons,
+                        this.playingState
                     );
                     const newOffset = this.playingState.shopScrollOffset + wheelDelta * 0.4;
                     this.playingState.shopScrollOffset = Math.max(0, Math.min(newOffset, layout.maxScrollOffset));
                 }
             }
             this.playingStateController.updateHub(deltaTime);
+            // updateHub already calls systems.update once; run combat so training dummy can be hit (no second systems.update or speed doubles)
+            const player = this.entities.get('player');
+            if (player) {
+                const combat = player.getComponent(Combat);
+                if (combat && combat.isPlayer && !combat.isAttacking && combat.attackInputBuffered) {
+                    combat.tryFlushBufferedAttack();
+                }
+                const enemyManager = this.systems.get('enemies');
+                if (enemyManager) {
+                    enemyManager.checkPlayerAttack(player);
+                    enemyManager.checkEnemyAttacks(player);
+                }
+                const healing = player.getComponent(PlayerHealing);
+                if (healing) healing.update(deltaTime);
+            }
+            if (player) {
+                const transform = player.getComponent(Transform);
+                const cameraSystem = this.systems.get('camera');
+                const movement = player.getComponent(Movement);
+                if (transform && cameraSystem) {
+                    const fastFollow = movement && movement.isAttackDashing === true;
+                    cameraSystem.follow(transform, this.canvas.width, this.canvas.height, { fastFollow });
+                }
+            }
             this.hudController.update(this.entities.get('player'));
             return;
         }
@@ -1033,12 +1103,31 @@ class Game {
             const layout = getShopLayout(
                 this.canvas,
                 this.playingState.shopScrollOffset,
-                this.playingState.shopExpandedWeapons
+                this.playingState.shopExpandedWeapons,
+                this.playingState
             );
             const hit = hitTestShop(x, y, layout);
             if (hit?.type === 'back') {
                 this.playingState.shopOpen = false;
                 this.playingState.shopUseCooldown = 0.4;
+                return true;
+            }
+            if (hit?.type === 'repair') {
+                const gold = this.playingState.gold ?? 0;
+                if (gold >= hit.cost) {
+                    this.playingState.gold = gold - hit.cost;
+                    if (hit.source === 'mainhand') {
+                        this.playingState.equippedMainhandDurability = MAX_WEAPON_DURABILITY;
+                    } else if (hit.source === 'offhand') {
+                        this.playingState.equippedOffhandDurability = MAX_WEAPON_DURABILITY;
+                    } else {
+                        const slot = this.playingState.inventorySlots?.[hit.bagIndex];
+                        if (slot) {
+                            this.playingState.inventorySlots[hit.bagIndex] = { key: slot.key, durability: MAX_WEAPON_DURABILITY };
+                        }
+                    }
+                    this.refreshInventoryPanel();
+                }
                 return true;
             }
             if (hit?.type === 'dropdown') {
@@ -1380,8 +1469,21 @@ class Game {
                     if (this.playingState.shop) {
                         renderSystem.renderShopkeeper(this.playingState.shop, cameraSystem, this.playingState.playerNearShop);
                     }
+                    if (this.playingState.activeQuest && hubConfig.questPortal) {
+                        const questPortal = {
+                            ...hubConfig.questPortal,
+                            spawned: true,
+                            hasNextLevel: true,
+                            targetLevel: this.playingState.activeQuest.level
+                        };
+                        renderSystem.renderPortal(questPortal, cameraSystem, this.playingState.playerNearQuestPortal, ['E — Enter quest']);
+                    }
                     const hubEntities = this.entities.getAll();
                     renderSystem.renderEntities(hubEntities, cameraSystem);
+                    const damageNumberManager = this.systems.get('damageNumbers');
+                    if (damageNumberManager) {
+                        damageNumberManager.render(this.ctx, cameraSystem);
+                    }
                 } finally {
                     // Always reset context and draw UI so minimap/level select work even if entity render threw
                     this.ctx.globalAlpha = 1;
@@ -1402,19 +1504,6 @@ class Game {
                             this.playingState.hubSelectedQuestIndex,
                             levelNames,
                             this.playingState.gold ?? 0
-                        );
-                    } else {
-                        const levelNames: Record<number, string> = this.config.levels
-                            ? Object.fromEntries(
-                                Object.entries(this.config.levels).map(([k, v]) => [
-                                    Number(k),
-                                    (v as { name?: string }).name ?? 'Level ' + k
-                                ])
-                            ) : {};
-                        this.screenManager.renderHubSpawnPortalButton(
-                            this.playingState.questList,
-                            this.playingState.hubSelectedQuestIndex,
-                            levelNames
                         );
                     }
                     if (this.playingState.chestOpen) {
@@ -1479,6 +1568,10 @@ class Game {
                 const healthOrbManager = this.systems.get('healthOrbs');
                 if (healthOrbManager) {
                     healthOrbManager.render(this.ctx, cameraSystem);
+                }
+                const goldPickupManager = this.systems.get('goldPickups');
+                if (goldPickupManager && goldPickupManager.render) {
+                    goldPickupManager.render(this.ctx, cameraSystem);
                 }
             } finally {
                 // Always reset context and draw UI so minimap/pause work even if entity render threw

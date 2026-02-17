@@ -48,6 +48,7 @@ export function equipFromInventory(
   if (slotIndex < 0 || slotIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
   const item = ps.inventorySlots[slotIndex];
   if (!item) return;
+  if (item.durability <= 0) return;
   if (!canEquipWeaponInSlot(item.key, slot)) return;
   const weapon = getWeapon(item.key);
   if (slot === 'mainhand') {
@@ -120,6 +121,7 @@ export function equipFromChestToHand(
   if (!ps.chestSlots || chestIndex < 0 || chestIndex >= ps.chestSlots.length) return;
   const instance = ps.chestSlots[chestIndex];
   if (!instance) return;
+  if (instance.durability <= 0) return;
   if (!canEquipWeaponInSlot(instance.key, slot)) return;
   const weapon = getWeapon(instance.key);
   if (slot === 'mainhand') {
@@ -179,7 +181,7 @@ export function swapEquipmentWithInventory(
   const equipKey = equipSlot === 'mainhand' ? ps.equippedMainhandKey : ps.equippedOffhandKey;
   const equipDurability = equipSlot === 'mainhand' ? ps.equippedMainhandDurability : ps.equippedOffhandDurability;
   const bagItem = ps.inventorySlots[bagIndex];
-  if (bagItem && !canEquipWeaponInSlot(bagItem.key, equipSlot)) return;
+  if (bagItem && (bagItem.durability <= 0 || !canEquipWeaponInSlot(bagItem.key, equipSlot))) return;
 
   if (equipSlot === 'mainhand') {
     const newMainWeapon = bagItem ? getWeapon(bagItem.key) : undefined;

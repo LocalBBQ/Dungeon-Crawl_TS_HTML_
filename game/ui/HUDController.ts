@@ -387,8 +387,21 @@ export class HUDController {
 
         const healing = player.getComponent(PlayerHealing);
         const healChargesEl = document.getElementById('heal-charges');
-        if (healing && healChargesEl) {
-            healChargesEl.textContent = healing.charges + '/' + healing.maxCharges;
+        const potionFillEl = document.getElementById('potion-fill');
+        const potionBottleEl = document.querySelector('.potion-bottle');
+        if (healing) {
+            if (healChargesEl) healChargesEl.textContent = healing.charges + '/' + healing.maxCharges;
+            if (potionFillEl && potionBottleEl) {
+                let fillPercent: number;
+                if (healing.phase === 'drinking' && healing.maxCharges > 0) {
+                    const chargeFraction = (healing.charges - 1) + (1 - healing.phaseTimer / healing.drinkTime);
+                    fillPercent = Math.max(0, (100 * chargeFraction) / healing.maxCharges);
+                } else {
+                    fillPercent = healing.maxCharges > 0 ? (100 * healing.charges) / healing.maxCharges : 100;
+                }
+                potionFillEl.style.height = fillPercent + '%';
+                potionBottleEl.classList.toggle('drinking', healing.phase === 'drinking');
+            }
         }
 
         const statusEffects = player.getComponent(StatusEffects);

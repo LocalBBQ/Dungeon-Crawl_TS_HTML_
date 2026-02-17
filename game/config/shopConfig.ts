@@ -3,7 +3,7 @@
  * All tiers from materialTiers are sold (Rusty through Dragon).
  * Weapon keys must exist in WeaponsRegistry (e.g. sword_rusty, sword_dragon).
  */
-import { MATERIALS, TIERED_WEAPON_KEYS } from '../weapons/materialTiers.js';
+import { MATERIALS, TIERED_WEAPON_KEYS, TIERED_OFFHAND_KEYS } from '../weapons/materialTiers.js';
 
 export interface ShopItem {
   weaponKey: string;
@@ -23,6 +23,7 @@ const RUSTY_BASE_PRICE: Record<string, number> = {
   greatsword: 45,
   mace: 35,
   crossbow: 40,
+  defender: 22,
 };
 
 /** Extra price added per material tier (index matches MATERIALS order). */
@@ -49,6 +50,13 @@ function buildShopSections(): ShopSection[] {
         price: basePrice + add,
       });
     }
+    for (const baseKey of TIERED_OFFHAND_KEYS) {
+      const basePrice = RUSTY_BASE_PRICE[baseKey] ?? 22;
+      items.push({
+        weaponKey: `${baseKey}_${material.id}`,
+        price: basePrice + add,
+      });
+    }
     sections.push({
       title: material.displayName,
       items,
@@ -64,7 +72,7 @@ export const SHOP_SECTIONS: ShopSection[] = buildShopSections();
 export const SHOP_ITEMS: ShopItem[] = SHOP_SECTIONS.flatMap((s) => s.items);
 
 /** Order and display names for weapon-type dropdowns in the shop UI. */
-export const SHOP_WEAPON_TYPE_ORDER: string[] = [...TIERED_WEAPON_KEYS];
+export const SHOP_WEAPON_TYPE_ORDER: string[] = [...TIERED_WEAPON_KEYS, ...TIERED_OFFHAND_KEYS];
 
 export const SHOP_WEAPON_TYPE_LABELS: Record<string, string> = {
   sword: 'Sword',
@@ -72,6 +80,7 @@ export const SHOP_WEAPON_TYPE_LABELS: Record<string, string> = {
   greatsword: 'Greatsword',
   mace: 'Mace',
   crossbow: 'Crossbow',
+  defender: 'Defender',
 };
 
 /** Shop items grouped by base weapon type (for dropdown menus). */

@@ -45,6 +45,7 @@ export interface LevelConfig {
   board?: { x: number; y: number; width: number; height: number };
   weaponChest?: { x: number; y: number; width: number; height: number };
   shopkeeper?: { x: number; y: number; width: number; height: number };
+  trainingDummy?: { x: number; y: number };
   walls?: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
@@ -70,6 +71,10 @@ export interface GameConfigShape {
     board?: { x: number; y: number; width: number; height: number };
     weaponChest?: { x: number; y: number; width: number; height: number };
     shopkeeper?: { x: number; y: number; width: number; height: number };
+    /** Spawn position for the quest portal when a quest is accepted (player enters to go to quest). */
+    questPortal?: { x: number; y: number; width: number; height: number };
+    /** Training dummy position (center or top-left). Spawned only in hub. */
+    trainingDummy?: { x: number; y: number };
     theme?: { ground?: unknown; sky?: string };
     walls?: Array<{ x: number; y: number; width: number; height: number }>;
   };

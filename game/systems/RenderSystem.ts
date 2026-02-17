@@ -62,12 +62,12 @@ export class RenderSystem {
         }
     }
 
-    renderPortal(portal, camera, playerNearPortal) {
-        this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal });
+    renderPortal(portal, camera, playerNearPortal, promptLines?: string[]) {
+        this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal, promptLines });
     }
 
-    renderPortalInteractionPrompt(portal, camera, showPrompt) {
-        this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal: showPrompt });
+    renderPortalInteractionPrompt(portal, camera, showPrompt, promptLines?: string[]) {
+        this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal: showPrompt, promptLines });
     }
 
     renderBoard(board, camera, playerNearBoard) {

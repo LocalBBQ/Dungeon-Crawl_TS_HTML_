@@ -11,9 +11,9 @@ interface PortalLike {
 }
 
 export class PortalRenderer {
-    render(context: RenderContext, data: { portal?: PortalLike | null; playerNearPortal?: boolean }): void {
+    render(context: RenderContext, data: { portal?: PortalLike | null; playerNearPortal?: boolean; promptLines?: string[] }): void {
         const { ctx, canvas, camera } = context;
-        const { portal, playerNearPortal } = data;
+        const { portal, playerNearPortal, promptLines: customPromptLines } = data;
         if (!portal || !portal.spawned) return;
         const screenX = camera.toScreenX(portal.x);
         const screenY = camera.toScreenY(portal.y);
@@ -43,10 +43,15 @@ export class PortalRenderer {
             ctx.textBaseline = 'middle';
             const padding = 12;
             const lineHeight = 24;
-            const hasNext = portal.hasNextLevel === true;
-            const lines = [];
-            if (hasNext) lines.push('E Next area');
-            lines.push('B Return to Sanctuary');
+            const lines = customPromptLines && customPromptLines.length > 0
+                ? customPromptLines
+                : (() => {
+                    const hasNext = portal.hasNextLevel === true;
+                    const out: string[] = [];
+                    if (hasNext) out.push('E Next area');
+                    out.push('B Return to Sanctuary');
+                    return out;
+                })();
             const textMetrics = lines.map(t => ctx.measureText(t));
             const bgWidth = Math.max(...textMetrics.map(m => m.width)) + padding * 2;
             const bgHeight = lines.length * lineHeight + padding;

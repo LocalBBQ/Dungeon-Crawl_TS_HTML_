@@ -73,5 +73,6 @@ import './managers/HazardManager.ts';
 import './managers/DamageNumberManager.ts';
 import './managers/ProjectileManager.ts';
 import './managers/HealthOrbManager.ts';
+import './managers/GoldPickupManager.ts';
 import './managers/GatherableManager.ts';
 import './controllers/PlayerInputController.ts';

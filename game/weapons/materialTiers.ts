@@ -23,6 +23,9 @@ export const MATERIALS: MaterialDef[] = [
 /** Weapon types that get material tier variants (shield is single, no tiers). */
 export const TIERED_WEAPON_KEYS = ['sword', 'greatsword', 'dagger', 'mace', 'crossbow'] as const;
 
+/** Offhand types that get material tier variants (shield is single, no tiers). */
+export const TIERED_OFFHAND_KEYS = ['defender'] as const;
+
 export type TieredWeaponKey = (typeof TIERED_WEAPON_KEYS)[number];
 
 /**
@@ -44,6 +47,9 @@ export const TIER_DAMAGE_TABLE: Record<string, Record<string, number>> = {
     },
     crossbow: {
         rusty: 14, bronze: 19, iron: 22, steel: 26, mithril: 29, adamant: 32, rune: 35, dragon: 38
+    },
+    defender: {
+        rusty: 5, bronze: 7, iron: 9, steel: 11, mithril: 13, adamant: 15, rune: 17, dragon: 20
     }
 };
 

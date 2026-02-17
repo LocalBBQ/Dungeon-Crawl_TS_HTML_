@@ -193,7 +193,7 @@ const crossbowConfig: WeaponConfigInput = {
 
 const maceConfig: WeaponConfigInput = {
     name: 'mace',
-    twoHanded: true,
+    twoHanded: false,
     baseRange: 95,
     baseDamage: 22,
     baseArcDegrees: 90,

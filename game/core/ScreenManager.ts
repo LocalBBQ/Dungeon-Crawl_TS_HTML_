@@ -554,17 +554,6 @@ export class ScreenManager {
         return x >= buttonLeft && x <= buttonRight && y >= buttonTop && y <= buttonBottom;
     }
 
-    /** Hub UI (when board is closed): Spawn Portal button. */
-    getHubSpawnPortalButtonAt(x: number, y: number): boolean {
-        const width = this.canvas.width;
-        const height = this.canvas.height;
-        const cx = width / 2;
-        const buttonW = 180;
-        const buttonH = 44;
-        const btnY = height - 76;
-        return x >= cx - buttonW / 2 && x <= cx + buttonW / 2 && y >= btnY - buttonH / 2 && y <= btnY + buttonH / 2;
-    }
-
     renderHubBoardOverlay(questList: Quest[], selectedQuestIndex: number, levelNames: Record<number, string>, gold: number = 0): void {
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         const width = this.canvas.width;
@@ -699,30 +688,6 @@ export class ScreenManager {
             }
             this.ctx.restore();
         }
-    }
-
-    /** Draw the hub UI "Spawn Portal" button (when board is closed). */
-    renderHubSpawnPortalButton(questList: Quest[], selectedQuestIndex: number, levelNames: Record<number, string>): void {
-        const width = this.canvas.width;
-        const height = this.canvas.height;
-        const cx = width / 2;
-        const buttonW = 180;
-        const buttonH = 44;
-        const btnY = height - 76;
-        this.ctx.fillStyle = '#1a1008';
-        this.ctx.fillRect(cx - buttonW / 2, btnY - buttonH / 2, buttonW, buttonH);
-        this.ctx.strokeStyle = '#c9a227';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(cx - buttonW / 2, btnY - buttonH / 2, buttonW, buttonH);
-        this.ctx.fillStyle = '#e8dcc8';
-        this.ctx.font = '600 14px Cinzel, Georgia, serif';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        const hasQuest = questList.length > 0 && questList[selectedQuestIndex];
-        const label = hasQuest
-            ? `Spawn Portal — ${levelNames[questList[selectedQuestIndex].level] ?? 'Level ' + questList[selectedQuestIndex].level}`
-            : 'Spawn Portal';
-        this.ctx.fillText(label, cx, btnY);
     }
 
     getWeaponChestOverlayBounds() {

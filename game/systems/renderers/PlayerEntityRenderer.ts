@@ -118,8 +118,10 @@ export const PlayerEntityRenderer = {
                     PlayerCombatRenderer.drawMace(ctx, screenX, screenY, transform, movement, combat, camera);
                 } else {
                     PlayerCombatRenderer.drawSword(ctx, screenX, screenY, transform, movement, combat, camera, { part: 'blade' });
-                    PlayerCombatRenderer.drawShield(ctx, screenX, screenY, transform, movement, combat, camera);
                 }
+            }
+            if (showWeapon && combat && movement && transform) {
+                PlayerCombatRenderer.drawShield(ctx, screenX, screenY, transform, movement, combat, camera);
             }
             // Draw spin attack arc on top of body/weapon so it is visible. Arc center must be (screenX, screenY): after rotate-around-player, that point is still the player center.
             if (showPlayerHitboxIndicators && combat && combat.isAttacking && (combat.currentAttackAnimationKey === 'meleeSpin' || combat.currentAttackIsCircular)) {
@@ -243,6 +245,8 @@ export const PlayerEntityRenderer = {
                         PlayerCombatRenderer.drawMace(ctx, screenX, screenY, transform, movement, combat, camera);
                     } else if (combat && movement && transform) {
                         PlayerCombatRenderer.drawSword(ctx, screenX, screenY, transform, movement, combat, camera);
+                    }
+                    if (combat && movement && transform) {
                         PlayerCombatRenderer.drawShield(ctx, screenX, screenY, transform, movement, combat, camera);
                     }
                 } finally {
@@ -258,6 +262,8 @@ export const PlayerEntityRenderer = {
                     PlayerCombatRenderer.drawMace(ctx, screenX, screenY, transform, movement, combat, camera);
                 } else if (combat && movement && transform) {
                     PlayerCombatRenderer.drawSword(ctx, screenX, screenY, transform, movement, combat, camera);
+                }
+                if (combat && movement && transform) {
                     PlayerCombatRenderer.drawShield(ctx, screenX, screenY, transform, movement, combat, camera);
                 }
             }

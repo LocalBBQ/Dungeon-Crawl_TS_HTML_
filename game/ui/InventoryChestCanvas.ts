@@ -29,7 +29,7 @@ const WEAPON_SYMBOLS: Record<string, string> = {
 };
 
 export const CHEST_WEAPON_ORDER: string[] = [
-    'sword_rusty', 'shield', 'defender', 'dagger_rusty', 'greatsword_rusty', 'crossbow_rusty', 'mace_rusty'
+    'sword_rusty', 'shield', 'defender_rusty', 'dagger_rusty', 'greatsword_rusty', 'crossbow_rusty', 'mace_rusty'
 ];
 
 const INVENTORY_COLS = 6;
@@ -210,8 +210,8 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, cx: number, cy: nu
         const guardW = s * 0.2;
         const tipW = guardW * 0.5;
         ctx.lineWidth = lw;
-        ctx.strokeStyle = '#4a5a6a';
-        ctx.fillStyle = '#7a8a9a';
+        ctx.strokeStyle = colors.stroke;
+        ctx.fillStyle = colors.fill;
         ctx.beginPath();
         ctx.moveTo(0, -guardW);
         ctx.lineTo(0, guardW);
@@ -221,8 +221,8 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, cx: number, cy: nu
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#5a6a72';
-        ctx.strokeStyle = '#3a4a52';
+        ctx.fillStyle = colors.stroke;
+        ctx.strokeStyle = colors.fill;
         ctx.fillRect(-s * 0.12, -guardW * 0.6, s * 0.14, guardW * 1.2);
         ctx.strokeRect(-s * 0.12, -guardW * 0.6, s * 0.14, guardW * 1.2);
     } else if (base === 'shield') {
@@ -466,6 +466,18 @@ export interface ShopDropdownSection {
     itemRows: ShopItemRow[];
 }
 
+/** One repairable item row in the shop (equipped or inventory). */
+export interface ShopRepairRow {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    source: 'mainhand' | 'offhand' | { bagIndex: number };
+    weaponKey: string;
+    currentDurability: number;
+    cost: number;
+}
+
 export interface ShopLayout {
     overlay: { x: number; y: number; w: number; h: number };
     panel: { x: number; y: number; w: number; h: number };
@@ -474,17 +486,25 @@ export interface ShopLayout {
     allItemRows: ShopItemRow[];
     /** Dropdown header rects for hit-testing. */
     dropdownHeaders: ShopDropdownHeader[];
+    /** Repair section rows (when playingState provided). */
+    repairRows: ShopRepairRow[];
     back: { x: number; y: number; w: number; h: number };
     contentHeight: number;
     maxScrollOffset: number;
 }
 
+/** Gold per point of durability restored at the shop. */
+export const REPAIR_GOLD_PER_DURABILITY = 1;
+
 const SHOP_VISIBLE_PANEL_HEIGHT = 540;
+
+const SHOP_REPAIR_HEADER_HEIGHT = 36;
 
 export function getShopLayout(
     canvas: HTMLCanvasElement,
     scrollOffset = 0,
-    expandedWeapons?: Record<string, boolean>
+    expandedWeapons?: Record<string, boolean>,
+    playingState?: PlayingStateShape
 ): ShopLayout {
     const W = canvas.width;
     const H = canvas.height;
@@ -497,6 +517,38 @@ export function getShopLayout(
 
     const byType = getShopByWeaponType();
     let contentY = SHOP_HEADER_HEIGHT;
+    const repairRowsContent: ShopRepairRow[] = [];
+
+    if (playingState) {
+        const rowW = panelW - 32;
+        const rowH = SHOP_ROW_HEIGHT - 2;
+        const toRepair: Omit<ShopRepairRow, 'x' | 'y' | 'w' | 'h'>[] = [];
+        const mainKey = playingState.equippedMainhandKey;
+        const mainDur = playingState.equippedMainhandDurability ?? MAX_WEAPON_DURABILITY;
+        if (mainKey && mainKey !== 'none' && mainDur < MAX_WEAPON_DURABILITY) {
+            toRepair.push({ source: 'mainhand', weaponKey: mainKey, currentDurability: mainDur, cost: (MAX_WEAPON_DURABILITY - mainDur) * REPAIR_GOLD_PER_DURABILITY });
+        }
+        const offKey = playingState.equippedOffhandKey;
+        const offDur = playingState.equippedOffhandDurability ?? MAX_WEAPON_DURABILITY;
+        if (offKey && offKey !== 'none' && offDur < MAX_WEAPON_DURABILITY) {
+            toRepair.push({ source: 'offhand', weaponKey: offKey, currentDurability: offDur, cost: (MAX_WEAPON_DURABILITY - offDur) * REPAIR_GOLD_PER_DURABILITY });
+        }
+        const slots = playingState.inventorySlots ?? [];
+        for (let i = 0; i < slots.length; i++) {
+            const slot = slots[i];
+            if (!slot || slot.durability >= MAX_WEAPON_DURABILITY) continue;
+            toRepair.push({ source: { bagIndex: i }, weaponKey: slot.key, currentDurability: slot.durability, cost: (MAX_WEAPON_DURABILITY - slot.durability) * REPAIR_GOLD_PER_DURABILITY });
+        }
+        if (toRepair.length > 0) {
+            contentY += SHOP_REPAIR_HEADER_HEIGHT;
+            for (const r of toRepair) {
+                repairRowsContent.push({ x: 16, y: contentY, w: rowW, h: rowH, ...r });
+                contentY += SHOP_ROW_HEIGHT;
+            }
+            contentY += 8;
+        }
+    }
+
     const dropdowns: ShopDropdownSection[] = [];
     const allItemRows: ShopItemRow[] = [];
     const dropdownHeaders: ShopDropdownHeader[] = [];
@@ -569,6 +621,11 @@ export function getShopLayout(
     }));
     const allItemRowsAdjusted = dropdownsAdjusted.flatMap((d) => d.itemRows);
     const dropdownHeadersAdjusted = dropdownsAdjusted.map((d) => d.header);
+    const repairRowsAdjusted: ShopRepairRow[] = repairRowsContent.map((r) => ({
+        ...r,
+        x: panelX + r.x,
+        y: headerOffset + r.y
+    }));
 
     return {
         overlay,
@@ -576,6 +633,7 @@ export function getShopLayout(
         dropdowns: dropdownsAdjusted,
         allItemRows: allItemRowsAdjusted,
         dropdownHeaders: dropdownHeadersAdjusted,
+        repairRows: repairRowsAdjusted,
         back,
         contentHeight,
         maxScrollOffset
@@ -585,11 +643,21 @@ export function getShopLayout(
 export type ShopHit =
     | { type: 'item'; index: number; weaponKey: string; price: number }
     | { type: 'dropdown'; weaponKey: string }
+    | { type: 'repair'; source: 'mainhand' | 'offhand'; weaponKey: string; cost: number }
+    | { type: 'repair'; source: 'inventory'; bagIndex: number; weaponKey: string; cost: number }
     | { type: 'back' }
     | null;
 
 export function hitTestShop(x: number, y: number, layout: ShopLayout): ShopHit {
     if (inRect(x, y, layout.back)) return { type: 'back' };
+    for (const row of layout.repairRows) {
+        if (inRect(x, y, row)) {
+            if (row.source === 'mainhand' || row.source === 'offhand') {
+                return { type: 'repair', source: row.source, weaponKey: row.weaponKey, cost: row.cost };
+            }
+            return { type: 'repair', source: 'inventory', bagIndex: row.source.bagIndex, weaponKey: row.weaponKey, cost: row.cost };
+        }
+    }
     for (const header of layout.dropdownHeaders) {
         if (inRect(x, y, header)) return { type: 'dropdown', weaponKey: header.weaponKey };
     }
@@ -737,7 +805,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
     ctx.roundRect(x, y, w, h, r);
 }
 
-function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, options: { filled?: boolean; symbol?: string; weaponKey?: string; label?: string; highlight?: boolean; emptyLabel?: string }) {
+function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, options: { filled?: boolean; symbol?: string; weaponKey?: string; label?: string; highlight?: boolean; emptyLabel?: string; broken?: boolean }) {
     ctx.fillStyle = options.filled ? 'rgba(18, 12, 8, 0.88)' : 'rgba(20, 16, 8, 0.6)';
     if (options.highlight) ctx.fillStyle = 'rgba(201, 162, 39, 0.2)';
     roundRect(ctx, r.x, r.y, r.w, r.h, SLOT_RADIUS);
@@ -764,6 +832,24 @@ function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: n
             ctx.font = `500 ${fontSize - 4}px Cinzel, Georgia, serif`;
             ctx.fillText(options.emptyLabel, cx, cy);
         }
+    }
+    if (options.broken && options.weaponKey) {
+        ctx.fillStyle = 'rgba(80, 20, 20, 0.45)';
+        roundRect(ctx, r.x, r.y, r.w, r.h, SLOT_RADIUS);
+        ctx.fill();
+        const pad = 4;
+        const size = Math.min(r.w, r.h) - pad * 2;
+        const x1 = cx - size / 2;
+        const y1 = cy - size / 2;
+        ctx.strokeStyle = '#c04040';
+        ctx.lineWidth = Math.max(2, size / 10);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + size, y1 + size);
+        ctx.moveTo(x1 + size, y1);
+        ctx.lineTo(x1, y1 + size);
+        ctx.stroke();
     }
     let labelY = r.y + r.h + 10;
     if (options.label) {
@@ -856,14 +942,16 @@ export function renderInventory(
         weaponKey: mainKey ?? undefined,
         emptyLabel: mainKey ? undefined : '—',
         label: 'Main hand',
-        highlight: !!mainKey || !!dragValidMain
+        highlight: !!mainKey || !!dragValidMain,
+        broken: !!(mainKey && mainKey !== 'none' && ps.equippedMainhandDurability === 0)
     });
     drawSlot(ctx, equipmentOffhand, {
         filled: true,
         weaponKey: offKey ?? undefined,
         emptyLabel: offKey ? undefined : '—',
         label: 'Off hand',
-        highlight: !!offKey || !!dragValidOff
+        highlight: !!offKey || !!dragValidOff,
+        broken: !!(offKey && offKey !== 'none' && ps.equippedOffhandDurability === 0)
     });
 
     // Inventory section label (slightly muted)
@@ -879,7 +967,8 @@ export function renderInventory(
         const key = getSlotKey(slot);
         drawSlot(ctx, s, {
             filled: !!key,
-            weaponKey: key || undefined
+            weaponKey: key || undefined,
+            broken: !!(key && slot && slot.durability === 0)
         });
     }
 
@@ -936,7 +1025,8 @@ export function renderChest(
             filled: !!key,
             weaponKey: key ?? undefined,
             emptyLabel: key ? undefined : '—',
-            highlight: !!isEquipped
+            highlight: !!isEquipped,
+            broken: !!(key && instance && instance.durability === 0)
         });
     }
 
@@ -980,7 +1070,7 @@ export function renderShop(
 ): void {
     const scrollOffset = ps.shopScrollOffset ?? 0;
     const expandedWeapons = ps.shopExpandedWeapons;
-    const layout = getShopLayout(canvas, scrollOffset, expandedWeapons);
+    const layout = getShopLayout(canvas, scrollOffset, expandedWeapons, ps);
     const { panel, dropdowns, back } = layout;
     const gold = ps.gold ?? 0;
 
@@ -1021,6 +1111,41 @@ export function renderShop(
     ctx.beginPath();
     ctx.rect(panel.x, contentTop, panel.w, contentBottom - contentTop);
     ctx.clip();
+
+    if (layout.repairRows.length > 0) {
+        const firstY = layout.repairRows[0].y;
+        ctx.fillStyle = '#a08050';
+        ctx.font = '600 11px Cinzel, Georgia, serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('REPAIR', panel.x + 20, firstY - SHOP_REPAIR_HEADER_HEIGHT + SHOP_REPAIR_HEADER_HEIGHT / 2);
+        for (const row of layout.repairRows) {
+            const canAfford = gold >= row.cost;
+            ctx.fillStyle = canAfford ? 'rgba(40, 32, 24, 0.7)' : 'rgba(30, 22, 16, 0.85)';
+            roundRect(ctx, row.x, row.y, row.w, row.h, 4);
+            ctx.fill();
+            ctx.strokeStyle = canAfford ? 'rgba(100, 80, 50, 0.6)' : 'rgba(50, 40, 30, 0.6)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, row.x, row.y, row.w, row.h, 4);
+            ctx.stroke();
+            const iconCx = row.x + 20;
+            const iconCy = row.y + row.h / 2;
+            drawWeaponIcon(ctx, iconCx, iconCy, 12, row.weaponKey);
+            const name = getWeaponDisplayName(row.weaponKey);
+            ctx.fillStyle = canAfford ? '#e0c8a0' : '#6a5a4a';
+            ctx.font = '500 13px Cinzel, Georgia, serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(name, row.x + 44, row.y + row.h / 2);
+            const durText = `${row.currentDurability}/${MAX_WEAPON_DURABILITY}`;
+            ctx.fillStyle = '#8a7048';
+            ctx.font = '500 11px Cinzel, Georgia, serif';
+            ctx.fillText(durText, row.x + row.w - 100, row.y + row.h / 2);
+            ctx.textAlign = 'right';
+            ctx.fillStyle = canAfford ? '#c9a227' : '#5a4a38';
+            ctx.fillText(row.cost + ' g — Repair', row.x + row.w - 10, row.y + row.h / 2);
+            ctx.textAlign = 'left';
+        }
+    }
 
     for (const dd of dropdowns) {
         const header = dd.header;

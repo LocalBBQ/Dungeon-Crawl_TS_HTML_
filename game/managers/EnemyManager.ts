@@ -120,7 +120,7 @@ export class EnemyManager {
             }
         }
         
-        const size = type === 'greaterDemon' ? 38 : (type === 'goblinChieftain' ? 34 : (type === 'bandit' || type === 'banditDagger' ? 31 : 25));
+        const size = type === 'trainingDummy' ? 32 : (type === 'greaterDemon' ? 38 : (type === 'goblinChieftain' ? 34 : (type === 'bandit' || type === 'banditDagger' ? 31 : 25)));
         enemy
             .addComponent(new Transform(x, y, size, size))
             .addComponent(new Health(maxHealth))
@@ -478,15 +478,29 @@ export class EnemyManager {
 
             const health = enemy.getComponent(Health);
             if (health && health.isDead) {
+                const ai = enemy.getComponent(AI);
+                // Training dummy: reset health instead of dying (no gold, no kill count, stay in hub)
+                if (ai?.enemyType === 'trainingDummy') {
+                    health.currentHealth = health.maxHealth;
+                    continue;
+                }
                 this.enemiesKilledThisLevel++;
                 let goldDrop = 0;
-                const ai = enemy.getComponent(AI);
+                const transform = enemy.getComponent(Transform);
                 if (ai?.enemyType) {
                     const typeConfig = this.config.enemy.types[ai.enemyType] as { goldDrop?: number } | undefined;
                     goldDrop = typeConfig?.goldDrop ?? 0;
                 }
+                if (goldDrop > 0 && transform && this.systems) {
+                    const goldPickupManager = this.systems.get<{ spawn(x: number, y: number, amount: number): void }>('goldPickups');
+                    if (goldPickupManager) {
+                        const cx = transform.x + transform.width / 2;
+                        const cy = transform.y + transform.height / 2;
+                        goldPickupManager.spawn(cx, cy, goldDrop);
+                    }
+                }
                 if (this.systems && this.systems.eventBus) {
-                    this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, { goldDrop });
+                    this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, {});
                 }
                 if (entityManager) {
                     entityManager.remove(enemy.id);

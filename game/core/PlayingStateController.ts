@@ -4,6 +4,7 @@
 import { GameConfig } from '../config/GameConfig.js';
 import { getRandomQuestsForBoard } from '../config/questConfig.js';
 import { Utils } from '../utils/Utils.js';
+import type { Quest } from '../types/quest.js';
 import { Transform } from '../components/Transform.js';
 import { Combat } from '../components/Combat.js';
 import type { Entity } from '../entities/Entity.js';
@@ -17,6 +18,9 @@ export interface PlayingStateControllerContext {
         boardOpen: boolean;
         boardUseCooldown: number;
         playerNearBoard: boolean;
+        playerNearQuestPortal: boolean;
+        questPortalUseCooldown: number;
+        activeQuest: Quest | null;
         chest: { x: number; y: number; width: number; height: number } | null;
         chestOpen: boolean;
         chestUseCooldown: number;
@@ -143,6 +147,9 @@ export class PlayingStateController {
         if (g.playingState.shopUseCooldown > 0) {
             g.playingState.shopUseCooldown = Math.max(0, g.playingState.shopUseCooldown - deltaTime);
         }
+        if (g.playingState.questPortalUseCooldown > 0) {
+            g.playingState.questPortalUseCooldown = Math.max(0, g.playingState.questPortalUseCooldown - deltaTime);
+        }
         if (g.playingState.boardOpen || g.playingState.chestOpen || g.playingState.shopOpen) return;
 
         g.handleCameraZoom();
@@ -234,6 +241,7 @@ export class PlayingStateController {
                     g.playingState.shopOpen = true;
                     g.playingState.shopUseCooldown = 0.4;
                     g.playingState.shopScrollOffset = 0;
+                    g.playingState.shopExpandedWeapons = undefined;
                     g.clearPlayerInputsForMenu();
                 }
             } else {
@@ -241,6 +249,28 @@ export class PlayingStateController {
             }
         } else {
             g.playingState.playerNearShop = false;
+        }
+        // Quest portal in hub: when a quest is accepted, a portal spawns; E at portal starts the quest
+        const hubConfig = GameConfig.hub;
+        const questPortalConfig = hubConfig && hubConfig.questPortal;
+        if (player && g.playingState.activeQuest && questPortalConfig) {
+            const transform = player.getComponent(Transform);
+            if (transform) {
+                const overlap = Utils.rectCollision(
+                    transform.left, transform.top, transform.width, transform.height,
+                    questPortalConfig.x, questPortalConfig.y, questPortalConfig.width, questPortalConfig.height
+                );
+                g.playingState.playerNearQuestPortal = overlap;
+                if (overlap && g.playingState.questPortalUseCooldown <= 0 && inputSystem && inputSystem.isKeyPressed('e')) {
+                    g.screenManager.selectedStartLevel = g.playingState.activeQuest.level;
+                    g.playingState.questPortalUseCooldown = 0.5;
+                    g.startGame();
+                }
+            } else {
+                g.playingState.playerNearQuestPortal = false;
+            }
+        } else {
+            g.playingState.playerNearQuestPortal = false;
         }
     }
 }

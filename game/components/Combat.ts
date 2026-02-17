@@ -219,7 +219,7 @@ export class Combat implements Component {
         }
       }
       const offhandWeapon = this._offhandWeapon as { name?: string; baseDamage?: number } | null;
-      if (offhandWeapon && offhandWeapon.name === 'Defender' && typeof offhandWeapon.baseDamage === 'number') {
+      if (offhandWeapon && offhandWeapon.name?.includes('Defender') && typeof offhandWeapon.baseDamage === 'number') {
         this.attackDamage += offhandWeapon.baseDamage;
       }
     }
@@ -407,7 +407,7 @@ export class Combat implements Component {
     if (result.range != null) this.attackRange = result.range as number;
     if (result.damage != null) this.attackDamage = result.damage as number;
     const offhand = this._offhandWeapon as { name?: string; baseDamage?: number } | null;
-    if (offhand && offhand.name === 'Defender' && typeof offhand.baseDamage === 'number') {
+    if (offhand && offhand.name?.includes('Defender') && typeof offhand.baseDamage === 'number') {
       this.attackDamage += offhand.baseDamage;
     }
     if (result.arc != null) this.attackArc = result.arc as number;
