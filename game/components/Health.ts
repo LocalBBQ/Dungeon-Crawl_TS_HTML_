@@ -22,12 +22,13 @@ export class Health implements Component {
     this.currentHealth = maxHealth;
   }
 
-  takeDamage(amount: number, isBlocked = false): boolean {
+  takeDamage(amount: number, isBlocked = false, isParry = false): boolean {
     if (this.isInvincible) return false;
     const actualDamage = this.currentHealth - Math.max(0, this.currentHealth - amount);
     this.currentHealth = Math.max(0, this.currentHealth - amount);
     if (actualDamage > 0) this.wasJustHit = true;
-    if (actualDamage > 0 && this.entity) {
+    const shouldEmit = (actualDamage > 0 || isParry) && this.entity;
+    if (shouldEmit) {
       const transform = this.entity.getComponent(Transform);
       if (transform) {
         const systems = this.entity.systems;
@@ -39,6 +40,7 @@ export class Health implements Component {
             damage: actualDamage,
             isPlayerDamage: !isPlayer,
             isBlocked,
+            isParry,
             entityId: this.entity.id,
           });
         }

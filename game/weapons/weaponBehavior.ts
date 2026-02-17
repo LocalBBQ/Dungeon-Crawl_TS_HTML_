@@ -14,6 +14,10 @@ export interface BlockConfigInput {
     damageReduction?: number;
     staminaCost?: number;
     animationKey?: string;
+    /** Parry: if set, blocking within this many ms of block start absorbs all damage and adds a % to rally. */
+    parryWindowMs?: number;
+    /** Percent of parried damage (0–1) added to rally pool. Only used when parryWindowMs > 0. */
+    parryRallyPercent?: number;
     shieldBash?: {
         knockback?: number;
         dashSpeed?: number;
@@ -30,6 +34,8 @@ export interface BlockResult {
     damageReduction: number;
     staminaCost: number;
     animationKey: string;
+    parryWindowMs: number;
+    parryRallyPercent: number;
     shieldBash?: {
         knockback: number;
         dashSpeed: number;
@@ -187,7 +193,9 @@ export const WeaponBehavior = {
             arcRad: degToRad(arcDegrees),
             damageReduction: effective.damageReduction ?? 1.0,
             staminaCost: effective.staminaCost ?? 5,
-            animationKey: effective.animationKey ?? 'block'
+            animationKey: effective.animationKey ?? 'block',
+            parryWindowMs: effective.parryWindowMs ?? 0,
+            parryRallyPercent: Math.max(0, Math.min(1, effective.parryRallyPercent ?? 0))
         };
         if (effective.shieldBash) {
             const sb = effective.shieldBash;

@@ -7,7 +7,8 @@ import {
   type InventorySlot,
   getSlotKey,
   INVENTORY_SLOT_COUNT,
-  MAX_WEAPON_DURABILITY
+  MAX_WEAPON_DURABILITY,
+  CHEST_SLOT_COUNT
 } from './PlayingState.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot } from '../weapons/weaponSlot.js';
@@ -103,12 +104,12 @@ export function unequipToInventory(
 }
 
 export function equipFromChest(ps: PlayingStateShape, chestIndex: number, bagIndex: number): void {
-  if (!ps.chestSlots || chestIndex < 0 || chestIndex >= ps.chestSlots.length) return;
+  if (!ps.chestSlots || chestIndex < 0 || chestIndex >= CHEST_SLOT_COUNT) return;
   if (bagIndex < 0 || bagIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
   const instance = ps.chestSlots[chestIndex];
   if (!instance) return;
   ps.inventorySlots[bagIndex] = { key: instance.key, durability: instance.durability };
-  ps.chestSlots.splice(chestIndex, 1);
+  ps.chestSlots[chestIndex] = null;
 }
 
 /** Take weapon from chest and equip directly to mainhand or offhand. */
@@ -118,7 +119,7 @@ export function equipFromChestToHand(
   slot: 'mainhand' | 'offhand',
   syncCombat?: SyncCombat
 ): void {
-  if (!ps.chestSlots || chestIndex < 0 || chestIndex >= ps.chestSlots.length) return;
+  if (!ps.chestSlots || chestIndex < 0 || chestIndex >= CHEST_SLOT_COUNT) return;
   const instance = ps.chestSlots[chestIndex];
   if (!instance) return;
   if (instance.durability <= 0) return;
@@ -138,7 +139,7 @@ export function equipFromChestToHand(
     ps.equippedOffhandKey = instance.key;
     ps.equippedOffhandDurability = instance.durability;
   }
-  ps.chestSlots.splice(chestIndex, 1);
+  ps.chestSlots[chestIndex] = null;
   syncCombat?.(ps);
 }
 
@@ -147,8 +148,9 @@ export function putInChestFromInventory(ps: PlayingStateShape, bagIndex: number)
   const item = ps.inventorySlots[bagIndex];
   if (!item) return;
   ps.inventorySlots[bagIndex] = null;
-  ps.chestSlots = ps.chestSlots ?? [];
-  ps.chestSlots.push({ key: item.key, durability: item.durability });
+  if (!ps.chestSlots || ps.chestSlots.length !== CHEST_SLOT_COUNT) return;
+  const empty = ps.chestSlots.findIndex((s) => s == null);
+  if (empty >= 0) ps.chestSlots[empty] = { key: item.key, durability: item.durability };
 }
 
 export function putInChestFromEquipment(
@@ -159,8 +161,9 @@ export function putInChestFromEquipment(
   const key = equipSlot === 'mainhand' ? ps.equippedMainhandKey : ps.equippedOffhandKey;
   const durability = equipSlot === 'mainhand' ? ps.equippedMainhandDurability : ps.equippedOffhandDurability;
   if (!key || key === 'none') return;
-  ps.chestSlots = ps.chestSlots ?? [];
-  ps.chestSlots.push({ key, durability });
+  if (!ps.chestSlots || ps.chestSlots.length !== CHEST_SLOT_COUNT) return;
+  const empty = ps.chestSlots.findIndex((s) => s == null);
+  if (empty >= 0) ps.chestSlots[empty] = { key, durability };
   if (equipSlot === 'mainhand') {
     ps.equippedMainhandKey = 'none';
     ps.equippedMainhandDurability = MAX_WEAPON_DURABILITY;

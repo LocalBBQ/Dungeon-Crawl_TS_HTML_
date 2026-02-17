@@ -5,6 +5,8 @@ import { Utils } from '../utils/Utils.ts';
 import type { SystemManager } from '../core/SystemManager.ts';
 import type { CameraShape } from '../types/camera.ts';
 import type { EntityShape } from '../types/entity.ts';
+import type { PlayingStateShape } from '../state/PlayingState.js';
+import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 
 interface FlamePillar {
     x: number;
@@ -71,7 +73,10 @@ export class HazardManager {
             p.lastDamageTime += deltaTime;
             if (p.lastDamageTime >= p.damageInterval) {
                 p.lastDamageTime = 0;
-                playerHealth.takeDamage(p.damage);
+                const ps = sys ? sys.get<PlayingStateShape>('playingState') : null;
+                let damage = p.damage;
+                if (ps) damage *= Math.max(0, 1 - getPlayerArmorReduction(ps));
+                playerHealth.takeDamage(damage);
             }
         }
     }

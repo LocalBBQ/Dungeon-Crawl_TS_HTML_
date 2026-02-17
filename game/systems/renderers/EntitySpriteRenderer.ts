@@ -86,6 +86,18 @@ export class EntitySpriteRenderer {
                     } finally {
                         ctx.restore();
                     }
+                    if (renderable && renderable.type === 'player') {
+                        const playerCombat = entity.getComponent(Combat);
+                        if (playerCombat && playerCombat.parryFlashUntil > Date.now()) {
+                            ctx.save();
+                            ctx.globalAlpha = 0.55;
+                            ctx.fillStyle = '#ffffff';
+                            ctx.beginPath();
+                            ctx.ellipse(screenX, screenY, (transform.width / 2 + 6) * camera.zoom, (transform.height / 2 + 6) * camera.zoom, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        }
+                    }
                     if (typeof EntityEffectsRenderer !== 'undefined') {
                         EntityEffectsRenderer.drawShadow(ctx, screenX, screenY, transform, camera);
                         EntityEffectsRenderer.drawHealingVial(context, entity, screenX, screenY);
@@ -230,6 +242,16 @@ export class EntitySpriteRenderer {
                 ctx.globalCompositeOperation = 'source-over';
             }
         } finally {
+            ctx.restore();
+        }
+
+        if (renderable && renderable.type === 'player' && combat && combat.parryFlashUntil > Date.now()) {
+            ctx.save();
+            ctx.globalAlpha = 0.55;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(screenX, screenY, (transform.width / 2 + 6) * camera.zoom, (transform.height / 2 + 6) * camera.zoom, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.restore();
         }
 

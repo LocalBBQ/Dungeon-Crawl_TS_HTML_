@@ -6,10 +6,13 @@ import { Health } from '../components/Health.ts';
 import { Transform } from '../components/Transform.ts';
 import { StatusEffects } from '../components/StatusEffects.ts';
 import { Combat } from '../components/Combat.ts';
+import { Rally } from '../components/Rally.ts';
 import { Projectile } from '../projectiles/Projectile.ts';
 import { EventTypes } from '../core/EventTypes.ts';
 import type { SystemManager } from '../core/SystemManager.ts';
 import type { CameraShape } from '../types/camera.ts';
+import type { PlayingStateShape } from '../state/PlayingState.js';
+import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 
 export class ProjectileManager {
     projectiles: Projectile[] = [];
@@ -94,6 +97,7 @@ export class ProjectileManager {
                         if (playerHealth) {
                             let finalDamage = projectile.damage;
                             let blocked = false;
+                            let parried = false;
 
                             if (playerCombat && (playerCombat as Combat).isBlocking && playerMovement && playerTransform) {
                                 const attackAngle = Utils.angleTo(
@@ -101,14 +105,24 @@ export class ProjectileManager {
                                     projectile.x, projectile.y
                                 );
                                 if ((playerCombat as Combat).canBlockAttack(attackAngle, (playerMovement as Movement).facingAngle)) {
-                                    if ((playerCombat as Combat).consumeBlockStamina()) {
+                                    if ((playerCombat as Combat).isInParryWindow() && (playerCombat as Combat).getParryRallyPercent() > 0) {
+                                        const rallyAmount = finalDamage * (playerCombat as Combat).getParryRallyPercent();
+                                        const rally = (player as { getComponent: (c: unknown) => unknown }).getComponent(Rally);
+                                        if (rally) (rally as Rally).addToPool(rallyAmount);
+                                        (playerCombat as Combat).applyParry(rallyAmount, 220);
+                                        finalDamage = 0;
+                                        blocked = true;
+                                        parried = true;
+                                    } else if ((playerCombat as Combat).consumeBlockStamina()) {
                                         finalDamage = projectile.damage * (1 - (playerCombat as Combat).blockDamageReduction);
                                         blocked = true;
                                     }
                                 }
                             }
 
-                            (playerHealth as Health).takeDamage(finalDamage, blocked);
+                            const ps = systems?.get<PlayingStateShape>('playingState');
+                            if (ps) finalDamage *= Math.max(0, 1 - getPlayerArmorReduction(ps));
+                            (playerHealth as Health).takeDamage(finalDamage, blocked, parried);
                             const playerStatus = (player as { getComponent: (c: unknown) => unknown }).getComponent(StatusEffects);
                             if (playerStatus) {
                                 const baseStun = projectile.stunBuildup || 0;
