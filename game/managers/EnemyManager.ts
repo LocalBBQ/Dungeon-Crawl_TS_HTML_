@@ -25,6 +25,8 @@ import { SleepBehavior } from '../behaviors/SleepBehavior.ts';
 import { PackFollowBehavior } from '../behaviors/PackFollowBehavior.ts';
 import { WanderBehavior } from '../behaviors/WanderBehavior.ts';
 import type { Quest } from '../types/quest.ts';
+import type { HitCategory } from '../types/combat.js';
+import { rollWeaponDrop } from '../config/lootConfig.js';
 
 /** Base enemy type -> tier-2 variant (used when difficulty has enemyTier2Chance > 0). */
 const TIER2_MAP: Record<string, string> = {
@@ -499,6 +501,19 @@ export class EnemyManager {
                         goldPickupManager.spawn(cx, cy, goldDrop);
                     }
                 }
+                const typeConfigForLoot = ai?.enemyType ? (this.config.enemy.types[ai.enemyType] as { weaponDropChance?: number; weaponDropPoolId?: string } | undefined) : undefined;
+                const weaponDropChance = typeConfigForLoot?.weaponDropChance ?? 0;
+                if (weaponDropChance > 0 && Math.random() < weaponDropChance && transform && this.systems) {
+                    const instance = rollWeaponDrop(ai!.enemyType, typeConfigForLoot?.weaponDropPoolId);
+                    if (instance) {
+                        const weaponPickupManager = this.systems.get<{ spawn(x: number, y: number, instance: import('../state/PlayingState.js').WeaponInstance): void }>('weaponPickups');
+                        if (weaponPickupManager) {
+                            const cx = transform.x + transform.width / 2;
+                            const cy = transform.y + transform.height / 2;
+                            weaponPickupManager.spawn(cx, cy, instance);
+                        }
+                    }
+                }
                 if (this.systems && this.systems.eventBus) {
                     this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, {});
                 }
@@ -720,7 +735,7 @@ export class EnemyManager {
                             enemyTransform.x, enemyTransform.y
                         );
                         if (playerCombat.canBlockAttack(attackAngle, playerMovement.facingAngle)) {
-                            if (playerCombat.consumeBlockStamina()) {
+                            if (playerCombat.consumeBlockStamina('lunge')) {
                                 finalDamage = lungeDamage * (1 - playerCombat.blockDamageReduction);
                                 blocked = true;
                             }
@@ -801,6 +816,13 @@ export class EnemyManager {
                     if (attackerStatus && attackerStatus.packDamageMultiplier != null) finalDamage *= attackerStatus.packDamageMultiplier;
                     let blocked = false;
 
+                    const ai = enemy.getComponent(AI);
+                    const enemyTypeForCategory = ai ? ai.enemyType : 'goblin';
+                    const hitCategory: HitCategory =
+                        aoeInFront && (enemyTypeForCategory === 'goblinChieftain' || enemyTypeForCategory === 'greaterDemon')
+                            ? 'heavy'
+                            : 'light';
+
                     // Check if player is blocking and can block this attack
                     if (playerCombat && playerCombat.isBlocking && playerMovement) {
                         const attackAngle = Utils.angleTo(
@@ -808,14 +830,12 @@ export class EnemyManager {
                             enemyTransform.x, enemyTransform.y
                         );
                         if (playerCombat.canBlockAttack(attackAngle, playerMovement.facingAngle)) {
-                            if (playerCombat.consumeBlockStamina()) {
-                                finalDamage = enemyCombat.attackDamage * (1 - playerCombat.blockDamageReduction);
+                            if (playerCombat.consumeBlockStamina(hitCategory)) {
+                                finalDamage = finalDamage * (1 - playerCombat.getEffectiveBlockDamageReduction(hitCategory));
                                 blocked = true;
                             }
                         }
                     }
-
-                    const ai = enemy.getComponent(AI);
                     playerHealth.takeDamage(finalDamage, blocked);
                     const enemyTypeForStun = ai ? ai.enemyType : 'goblin';
                     const enemyConfigForStun = this.config.enemy.types[enemyTypeForStun] || this.config.enemy.types.goblin;

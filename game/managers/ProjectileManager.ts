@@ -101,8 +101,8 @@ export class ProjectileManager {
                                     projectile.x, projectile.y
                                 );
                                 if ((playerCombat as Combat).canBlockAttack(attackAngle, (playerMovement as Movement).facingAngle)) {
-                                    if ((playerCombat as Combat).consumeBlockStamina()) {
-                                        finalDamage = projectile.damage * (1 - (playerCombat as Combat).blockDamageReduction);
+                                    if ((playerCombat as Combat).consumeBlockStamina('ranged')) {
+                                        finalDamage = projectile.damage * (1 - (playerCombat as Combat).getEffectiveBlockDamageReduction('ranged'));
                                         blocked = true;
                                     }
                                 }

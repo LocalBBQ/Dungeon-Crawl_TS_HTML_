@@ -16,7 +16,7 @@ const swordConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 100,
-        damageReduction: 0.5,
+        damageReduction: 0.38,
         staminaCost: 22,
         animationKey: 'block'
     },
@@ -54,7 +54,7 @@ const shieldConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 180,
-        damageReduction: 1.0,
+        damageReduction: 0.65,
         staminaCost: 25,
         animationKey: 'block',
         shieldBash: {
@@ -80,7 +80,7 @@ const defenderConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 100,
-        damageReduction: 0.5,
+        damageReduction: 0.38,
         staminaCost: 20,
         animationKey: 'block'
     }
@@ -101,7 +101,7 @@ const greatswordConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 100,
-        damageReduction: 0.6,
+        damageReduction: 0.45,
         staminaCost: 22,
         animationKey: 'block'
     },
@@ -148,7 +148,7 @@ const daggerConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 90,
-        damageReduction: 0.5,
+        damageReduction: 0.35,
         staminaCost: 20,
         animationKey: 'block'
     },
@@ -185,7 +185,7 @@ const crossbowConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 60,
-        damageReduction: 0.4,
+        damageReduction: 0.3,
         staminaCost: 18,
         animationKey: 'block'
     }
@@ -205,7 +205,7 @@ const maceConfig: WeaponConfigInput = {
     block: {
         enabled: true,
         arcDegrees: 120,
-        damageReduction: 0.65,
+        damageReduction: 0.48,
         staminaCost: 24,
         animationKey: 'block'
     },

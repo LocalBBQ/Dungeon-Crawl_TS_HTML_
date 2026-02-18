@@ -22,6 +22,7 @@ import { StatusEffects } from '../components/StatusEffects.js';
 import { SpriteUtils } from '../utils/SpriteUtils.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
+import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { CHEST_WEAPON_ORDER, getWeaponDisplayName, getWeaponSymbol } from './InventoryChestCanvas.js';
 
 export interface SystemsLike {
@@ -201,12 +202,16 @@ export class HUDController {
         const combat = player.getComponent(Combat) as Combat | null;
         if (!combat || !combat.isPlayer) return;
         (combat as Combat & { stopBlocking?(): void }).stopBlocking?.();
-        const mainhand = ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none'
-            ? (Weapons[ps.equippedMainhandKey] ?? null)
-            : null;
-        const offhand = ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none'
-            ? (Weapons[ps.equippedOffhandKey] ?? null)
-            : null;
+        const mainhand = getEffectiveWeapon(
+            ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none' ? ps.equippedMainhandKey : undefined,
+            ps.equippedMainhandPrefixId,
+            ps.equippedMainhandSuffixId
+        );
+        const offhand = getEffectiveWeapon(
+            ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none' ? ps.equippedOffhandKey : undefined,
+            ps.equippedOffhandPrefixId,
+            ps.equippedOffhandSuffixId
+        );
         (combat as Combat & { setWeapons(m: unknown, o?: unknown): void }).setWeapons(mainhand, offhand);
     }
 
@@ -214,8 +219,10 @@ export class HUDController {
         const ps = this.ctx.playingState;
         const mainEl = document.getElementById('chest-equip-mainhand');
         const offEl = document.getElementById('chest-equip-offhand');
-        const mainName = getWeaponDisplayName(ps.equippedMainhandKey);
-        const offName = getWeaponDisplayName(ps.equippedOffhandKey);
+        const mainInstance = ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none' ? { prefixId: ps.equippedMainhandPrefixId, suffixId: ps.equippedMainhandSuffixId } : null;
+        const offInstance = ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none' ? { prefixId: ps.equippedOffhandPrefixId, suffixId: ps.equippedOffhandSuffixId } : null;
+        const mainName = getWeaponDisplayName(ps.equippedMainhandKey, mainInstance);
+        const offName = getWeaponDisplayName(ps.equippedOffhandKey, offInstance);
         const mainPct = ps.equippedMainhandDurability != null ? Math.round((100 * ps.equippedMainhandDurability) / MAX_WEAPON_DURABILITY) : null;
         const offPct = ps.equippedOffhandDurability != null ? Math.round((100 * ps.equippedOffhandDurability) / MAX_WEAPON_DURABILITY) : null;
         const mainText = mainName === '—' || !mainName ? mainName : (mainPct != null ? `${mainName} (${mainPct}%)` : mainName);
@@ -236,8 +243,10 @@ export class HUDController {
         const ps = this.ctx.playingState;
         const mainEl = document.getElementById('inventory-equip-mainhand');
         const offEl = document.getElementById('inventory-equip-offhand');
-        const mainName = getWeaponDisplayName(ps.equippedMainhandKey);
-        const offName = getWeaponDisplayName(ps.equippedOffhandKey);
+        const mainInstance = ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none' ? { prefixId: ps.equippedMainhandPrefixId, suffixId: ps.equippedMainhandSuffixId } : null;
+        const offInstance = ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none' ? { prefixId: ps.equippedOffhandPrefixId, suffixId: ps.equippedOffhandSuffixId } : null;
+        const mainName = getWeaponDisplayName(ps.equippedMainhandKey, mainInstance);
+        const offName = getWeaponDisplayName(ps.equippedOffhandKey, offInstance);
         const mainPct = ps.equippedMainhandDurability != null ? Math.round((100 * ps.equippedMainhandDurability) / MAX_WEAPON_DURABILITY) : null;
         const offPct = ps.equippedOffhandDurability != null ? Math.round((100 * ps.equippedOffhandDurability) / MAX_WEAPON_DURABILITY) : null;
         const mainText = mainName === '—' || !mainName ? mainName : (mainPct != null ? `${mainName} (${mainPct}%)` : mainName);

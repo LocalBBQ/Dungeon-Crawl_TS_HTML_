@@ -45,6 +45,7 @@ export interface LevelConfig {
   board?: { x: number; y: number; width: number; height: number };
   weaponChest?: { x: number; y: number; width: number; height: number };
   shopkeeper?: { x: number; y: number; width: number; height: number };
+  rerollStation?: { x: number; y: number; width: number; height: number };
   trainingDummy?: { x: number; y: number };
   walls?: Array<{ x: number; y: number; width: number; height: number }>;
 }

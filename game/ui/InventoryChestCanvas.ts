@@ -12,6 +12,7 @@ import {
     SHOP_WEAPON_TYPE_ORDER,
     SHOP_WEAPON_TYPE_LABELS
 } from '../config/shopConfig.js';
+import { getEnchantmentById } from '../config/enchantmentConfig.js';
 
 function isWeaponInstance(w: unknown): w is Weapon {
     return !!w && typeof (w as Weapon).baseDamage === 'number';
@@ -62,14 +63,29 @@ function getMaterialDisplayNameFromKey(key: string): string | null {
     return suffix.charAt(0).toUpperCase() + suffix.slice(1).toLowerCase();
 }
 
-export function getWeaponDisplayName(key: string): string {
+/** Get display name for a weapon key; optionally include prefix/suffix from instance. */
+export function getWeaponDisplayName(
+    key: string,
+    instance?: { prefixId?: string; suffixId?: string } | null
+): string {
     if (!key) return '—';
-    if (BASE_DISPLAY_NAMES[key] !== undefined) return BASE_DISPLAY_NAMES[key];
-    const base = getBaseWeaponKey(key);
-    const baseName = BASE_DISPLAY_NAMES[base];
-    const materialName = getMaterialDisplayNameFromKey(key);
-    if (baseName && materialName) return `${materialName} ${baseName}`;
-    return key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
+    const baseName = BASE_DISPLAY_NAMES[key] !== undefined
+        ? BASE_DISPLAY_NAMES[key]
+        : (() => {
+            const base = getBaseWeaponKey(key);
+            const bn = BASE_DISPLAY_NAMES[base];
+            const materialName = getMaterialDisplayNameFromKey(key);
+            if (bn && materialName) return `${materialName} ${bn}`;
+            return key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
+        })();
+    if (!instance?.prefixId && !instance?.suffixId) return baseName;
+    const prefix = instance.prefixId ? (getEnchantmentById(instance.prefixId)?.displayName ?? '') : '';
+    const suffix = instance.suffixId ? (getEnchantmentById(instance.suffixId)?.displayName ?? '') : '';
+    const parts: string[] = [];
+    if (prefix) parts.push(prefix);
+    parts.push(baseName);
+    if (suffix) parts.push(`of ${suffix}`);
+    return parts.join(' ');
 }
 
 /** Metal fill and stroke for weapon icon from registry (material tier color). */
@@ -251,7 +267,7 @@ export interface DragState {
     /** When dragging from equipment, current durability of that item. */
     durability?: number;
     sourceSlotIndex: number;
-    sourceContext: 'inventory' | 'chest' | 'equipment';
+    sourceContext: 'inventory' | 'chest' | 'equipment' | 'rerollSlot';
     pointerX: number;
     pointerY: number;
 }
@@ -287,9 +303,15 @@ export interface InventoryLayout {
     equipmentMainhand: { x: number; y: number; w: number; h: number };
     equipmentOffhand: { x: number; y: number; w: number; h: number };
     closeButton: { x: number; y: number; w: number; h: number };
+    /** When includeChestGrid is true, chest slots are placed inside the panel below the inventory grid. */
+    chestSlots?: { x: number; y: number; w: number; h: number; index: number }[];
 }
 
-export function getInventoryLayout(canvas: HTMLCanvasElement): InventoryLayout {
+const CHEST_COLS_IN_PANEL = 4;
+const CHEST_ROWS_IN_PANEL = 3;
+const CHEST_SLOTS_IN_PANEL = CHEST_COLS_IN_PANEL * CHEST_ROWS_IN_PANEL;
+
+export function getInventoryLayout(canvas: HTMLCanvasElement, options?: { includeChestGrid?: boolean }): InventoryLayout {
     const W = canvas.width;
     const H = canvas.height;
     const panelW = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, W * PANEL_WIDTH_RATIO));
@@ -332,22 +354,56 @@ export function getInventoryLayout(canvas: HTMLCanvasElement): InventoryLayout {
         }
     }
 
-    return {
+    const result: InventoryLayout = {
         panel: { x: panelX, y: panelY, w: panelW, h: panelH },
         slots,
         equipmentMainhand,
         equipmentOffhand,
         closeButton
     };
+
+    if (options?.includeChestGrid) {
+        const invGridBottom = gridTop + INVENTORY_ROWS * (slotSize + SLOT_GAP) - SLOT_GAP;
+        const chestSectionMargin = 18;
+        const chestLabelH = 14;
+        const chestGridTop = invGridBottom + chestSectionMargin + chestLabelH;
+        const chestTotalGapW = (CHEST_COLS_IN_PANEL - 1) * SLOT_GAP;
+        const chestTotalGapH = (CHEST_ROWS_IN_PANEL - 1) * SLOT_GAP;
+        const chestSlotW = (contentW - chestTotalGapW) / CHEST_COLS_IN_PANEL;
+        const chestSlotH = Math.min(slotSize, chestSlotW);
+        const chestStartX = contentX + (contentW - (CHEST_COLS_IN_PANEL * chestSlotW + chestTotalGapW)) / 2;
+        const chestSlots: { x: number; y: number; w: number; h: number; index: number }[] = [];
+        for (let i = 0; i < CHEST_SLOTS_IN_PANEL; i++) {
+            const col = i % CHEST_COLS_IN_PANEL;
+            const row = Math.floor(i / CHEST_COLS_IN_PANEL);
+            chestSlots.push({
+                x: chestStartX + col * (chestSlotW + SLOT_GAP),
+                y: chestGridTop + row * (chestSlotH + SLOT_GAP),
+                w: chestSlotW,
+                h: chestSlotH,
+                index: i
+            });
+        }
+        result.chestSlots = chestSlots;
+    }
+
+    return result;
 }
 
 export type InventoryHit =
-    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number }
+    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; prefixId?: string; suffixId?: string }
     | { type: 'equipment'; slot: 'mainhand' | 'offhand' }
+    | { type: 'chest-slot'; index: number; key: string }
     | { type: 'close' }
     | null;
 
-export function hitTestInventory(x: number, y: number, ps: PlayingStateShape, layout: InventoryLayout): InventoryHit {
+export function hitTestInventory(
+    x: number,
+    y: number,
+    ps: PlayingStateShape,
+    layout: InventoryLayout,
+    chestSlots?: WeaponInstance[] | null
+): InventoryHit {
     const { panel, slots, equipmentMainhand, equipmentOffhand, closeButton } = layout;
     if (x < panel.x || x > panel.x + panel.w || y < panel.y || y > panel.y + panel.h) return null;
     if (inRect(x, y, closeButton)) return { type: 'close' };
@@ -357,7 +413,16 @@ export function hitTestInventory(x: number, y: number, ps: PlayingStateShape, la
         if (inRect(x, y, s)) {
             const slot = ps.inventorySlots?.[s.index] ?? null;
             const key = getSlotKey(slot);
-            return { type: 'inventory-slot', index: s.index, weaponKey: key, durability: slot?.durability };
+            return { type: 'inventory-slot', index: s.index, weaponKey: key, durability: slot?.durability, prefixId: slot?.prefixId, suffixId: slot?.suffixId };
+        }
+    }
+    if (layout.chestSlots && chestSlots) {
+        for (const s of layout.chestSlots) {
+            if (inRect(x, y, s)) {
+                const instance = s.index < chestSlots.length ? chestSlots[s.index] : undefined;
+                const key = instance?.key ?? '';
+                return { type: 'chest-slot', index: s.index, key };
+            }
         }
     }
     return null;
@@ -671,10 +736,17 @@ function inRect(px: number, py: number, r: { x: number; y: number; w: number; h:
     return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
 }
 
-function getWeaponTooltipLines(key: string): { name: string; rows: { label: string; value: string }[] } {
-    const name = getWeaponDisplayName(key);
+function getWeaponTooltipLines(key: string, instance?: { prefixId?: string; suffixId?: string } | null): { name: string; rows: { label: string; value: string }[] } {
+    const name = getWeaponDisplayName(key, instance);
     const w = Weapons[key];
     const rows: { label: string; value: string }[] = [];
+    if (instance?.prefixId || instance?.suffixId) {
+        for (const id of [instance.prefixId, instance.suffixId]) {
+            if (!id) continue;
+            const enc = getEnchantmentById(id);
+            if (enc?.description) rows.push({ label: enc.displayName, value: enc.description });
+        }
+    }
     if (!isWeaponInstance(w)) return { name, rows };
     if (w.baseDamage > 0) rows.push({ label: 'Damage', value: String(w.baseDamage) });
     if (w.baseRange > 0) rows.push({ label: 'Range', value: String(w.baseRange) });
@@ -708,11 +780,12 @@ const TOOLTIP_DURABILITY_LABEL_HEIGHT = 12;
 export function renderWeaponTooltip(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
-    hover: { weaponKey: string; x: number; y: number; durability?: number } | null,
+    hover: { weaponKey: string; x: number; y: number; durability?: number; prefixId?: string; suffixId?: string } | null,
     playingState?: PlayingStateShape
 ): void {
     if (!hover || !Weapons[hover.weaponKey]) return;
-    const { name, rows } = getWeaponTooltipLines(hover.weaponKey);
+    const instance = (hover.prefixId != null || hover.suffixId != null) ? { prefixId: hover.prefixId, suffixId: hover.suffixId } : null;
+    const { name, rows } = getWeaponTooltipLines(hover.weaponKey, instance);
     const W = canvas.width;
     const H = canvas.height;
     const gap = 14;
@@ -864,11 +937,12 @@ export function renderInventory(
     canvas: HTMLCanvasElement,
     ps: PlayingStateShape,
     dragState: DragState,
-    weaponTooltipHover: { weaponKey: string; x: number; y: number } | null
+    weaponTooltipHover: { weaponKey: string; x: number; y: number } | null,
+    options?: { includeChestInPanel?: boolean }
 ): void {
     ensureInventoryInitialized(ps);
-    const layout = getInventoryLayout(canvas);
-    const { panel, slots, equipmentMainhand, equipmentOffhand, closeButton } = layout;
+    const layout = getInventoryLayout(canvas, options?.includeChestInPanel ? { includeChestGrid: true } : undefined);
+    const { panel, slots, equipmentMainhand, equipmentOffhand, closeButton, chestSlots } = layout;
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -972,21 +1046,26 @@ export function renderInventory(
         });
     }
 
-    // Drag ghost (rounded) — miniature weapon icon
-    if (dragState.isDragging && dragState.weaponKey) {
-        const ghostSize = 44;
-        const gx = dragState.pointerX - ghostSize / 2;
-        const gy = dragState.pointerY - ghostSize / 2;
-        ctx.globalAlpha = 0.92;
-        ctx.fillStyle = 'rgba(22, 16, 10, 0.95)';
-        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(201, 162, 39, 0.9)';
-        ctx.lineWidth = 2;
-        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
-        ctx.stroke();
-        drawWeaponIcon(ctx, dragState.pointerX, dragState.pointerY, ghostSize / 2 - 4, dragState.weaponKey);
-        ctx.globalAlpha = 1;
+    // Chest grid inside panel (when includeChestInPanel e.g. reroll screen)
+    if (chestSlots && chestSlots.length > 0) {
+        const chestList = ps.chestSlots ?? [];
+        const firstChestY = chestSlots[0].y;
+        ctx.fillStyle = '#7a6340';
+        ctx.font = '600 11px Cinzel, Georgia, serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('CHEST', panel.x + 20, firstChestY - 16);
+        for (const s of chestSlots) {
+            const instance = s.index < chestList.length ? chestList[s.index] : undefined;
+            const key = instance?.key;
+            const isEquipped = key && (ps.equippedMainhandKey === key || ps.equippedOffhandKey === key);
+            drawSlot(ctx, s, {
+                filled: !!key,
+                weaponKey: key ?? undefined,
+                emptyLabel: key ? undefined : '—',
+                highlight: !!isEquipped,
+                broken: !!(key && instance && instance.durability === 0)
+            });
+        }
     }
 
     renderWeaponTooltip(ctx, canvas, weaponTooltipHover, ps);
@@ -1043,23 +1122,33 @@ export function renderChest(
     ctx.font = `600 ${backFontSize}px Cinzel, Georgia, serif`;
     ctx.fillText('Back', back.x + back.w / 2, back.y + back.h / 2);
 
-    if (dragState.isDragging && dragState.weaponKey) {
-        const ghostSize = 44;
-        const gx = dragState.pointerX - ghostSize / 2;
-        const gy = dragState.pointerY - ghostSize / 2;
-        ctx.globalAlpha = 0.9;
-        ctx.fillStyle = 'rgba(22, 16, 10, 0.92)';
-        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(201, 162, 39, 0.9)';
-        ctx.lineWidth = 2;
-        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
-        ctx.stroke();
-        drawWeaponIcon(ctx, dragState.pointerX, dragState.pointerY, ghostSize / 2 - 4, dragState.weaponKey);
-        ctx.globalAlpha = 1;
-    }
-
     renderWeaponTooltip(ctx, canvas, weaponTooltipHover, ps);
+    ctx.restore();
+}
+
+/**
+ * Draw the drag ghost (weapon icon following cursor) on top of all UI.
+ * Call this last so the icon is visible over inventory, chest, reroll, and shop screens.
+ */
+export function renderDragGhost(
+    ctx: CanvasRenderingContext2D,
+    dragState: DragState
+): void {
+    if (!dragState.isDragging || !dragState.weaponKey) return;
+    const ghostSize = 44;
+    const gx = dragState.pointerX - ghostSize / 2;
+    const gy = dragState.pointerY - ghostSize / 2;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = 'rgba(22, 16, 10, 0.97)';
+    roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(201, 162, 39, 0.95)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
+    ctx.stroke();
+    drawWeaponIcon(ctx, dragState.pointerX, dragState.pointerY, ghostSize / 2 - 4, dragState.weaponKey);
     ctx.restore();
 }
 

@@ -105,6 +105,7 @@ const GameConfig: GameConfigShape = {
     board: { x: 750, y: 765, width: 100, height: 70 },
     weaponChest: { x: 340, y: 780, width: 80, height: 60 },
     shopkeeper: { x: 772, y: 280, width: 56, height: 56 },
+    rerollStation: { x: 580, y: 380, width: 64, height: 64 },
     questPortal: { x: 920, y: 780, width: 80, height: 80 },
     trainingDummy: { x: 560, y: 800 },
     theme: {
@@ -129,6 +130,7 @@ const GameConfig: GameConfigShape = {
       board: { x: 750, y: 765, width: 100, height: 70 },
       weaponChest: { x: 340, y: 780, width: 80, height: 60 },
       shopkeeper: { x: 772, y: 280, width: 56, height: 56 },
+      rerollStation: { x: 580, y: 380, width: 64, height: 64 },
       trainingDummy: { x: 560, y: 800 },
       theme: {
         ground: { r: 42, g: 38, b: 32, variation: 6 },

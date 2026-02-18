@@ -5,6 +5,7 @@ import { PortalRenderer } from './renderers/PortalRenderer.ts';
 import { BoardRenderer } from './renderers/BoardRenderer.ts';
 import { ChestRenderer } from './renderers/ChestRenderer.ts';
 import { ShopkeeperRenderer } from './renderers/ShopkeeperRenderer.ts';
+import { RerollStationRenderer } from './renderers/RerollStationRenderer.ts';
 import { EntityLayerRenderer } from './renderers/EntityLayerRenderer.ts';
 import { MinimapRenderer } from './renderers/MinimapRenderer.ts';
 import { createRenderContext } from './renderers/RenderContext.ts';
@@ -21,6 +22,7 @@ export class RenderSystem {
     boardRenderer: BoardRenderer;
     chestRenderer: ChestRenderer;
     shopkeeperRenderer: ShopkeeperRenderer;
+    rerollStationRenderer: RerollStationRenderer;
     entityLayer: EntityLayerRenderer;
     minimapRenderer: MinimapRenderer;
 
@@ -35,6 +37,7 @@ export class RenderSystem {
         this.boardRenderer = new BoardRenderer();
         this.chestRenderer = new ChestRenderer();
         this.shopkeeperRenderer = new ShopkeeperRenderer();
+        this.rerollStationRenderer = new RerollStationRenderer();
         this.entityLayer = new EntityLayerRenderer();
         this.minimapRenderer = new MinimapRenderer();
     }
@@ -88,6 +91,10 @@ export class RenderSystem {
 
     renderShopkeeper(shop, camera, playerNearShop) {
         this.shopkeeperRenderer.render(this._getContext(camera), { shop, playerNearShop });
+    }
+
+    renderRerollStation(rerollStation, camera, playerNearRerollStation) {
+        this.rerollStationRenderer.render(this._getContext(camera), { rerollStation, playerNearRerollStation });
     }
 
     /** Draw entities and depth-sort obstacles (trees, etc.) interleaved by Y so layering respects player and enemies. */

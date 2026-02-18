@@ -47,7 +47,9 @@ const goblinConfig = {
   maxStamina: 30,
   staminaRegen: 4,
   attackStaminaCost: 12,
-  goldDrop: 2
+  goldDrop: 2,
+  weaponDropChance: 0.04,
+  weaponDropPoolId: 'goblin'
 };
 
 // Skeleton: ranged projectile, no melee
@@ -70,7 +72,9 @@ const skeletonConfig = {
     cooldown: 3.5,
     stunBuildup: 15
   },
-  goldDrop: 3
+  goldDrop: 3,
+  weaponDropChance: 0.05,
+  weaponDropPoolId: 'skeleton'
 };
 
 // Lesser demon: claw + lunge
@@ -95,7 +99,9 @@ const lesserDemonConfig = {
     lungeDamage: 10,
     knockback: { force: 260 }
   },
-  goldDrop: 4
+  goldDrop: 4,
+  weaponDropChance: 0.06,
+  weaponDropPoolId: 'lesserDemon'
 };
 
 // Greater demon: pillar flame
@@ -120,7 +126,9 @@ const greaterDemonConfig = {
     cooldown: 18.0,
     pillarRange: 220
   },
-  goldDrop: 8
+  goldDrop: 8,
+  weaponDropChance: 0.12,
+  weaponDropPoolId: 'greaterDemon'
 };
 
 // Goblin chieftain: stats from ChieftainClub heavySmash
@@ -141,6 +149,8 @@ const chieftainAttackRange = heavySmash.aoeInFront
 const goblinChieftainConfig = {
   maxHealth: 60,
   moveSpeed: 50,
+  weaponDropChance: 0.1,
+  weaponDropPoolId: 'goblinChieftain',
   weaponId: 'chieftainClub',
   attackRange: chieftainAttackRange,
   attackDamage: heavySmash.damage,
@@ -197,7 +207,9 @@ const banditConfig = {
   maxStamina: 50,
   staminaRegen: 3,
   attackStaminaCost: 25,
-  goldDrop: 5
+  goldDrop: 5,
+  weaponDropChance: 0.06,
+  weaponDropPoolId: 'bandit'
 };
 
 // Bandit dagger: stats from Weapons.dagger
@@ -320,7 +332,9 @@ const zombieConfig = {
   stunBuildupPerHit: 16,
   knockbackResist: 0.2,
   knockback: { force: 140, decay: 0.88 },
-  goldDrop: 3
+  goldDrop: 3,
+  weaponDropChance: 0.04,
+  weaponDropPoolId: 'zombie'
 };
 
 // Training dummy: immobile, never attacks, high health, no gold, resets health on "death" (handled in EnemyManager)

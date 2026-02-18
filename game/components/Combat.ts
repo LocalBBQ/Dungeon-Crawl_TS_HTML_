@@ -13,6 +13,12 @@ import { Weapons } from '../weapons/WeaponsRegistry.ts';
 import { Enemies } from '../enemies/EnemiesRegistry.ts';
 import { PlayerAttack } from '../weapons/PlayerAttack.ts';
 import { WeaponAttackHandler } from '../weapons/WeaponAttackHandler.ts';
+import type { HitCategory } from '../types/combat.js';
+import {
+  HEAVY_BLOCK_EFFECTIVITY,
+  HEAVY_BLOCK_STAMINA_MULT,
+  LUNGE_BLOCK_STAMINA_MULT
+} from '../types/combat.js';
 
 /** Minimal attack handler interface used by Combat. */
 export interface AttackHandlerLike {
@@ -292,13 +298,30 @@ export class Combat implements Component {
     return blockConfig ? (blockConfig.damageReduction ?? 0) : 0;
   }
 
-  consumeBlockStamina(): boolean {
+  /**
+   * Effective block damage reduction for a given hit category. Used for "wrong answer" costs:
+   * heavy attacks get reduced block effectiveness; light/lunge/ranged use base.
+   */
+  getEffectiveBlockDamageReduction(category: HitCategory): number {
+    const base = this.blockDamageReduction;
+    if (category === 'heavy') return Math.min(1, base * HEAVY_BLOCK_EFFECTIVITY);
+    return base;
+  }
+
+  /**
+   * Consume stamina for blocking. Optional category applies difficulty tunings:
+   * heavy = 2× cost, lunge = 1.5× cost; light/ranged = base cost.
+   */
+  consumeBlockStamina(category?: HitCategory): boolean {
     if (this.isPlayer && this.isBlocking) {
       const blockConfig = this._getBlockConfig() as { staminaCost?: number } | null;
       if (!blockConfig) return false;
+      let cost = blockConfig.staminaCost ?? 0;
+      if (category === 'heavy') cost *= HEAVY_BLOCK_STAMINA_MULT;
+      else if (category === 'lunge') cost *= LUNGE_BLOCK_STAMINA_MULT;
       const stamina = this.entity!.getComponent(Stamina);
-      if (stamina && stamina.currentStamina >= (blockConfig.staminaCost ?? 0)) {
-        stamina.currentStamina -= blockConfig.staminaCost ?? 0;
+      if (stamina && stamina.currentStamina >= cost) {
+        stamina.currentStamina -= cost;
         return true;
       }
       this.stopBlocking();

@@ -35,8 +35,13 @@ export interface ShopState {
   height: number;
 }
 
-/** One weapon instance: key + durability. Used for inventory slots and chest. */
-export type WeaponInstance = { key: string; durability: number };
+/** One weapon instance: key + durability + optional enchant prefix/suffix. Used for inventory slots and chest. */
+export type WeaponInstance = {
+  key: string;
+  durability: number;
+  prefixId?: string;
+  suffixId?: string;
+};
 
 /** One inventory bag slot: weapon instance or empty. */
 export type InventorySlot = WeaponInstance | null;
@@ -62,6 +67,13 @@ export interface PlayingStateShape {
   chestOpen: boolean;
   chestUseCooldown: number;
   playerNearChest: boolean;
+  /** Reroll enchant NPC station (hub). */
+  rerollStation: { x: number; y: number; width: number; height: number } | null;
+  rerollStationOpen: boolean;
+  rerollStationUseCooldown: number;
+  playerNearRerollStation: boolean;
+  /** Weapon in the reroll station slot (drag in to modify, drag out to re-equip or stash). */
+  rerollSlotItem: WeaponInstance | null;
   shop: ShopState | null;
   shopOpen: boolean;
   shopUseCooldown: number;
@@ -84,6 +96,11 @@ export interface PlayingStateShape {
   equippedMainhandDurability: number;
   /** Current durability for equipped offhand (0..MAX_WEAPON_DURABILITY). */
   equippedOffhandDurability: number;
+  /** Enchant prefix/suffix for equipped mainhand (synced when equipping). */
+  equippedMainhandPrefixId?: string;
+  equippedMainhandSuffixId?: string;
+  equippedOffhandPrefixId?: string;
+  equippedOffhandSuffixId?: string;
   /** 24 slots: weapon instance or null. Starts empty; filled only by taking from chest. */
   inventorySlots: InventorySlot[];
   /** Weapon instances in the chest. Each instance has its own durability. */
@@ -135,6 +152,11 @@ const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, ch
   chestOpen: false,
   chestUseCooldown: 0,
   playerNearChest: false,
+  rerollStation: null,
+  rerollStationOpen: false,
+  rerollStationUseCooldown: 0,
+  playerNearRerollStation: false,
+  rerollSlotItem: null,
   shop: null,
   shopOpen: false,
   shopUseCooldown: 0,
@@ -154,7 +176,7 @@ const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, ch
   equippedMainhandDurability: MAX_WEAPON_DURABILITY,
   equippedOffhandDurability: MAX_WEAPON_DURABILITY,
   inventorySlots: Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[],
-  chestSlots: chestSlots.map((i) => ({ key: i.key, durability: i.durability })),
+  chestSlots: chestSlots.map((i) => ({ key: i.key, durability: i.durability, prefixId: i.prefixId, suffixId: i.suffixId })),
   hubSelectedLevel: 1,
   hubSelectedQuestIndex: 0,
   questList: [],
@@ -177,6 +199,11 @@ export class PlayingState implements PlayingStateShape {
   chestOpen = false;
   chestUseCooldown = 0;
   playerNearChest = false;
+  rerollStation: { x: number; y: number; width: number; height: number } | null = null;
+  rerollStationOpen = false;
+  rerollStationUseCooldown = 0;
+  playerNearRerollStation = false;
+  rerollSlotItem: WeaponInstance | null = null;
   shop: ShopState | null = null;
   shopOpen = false;
   shopUseCooldown = 0;

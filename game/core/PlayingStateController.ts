@@ -147,10 +147,13 @@ export class PlayingStateController {
         if (g.playingState.shopUseCooldown > 0) {
             g.playingState.shopUseCooldown = Math.max(0, g.playingState.shopUseCooldown - deltaTime);
         }
+        if (g.playingState.rerollStationUseCooldown > 0) {
+            g.playingState.rerollStationUseCooldown = Math.max(0, g.playingState.rerollStationUseCooldown - deltaTime);
+        }
         if (g.playingState.questPortalUseCooldown > 0) {
             g.playingState.questPortalUseCooldown = Math.max(0, g.playingState.questPortalUseCooldown - deltaTime);
         }
-        if (g.playingState.boardOpen || g.playingState.chestOpen || g.playingState.shopOpen) return;
+        if (g.playingState.boardOpen || g.playingState.chestOpen || g.playingState.shopOpen || g.playingState.rerollStationOpen) return;
 
         g.handleCameraZoom();
 
@@ -249,6 +252,25 @@ export class PlayingStateController {
             }
         } else {
             g.playingState.playerNearShop = false;
+        }
+        if (player && g.playingState.rerollStation) {
+            const transform = player.getComponent(Transform);
+            if (transform) {
+                const overlap = Utils.rectCollision(
+                    transform.left, transform.top, transform.width, transform.height,
+                    g.playingState.rerollStation.x, g.playingState.rerollStation.y, g.playingState.rerollStation.width, g.playingState.rerollStation.height
+                );
+                g.playingState.playerNearRerollStation = overlap;
+                if (overlap && g.playingState.rerollStationUseCooldown <= 0 && inputSystem && inputSystem.isKeyPressed('e')) {
+                    g.playingState.rerollStationOpen = true;
+                    g.playingState.rerollStationUseCooldown = 0.4;
+                    g.clearPlayerInputsForMenu();
+                }
+            } else {
+                g.playingState.playerNearRerollStation = false;
+            }
+        } else {
+            g.playingState.playerNearRerollStation = false;
         }
         // Quest portal in hub: when a quest is accepted, a portal spawns; E at portal starts the quest
         const hubConfig = GameConfig.hub;
