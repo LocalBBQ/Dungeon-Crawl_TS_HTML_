@@ -25,6 +25,7 @@ export interface ScreenControllerContext {
         chestOpen: boolean;
         boardOpen: boolean;
         shopOpen: boolean;
+        rerollStationOpen?: boolean;
         equippedMainhandKey: string;
         equippedOffhandKey: string;
         hubSelectedLevel: number;
@@ -181,6 +182,11 @@ export class ScreenController {
                     ctx.returnToSanctuaryOnDeath();
                 }
             } else if (isEscapeKey) {
+                // Enchantment (reroll) screen: Escape closes the overlay only, does not pause
+                if (ps.rerollStationOpen) {
+                    ps.rerollStationOpen = false;
+                    return;
+                }
                 if (ps.inventoryOpen) {
                     ps.inventoryOpen = false;
                     return;

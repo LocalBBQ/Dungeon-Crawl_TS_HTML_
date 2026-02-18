@@ -29,7 +29,7 @@ export interface EnchantmentDef {
 }
 
 export const ENCHANTMENTS: EnchantmentDef[] = [
-  { id: 'quick', displayName: 'Quick', slot: 'weapon', rarity: 'common', effect: { type: 'cooldownMultiplier', value: 0.92 }, description: '8% faster attacks' },
+  { id: 'haste', displayName: 'Haste', slot: 'weapon', rarity: 'common', effect: { type: 'cooldownMultiplier', value: 0.92 }, description: '8% faster attacks' },
   { id: 'heavy', displayName: 'Heavy', slot: 'weapon', rarity: 'common', effect: { type: 'damageFlat', value: 3 }, description: '+3 base damage' },
   { id: 'crushing', displayName: 'Crushing', slot: 'weapon', rarity: 'common', effect: { type: 'stunBuildupPercent', value: 15 }, description: '+15% stun buildup' },
   { id: 'vicious', displayName: 'Vicious', slot: 'weapon', rarity: 'common', effect: { type: 'damagePercent', value: 10 }, description: '+10% damage' },
@@ -38,7 +38,7 @@ export const ENCHANTMENTS: EnchantmentDef[] = [
   { id: 'vampiric', displayName: 'Vampiric', slot: 'weapon', rarity: 'rare', effect: { type: 'lifeOnHitPercent', value: 2 }, description: '2% life on hit' },
   { id: 'brutal', displayName: 'Brutal', slot: 'weapon', rarity: 'rare', effect: { type: 'knockbackPercent', value: 25 }, description: '+25% knockback' },
   { id: 'swift', displayName: 'Swift', slot: 'weapon', rarity: 'rare', effect: { type: 'cooldownMultiplier', value: 0.85 }, description: '15% faster attacks' },
-  { id: 'reaper', displayName: "Reaper's", slot: 'weapon', rarity: 'rare', effect: { type: 'stunBuildupPercent', value: 30 }, description: '+30% stun buildup' },
+  { id: 'force', displayName: "Force", slot: 'weapon', rarity: 'rare', effect: { type: 'stunBuildupPercent', value: 30 }, description: '+30% stun buildup' },
   { id: 'soulLeech', displayName: 'Soul Leech', slot: 'weapon', rarity: 'legendary', effect: { type: 'lifeOnHitPercent', value: 4 }, description: '4% life on hit' },
   { id: 'infernal', displayName: 'Infernal', slot: 'weapon', rarity: 'legendary', effect: { type: 'damagePercent', value: 20 }, description: '+20% damage' },
   { id: 'cursed', displayName: 'Cursed', slot: 'weapon', rarity: 'legendary', effect: { type: 'damagePercent', value: 25 }, description: '+25% damage' },

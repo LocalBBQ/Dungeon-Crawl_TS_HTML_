@@ -14,7 +14,7 @@ import {
     SHOP_WEAPON_TYPE_ORDER,
     SHOP_WEAPON_TYPE_LABELS
 } from '../config/shopConfig.js';
-import { getEnchantmentById } from '../config/enchantmentConfig.js';
+import { getEnchantmentById, applyEnchantEffectsToWeapon } from '../config/enchantmentConfig.js';
 
 function isWeaponInstance(w: unknown): w is Weapon {
     return !!w && typeof (w as Weapon).baseDamage === 'number';
@@ -855,8 +855,18 @@ function getWeaponTooltipLines(key: string, instance?: { prefixId?: string; suff
         }
     }
     if (!isWeaponInstance(w)) return { name, rows };
-    if (w.baseDamage > 0) rows.push({ label: 'Damage', value: String(w.baseDamage) });
-    if (w.baseRange > 0) rows.push({ label: 'Range', value: String(w.baseRange) });
+    // Use effective stats when weapon has prefix/suffix so tooltip shows actual damage/range
+    const baseForEnchant = {
+        baseDamage: w.baseDamage ?? 0,
+        baseRange: w.baseRange ?? 0,
+        cooldown: typeof (w as Weapon & { cooldown?: number }).cooldown === 'number' ? (w as Weapon & { cooldown?: number }).cooldown : 0.1,
+        baseStunBuildup: (w as Weapon & { baseStunBuildup?: number }).baseStunBuildup ?? 25
+    };
+    const effective = applyEnchantEffectsToWeapon(baseForEnchant, instance?.prefixId, instance?.suffixId);
+    const damage = typeof effective.baseDamage === 'number' ? effective.baseDamage : w.baseDamage ?? 0;
+    const range = typeof effective.baseRange === 'number' ? effective.baseRange : w.baseRange ?? 0;
+    if (damage > 0) rows.push({ label: 'Damage', value: String(damage) });
+    if (range > 0) rows.push({ label: 'Range', value: String(range) });
     const hasAttack = (w.comboConfig?.length ?? 0) > 0 || !!w.dashAttack || !!w.chargeAttack || !!w.chargeRelease;
     if (hasAttack) {
         rows.push({ label: 'Speed', value: String(Number(w.speed).toFixed(1)) });

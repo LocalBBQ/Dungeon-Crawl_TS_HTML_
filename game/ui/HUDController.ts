@@ -22,6 +22,7 @@ import { Combat } from '../components/Combat.js';
 import { PlayerHealing } from '../components/PlayerHealing.js';
 import { StatusEffects } from '../components/StatusEffects.js';
 import { SpriteUtils } from '../utils/SpriteUtils.js';
+import type { Weapon } from '../weapons/Weapon.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
@@ -58,11 +59,19 @@ export class HUDController {
         this.setupArmorDragAndDrop();
     }
 
+    private getChestOverlay(): HTMLElement | null {
+        return document.getElementById('equipment-chest-overlay') ?? document.getElementById('weapon-chest-overlay');
+    }
+
+    private getChestGrid(): HTMLElement | null {
+        return document.getElementById('equipment-chest-grid') ?? document.getElementById('weapon-chest-grid');
+    }
+
     private setupChestOverlay(): void {
-        const overlay = document.getElementById('equipment-chest-overlay');
+        const overlay = this.getChestOverlay();
         if (!overlay) return;
         overlay.addEventListener('click', (e) => this.handleChestOverlayClick(e));
-        const chestGrid = document.getElementById('equipment-chest-grid');
+        const chestGrid = this.getChestGrid();
         if (chestGrid) {
             chestGrid.addEventListener('dragover', (e) => this.handleChestSlotDragover(e));
             chestGrid.addEventListener('dragleave', (e) => this.handleChestSlotDragleave(e));
@@ -388,21 +397,34 @@ export class HUDController {
         }
     }
 
+    private getWeaponStatsLine(key: string): string {
+        const w = Weapons[key] as Weapon | undefined;
+        if (!w) return '';
+        if (w.block) return 'Block';
+        return `${w.baseDamage} dmg`;
+    }
+
     private initChestGrid(): void {
         if (this.chestGridInitialized) return;
-        const grid = document.getElementById('equipment-chest-grid');
+        const grid = this.getChestGrid();
         if (!grid) return;
         for (const key of CHEST_WEAPON_ORDER) {
             if (!Weapons[key]) continue;
+            const cell = document.createElement('div');
+            cell.className = 'equipment-chest-cell';
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'equipment-chest-slot';
             btn.setAttribute('data-weapon-key', key);
             btn.draggable = true;
             btn.textContent = getWeaponSymbol(key);
-            btn.title = getWeaponDisplayName(key);
             btn.addEventListener('dragstart', (e) => this.handleWeaponDragStart(e));
-            grid.appendChild(btn);
+            const caption = document.createElement('div');
+            caption.className = 'equipment-chest-slot-caption';
+            caption.innerHTML = `<span class="equipment-chest-slot-name">${getWeaponDisplayName(key)}</span><span class="equipment-chest-slot-stats">${this.getWeaponStatsLine(key)}</span>`;
+            cell.appendChild(btn);
+            cell.appendChild(caption);
+            grid.appendChild(cell);
         }
         this.chestGridInitialized = true;
     }
@@ -418,7 +440,7 @@ export class HUDController {
     }
 
     private refreshChestGridEquippedState(): void {
-        const grid = document.getElementById('equipment-chest-grid');
+        const grid = this.getChestGrid();
         if (!grid) return;
         const mainhand = this.ctx.playingState.equippedMainhandKey;
         const offhand = this.ctx.playingState.equippedOffhandKey;
@@ -430,7 +452,7 @@ export class HUDController {
     }
 
     setChestOverlayVisible(visible: boolean): void {
-        const el = document.getElementById('equipment-chest-overlay');
+        const el = this.getChestOverlay();
         if (el) {
             el.classList.toggle('hidden', !visible);
             if (visible) {

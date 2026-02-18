@@ -653,6 +653,34 @@ body {
     max-width: 100%;
 }
 
+.equipment-chest-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.equipment-chest-slot-caption {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-align: center;
+    font-size: 11px;
+    color: #b8a080;
+    line-height: 1.2;
+}
+
+.equipment-chest-slot-name {
+    font-weight: 600;
+    color: #e0c8a0;
+}
+
+.equipment-chest-slot-stats {
+    font-size: 10px;
+    color: #887866;
+}
+
 .equipment-chest-slot {
     display: flex;
     align-items: center;
@@ -782,4 +810,81 @@ body {
     background: #241810;
 }
 
+/* Same styles for dist/index.html which uses weapon-chest-* IDs/classes */
+.weapon-chest-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    background: rgba(10, 8, 6, 0.75);
+}
+
+.weapon-chest-overlay.hidden {
+    display: none;
+    pointer-events: none;
+}
+
+.weapon-chest-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 24px 28px 28px;
+    min-width: 280px;
+    background: linear-gradient(180deg, rgba(28, 20, 14, 0.98) 0%, rgba(18, 12, 8, 0.98) 100%);
+    border: 2px solid rgba(61, 40, 23, 0.7);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(120, 90, 60, 0.15);
+}
+
+.weapon-chest-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #c9a227;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+.weapon-chest-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    max-width: 100%;
+}
+
+.weapon-chest-equipment {
+    display: flex;
+    gap: 14px;
+    width: 100%;
+    justify-content: center;
+    padding: 14px 0 4px;
+    border-top: 1px solid rgba(61, 40, 23, 0.4);
+    margin-top: 4px;
+}
+
+.weapon-chest-equipment .equipment-slot {
+    min-width: 110px;
+}
+
+.weapon-chest-back {
+    padding: 10px 24px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: #a08060;
+    background: #1a1008;
+    border: 2px solid #4a3020;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.weapon-chest-back:hover {
+    color: #c9a86a;
+    border-color: #6a4030;
+    background: #241810;
+}
 

@@ -2,7 +2,9 @@
  * Reroll enchantments overlay: one drop slot, reroll buttons when slot has item.
  * Drag weapon into slot, modify, then drag out to re-equip or stash.
  */
-import type { PlayingStateShape, WeaponInstance } from '../state/PlayingState.js';
+import type { PlayingStateShape } from '../state/PlayingState.js';
+import type { EnchantmentEffect } from '../config/enchantmentConfig.js';
+import { getEnchantmentById } from '../config/enchantmentConfig.js';
 import { getWeaponDisplayName } from './InventoryChestCanvas.js';
 import { drawWeaponIcon } from './InventoryChestCanvas.js';
 import { REROLL_PREFIX_COST, REROLL_SUFFIX_COST, REROLL_BOTH_COST } from '../state/InventoryActions.js';
@@ -47,6 +49,37 @@ export function getRerollOverlayLayout(canvas: HTMLCanvasElement, ps: PlayingSta
   ];
 
   return { panel, back, slot, titleY, buttons, buttonsY };
+}
+
+function formatEnchantEffect(e: EnchantmentEffect): string {
+  switch (e.type) {
+    case 'cooldownMultiplier':
+      return `${Math.round((1 - e.value) * 100)}% faster attacks`;
+    case 'damageFlat':
+      return `+${e.value} base damage`;
+    case 'damagePercent':
+      return `+${e.value}% damage`;
+    case 'stunBuildupPercent':
+      return `+${e.value}% stun buildup`;
+    case 'knockbackPercent':
+      return `+${e.value}% knockback`;
+    case 'rangePercent':
+      return `+${e.value}% range`;
+    case 'staminaCostPercent':
+      return e.value < 0 ? `${-e.value}% less stamina per attack` : `+${e.value}% stamina cost`;
+    case 'lifeOnHitPercent':
+      return `${e.value}% life on hit`;
+    case 'blockDamageReductionPercent':
+      return `${e.value}% better block`;
+    case 'blockStaminaCostPercent':
+      return e.value < 0 ? `${-e.value}% less block stamina` : `+${e.value}% block stamina`;
+    case 'blockArcDegrees':
+      return `+${e.value}° block arc`;
+    case 'thornsPercent':
+      return `${e.value}% damage reflected on block`;
+    default:
+      return '';
+  }
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -107,13 +140,36 @@ export function renderRerollOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLC
   ctx.stroke();
   if (hasItem && ps.rerollSlotItem) {
     const inst = ps.rerollSlotItem;
-    drawWeaponIcon(ctx, slot.x + slot.w / 2, slot.y + slot.h / 2 - 6, slot.w / 2 - 8, inst.key);
-    ctx.fillStyle = '#e8dcc8';
-    ctx.font = '600 11px Cinzel, Georgia, serif';
-    ctx.textAlign = 'center';
+    drawWeaponIcon(ctx, slot.x + slot.w / 2, slot.y + slot.h / 2 - 8, slot.w / 2 - 8, inst.key);
     const name = getWeaponDisplayName(inst.key, inst);
-    const short = name.length > 14 ? name.slice(0, 12) + '…' : name;
-    ctx.fillText(short, slot.x + slot.w / 2, slot.y + slot.h - 10);
+    const centerX = slot.x + slot.w / 2;
+    let textY = slot.y + slot.h + 14;
+    ctx.fillStyle = '#e8dcc8';
+    ctx.font = '600 12px Cinzel, Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, centerX, textY);
+    const lineHeight = 14;
+    if (inst.prefixId) {
+      const enc = getEnchantmentById(inst.prefixId);
+      if (enc) {
+        textY += lineHeight;
+        ctx.fillStyle = '#b8a080';
+        ctx.font = '500 11px Cinzel, Georgia, serif';
+        const mod = enc.description ?? formatEnchantEffect(enc.effect);
+        ctx.fillText(`${enc.displayName}: ${mod}`, centerX, textY);
+      }
+    }
+    if (inst.suffixId) {
+      const enc = getEnchantmentById(inst.suffixId);
+      if (enc) {
+        textY += lineHeight;
+        ctx.fillStyle = '#b8a080';
+        ctx.font = '500 11px Cinzel, Georgia, serif';
+        const mod = enc.description ?? formatEnchantEffect(enc.effect);
+        ctx.fillText(`of ${enc.displayName}: ${mod}`, centerX, textY);
+      }
+    }
   } else {
     ctx.fillStyle = '#887866';
     ctx.font = '500 12px Cinzel, Georgia, serif';
