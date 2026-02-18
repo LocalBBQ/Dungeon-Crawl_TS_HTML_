@@ -39,7 +39,7 @@ import { Weapons } from '../weapons/WeaponsRegistry.ts';
 import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import type { GameRef, GameConfigShape } from '../types/index.js';
-import { PlayingState, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY } from '../state/PlayingState.js';
+import { PlayingState, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import {
     equipFromChest,
     equipFromChestToHand,
@@ -52,6 +52,8 @@ import {
     swapInventorySlots,
     unequipToInventory
 } from '../state/InventoryActions.js';
+import { equipArmorFromInventory, unequipArmorToInventory, swapArmorWithInventory, swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
+import { getArmor, SHOP_ARMOR_ENTRIES } from '../armor/armorConfigs.js';
 import { createPlayer as createPlayerEntity } from './PlayerFactory.js';
 import { ScreenController } from './ScreenController.js';
 import { PlayingStateController } from './PlayingStateController.js';
@@ -70,7 +72,8 @@ import {
     hitTestShop,
     createDragState,
     ensureInventoryInitialized,
-    type DragState
+    type DragState,
+    type ArmorTooltipHover
 } from '../ui/InventoryChestCanvas.js';
 import {
     renderRerollOverlay,
@@ -93,6 +96,8 @@ class Game {
     inventoryDragState!: DragState;
     /** Set when pointer is over a weapon slot (chest or inventory); cleared when moving away or closing. */
     weaponTooltipHover: WeaponTooltipHover | null = null;
+    /** Set when pointer is over an armor slot (equipment or inventory); cleared when moving away or closing. */
+    armorTooltipHover: ArmorTooltipHover | null = null;
 
     constructor() {
         try {
@@ -182,6 +187,10 @@ class Game {
     set shopOpen(v) { this.playingState.shopOpen = v; }
     get boardOpen() { return this.playingState.boardOpen; }
     set boardOpen(v) { this.playingState.boardOpen = v; }
+    /** True when the last mousedown was over inventory/chest/shop UI; attack/block should ignore that click. Cleared on matching mouseup. */
+    private lastPointerDownConsumedByUI = false;
+    get pointerDownConsumedByUI(): boolean { return this.lastPointerDownConsumedByUI; }
+    clearPointerDownConsumedByUI(): void { this.lastPointerDownConsumedByUI = false; }
     get playerInGatherableRange() { return this.playingState.playerInGatherableRange; }
     set playerInGatherableRange(v) { this.playingState.playerInGatherableRange = v; }
     get crossbowReloadProgress() { return this.playingState.crossbowReloadProgress; }
@@ -224,6 +233,8 @@ class Game {
         }
 
         this.systems.register('config', this.config as unknown as SystemLike);
+
+        this.systems.register('playingState', this.playingState as unknown as SystemLike);
 
         this.systems.register('entities', this.entities);
 
@@ -632,10 +643,12 @@ class Game {
         });
 
         // Pointer events for inventory/chest drag-and-drop (skip drag when Ctrl held so ctrl+click only runs once)
+        // Use capture so we run before InputSystem and can mark clicks on UI (so attack/block are not triggered)
         this.canvas.addEventListener('mousedown', (e) => {
             const { x, y } = this.getCanvasCoords(e);
+            this.lastPointerDownConsumedByUI = this.isPointerOverInventoryOrChestOrShopUI(x, y);
             if (this.handleInventoryChestPointerDown(x, y, e.ctrlKey)) e.preventDefault();
-        });
+        }, true);
         this.canvas.addEventListener('mousemove', (e) => {
             const { x, y } = this.getCanvasCoords(e);
             this.handleInventoryChestPointerMove(x, y);
@@ -701,9 +714,11 @@ class Game {
             }
         });
 
-        this.systems.eventBus.on(EventTypes.DAMAGE_TAKEN, (data: { isPlayerDamage?: boolean; isBlocked?: boolean; damage?: number }) => {
+        this.systems.eventBus.on(EventTypes.DAMAGE_TAKEN, (data: { isPlayerDamage?: boolean; isBlocked?: boolean; isParry?: boolean; damage?: number; entityId?: string }) => {
             if (data.isPlayerDamage || !data.isBlocked) return;
             const ps = this.playingState;
+            // Parry: rally already added in EnemyManager/ProjectileManager; don't consume offhand durability (greatsword has no offhand)
+            if (data.isParry) return;
             if (ps.equippedOffhandDurability > 0) {
                 ps.equippedOffhandDurability = Math.max(0, ps.equippedOffhandDurability - 1);
                 if (ps.equippedOffhandDurability === 0 && ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none') {
@@ -715,6 +730,55 @@ class Game {
                 const player = this.entities.get('player');
                 const rally = player?.getComponent(Rally);
                 if (rally) rally.addToPool(data.damage!);
+            }
+        });
+
+        // Armor durability: when player takes damage, decrement each equipped piece; unequip at 0 and put in bag
+        this.systems.eventBus.on(EventTypes.DAMAGE_TAKEN, (data: { entityId?: string; damage?: number }) => {
+            if (data.entityId !== 'player' || (data.damage ?? 0) <= 0) return;
+            const ps = this.playingState;
+            const decrement = Math.max(1, Math.floor((data.damage ?? 0) / 10));
+            const putBrokenInInventory = (key: string): void => {
+                if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return;
+                const empty = ps.inventorySlots.findIndex((s) => s == null);
+                if (empty >= 0) ps.inventorySlots[empty] = { key, durability: 0 };
+            };
+
+            if (ps.equippedArmorHeadKey && ps.equippedArmorHeadKey !== 'none' && ps.equippedArmorHeadDurability > 0) {
+                ps.equippedArmorHeadDurability = Math.max(0, ps.equippedArmorHeadDurability - decrement);
+                if (ps.equippedArmorHeadDurability === 0) {
+                    const k = ps.equippedArmorHeadKey;
+                    ps.equippedArmorHeadKey = 'none';
+                    ps.equippedArmorHeadDurability = MAX_ARMOR_DURABILITY;
+                    putBrokenInInventory(k);
+                }
+            }
+            if (ps.equippedArmorChestKey && ps.equippedArmorChestKey !== 'none' && ps.equippedArmorChestDurability > 0) {
+                ps.equippedArmorChestDurability = Math.max(0, ps.equippedArmorChestDurability - decrement);
+                if (ps.equippedArmorChestDurability === 0) {
+                    const k = ps.equippedArmorChestKey;
+                    ps.equippedArmorChestKey = 'none';
+                    ps.equippedArmorChestDurability = MAX_ARMOR_DURABILITY;
+                    putBrokenInInventory(k);
+                }
+            }
+            if (ps.equippedArmorHandsKey && ps.equippedArmorHandsKey !== 'none' && ps.equippedArmorHandsDurability > 0) {
+                ps.equippedArmorHandsDurability = Math.max(0, ps.equippedArmorHandsDurability - decrement);
+                if (ps.equippedArmorHandsDurability === 0) {
+                    const k = ps.equippedArmorHandsKey;
+                    ps.equippedArmorHandsKey = 'none';
+                    ps.equippedArmorHandsDurability = MAX_ARMOR_DURABILITY;
+                    putBrokenInInventory(k);
+                }
+            }
+            if (ps.equippedArmorFeetKey && ps.equippedArmorFeetKey !== 'none' && ps.equippedArmorFeetDurability > 0) {
+                ps.equippedArmorFeetDurability = Math.max(0, ps.equippedArmorFeetDurability - decrement);
+                if (ps.equippedArmorFeetDurability === 0) {
+                    const k = ps.equippedArmorFeetKey;
+                    ps.equippedArmorFeetKey = 'none';
+                    ps.equippedArmorFeetDurability = MAX_ARMOR_DURABILITY;
+                    putBrokenInInventory(k);
+                }
             }
         });
     }
@@ -874,6 +938,7 @@ class Game {
             this.playingState.chestOpen = false;
             this.playingState.chestUseCooldown = 0;
             this.weaponTooltipHover = null;
+            this.armorTooltipHover = null;
             this.playingState.playerNearChest = false;
             this.playingState.shop = hubLevel.shopkeeper ? { ...hubLevel.shopkeeper } : null;
             this.playingState.shopOpen = false;
@@ -927,6 +992,7 @@ class Game {
         if (!visible) {
             this.playingState.inventoryOpen = false;
             this.weaponTooltipHover = null;
+            this.armorTooltipHover = null;
             this.hudController.setInventoryPanelVisible(false);
         }
     }
@@ -1080,6 +1146,27 @@ class Game {
         this.hudController.refreshInventoryPanel();
     }
 
+    /** True if (x,y) in canvas coords is over the inventory, chest, or shop UI (so attack/block should not fire). */
+    private isPointerOverInventoryOrChestOrShopUI(x: number, y: number): boolean {
+        if (this.playingState.chestOpen) return true; // chest uses full-screen overlay
+        if (this.playingState.inventoryOpen) {
+            const layout = getInventoryLayout(this.canvas);
+            const p = layout.panel;
+            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return true;
+        }
+        if (this.playingState.shopOpen) {
+            const layout = getShopLayout(
+                this.canvas,
+                this.playingState.shopScrollOffset ?? 0,
+                this.playingState.shopExpandedWeapons,
+                this.playingState
+            );
+            const p = layout.panel;
+            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return true;
+        }
+        return false;
+    }
+
     /** Handle Back/Close on inventory or chest canvas UI. Returns true if click was consumed. */
     handleInventoryChestClick(x: number, y: number, e?: MouseEvent): boolean {
         if (this.playingState.rerollStationOpen) {
@@ -1130,6 +1217,14 @@ class Game {
                 return true;
             }
             if (invHit?.type === 'inventory-slot' && invHit.weaponKey && invHit.index >= 0) {
+                const armorConfig = getArmor(invHit.weaponKey);
+                if (armorConfig) {
+                    const slotHasItem = (armorConfig.slot === 'head' ? ps.equippedArmorHeadKey : armorConfig.slot === 'chest' ? ps.equippedArmorChestKey : armorConfig.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey) !== 'none';
+                    if (slotHasItem) swapArmorWithInventory(ps, armorConfig.slot, invHit.index);
+                    else equipArmorFromInventory(ps, invHit.index, armorConfig.slot);
+                    this.refreshInventoryPanel();
+                    return true;
+                }
                 const slot = getEquipSlotForWeapon(invHit.weaponKey);
                 const slotHasItem = slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
                 if (slotHasItem) {
@@ -1148,6 +1243,14 @@ class Game {
                     } else {
                         unequipToInventory(ps, invHit.slot, undefined, undefined, sync);
                     }
+                    this.refreshInventoryPanel();
+                    return true;
+                }
+            }
+            if (invHit?.type === 'armor-equipment') {
+                const key = invHit.slot === 'head' ? ps.equippedArmorHeadKey : invHit.slot === 'chest' ? ps.equippedArmorChestKey : invHit.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey;
+                if (key && key !== 'none') {
+                    unequipArmorToInventory(ps, invHit.slot);
                     this.refreshInventoryPanel();
                     return true;
                 }
@@ -1188,19 +1291,43 @@ class Game {
                         this.playingState.equippedMainhandDurability = MAX_WEAPON_DURABILITY;
                     } else if (hit.source === 'offhand') {
                         this.playingState.equippedOffhandDurability = MAX_WEAPON_DURABILITY;
-                    } else {
+                    } else if (hit.source === 'inventory' && 'bagIndex' in hit) {
                         const slot = this.playingState.inventorySlots?.[hit.bagIndex];
                         if (slot) {
                             this.playingState.inventorySlots[hit.bagIndex] = { key: slot.key, durability: MAX_WEAPON_DURABILITY };
+                        }
+                    } else if (hit.source === 'armor' && 'armorSlot' in hit) {
+                        const s = hit.armorSlot;
+                        if (s === 'head') this.playingState.equippedArmorHeadDurability = MAX_ARMOR_DURABILITY;
+                        else if (s === 'chest') this.playingState.equippedArmorChestDurability = MAX_ARMOR_DURABILITY;
+                        else if (s === 'hands') this.playingState.equippedArmorHandsDurability = MAX_ARMOR_DURABILITY;
+                        else if (s === 'feet') this.playingState.equippedArmorFeetDurability = MAX_ARMOR_DURABILITY;
+                    } else if (hit.source === 'armor-bag' && 'armorBagIndex' in hit) {
+                        const item = this.playingState.inventorySlots?.[hit.armorBagIndex];
+                        if (item) {
+                            this.playingState.inventorySlots![hit.armorBagIndex] = { key: item.key, durability: MAX_ARMOR_DURABILITY };
                         }
                     }
                     this.refreshInventoryPanel();
                 }
                 return true;
             }
+            if (hit?.type === 'armor-item') {
+                const gold = this.playingState.gold ?? 0;
+                if (gold >= hit.price) {
+                    ensureInventoryInitialized(this.playingState);
+                    const empty = this.playingState.inventorySlots?.findIndex((s) => s == null) ?? -1;
+                    if (empty >= 0) {
+                        this.playingState.gold = gold - hit.price;
+                        this.playingState.inventorySlots![empty] = { key: hit.armorKey, durability: MAX_ARMOR_DURABILITY };
+                        this.refreshInventoryPanel();
+                    }
+                }
+                return true;
+            }
             if (hit?.type === 'dropdown') {
                 const exp = this.playingState.shopExpandedWeapons ?? {};
-                const wasExpanded = exp[hit.weaponKey] !== false;
+                const wasExpanded = exp[hit.weaponKey] === true;
                 this.playingState.shopExpandedWeapons = { ...exp, [hit.weaponKey]: !wasExpanded };
                 return true;
             }
@@ -1225,6 +1352,7 @@ class Game {
             if (hit?.type === 'close') {
                 this.playingState.inventoryOpen = false;
                 this.weaponTooltipHover = null;
+                this.armorTooltipHover = null;
                 this.hudController.setInventoryPanelVisible(false);
                 return true;
             }
@@ -1236,6 +1364,7 @@ class Game {
                 this.playingState.chestOpen = false;
                 this.playingState.chestUseCooldown = 0;
                 this.weaponTooltipHover = null;
+                this.armorTooltipHover = null;
                 return true;
             }
             const layout = getChestLayout(this.canvas);
@@ -1244,6 +1373,7 @@ class Game {
                 this.playingState.chestOpen = false;
                 this.playingState.chestUseCooldown = 0;
                 this.weaponTooltipHover = null;
+                this.armorTooltipHover = null;
                 return true;
             }
         }
@@ -1343,13 +1473,20 @@ class Game {
             return true;
         }
         if (invHit?.type === 'inventory-slot' && invHit.weaponKey) {
+            const isArmor = !!getArmor(invHit.weaponKey);
             ds.isDragging = true;
-            ds.weaponKey = invHit.weaponKey;
-            ds.durability = undefined;
             ds.sourceSlotIndex = invHit.index;
             ds.sourceContext = 'inventory';
             ds.pointerX = x;
             ds.pointerY = y;
+            if (isArmor) {
+                ds.weaponKey = '';
+                ds.armorKey = invHit.weaponKey;
+            } else {
+                ds.weaponKey = invHit.weaponKey;
+                ds.armorKey = undefined;
+                ds.durability = undefined;
+            }
             return true;
         }
         if (invHit?.type === 'equipment') {
@@ -1360,6 +1497,19 @@ class Game {
                 ds.durability = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandDurability : this.playingState.equippedOffhandDurability;
                 ds.sourceSlotIndex = invHit.slot === 'mainhand' ? 0 : 1;
                 ds.sourceContext = 'equipment';
+                ds.pointerX = x;
+                ds.pointerY = y;
+                return true;
+            }
+        }
+        if (invHit?.type === 'armor-equipment') {
+            const key = invHit.slot === 'head' ? this.playingState.equippedArmorHeadKey : invHit.slot === 'chest' ? this.playingState.equippedArmorChestKey : invHit.slot === 'hands' ? this.playingState.equippedArmorHandsKey : this.playingState.equippedArmorFeetKey;
+            if (key && key !== 'none') {
+                ds.isDragging = true;
+                ds.weaponKey = '';
+                ds.armorKey = key;
+                ds.sourceArmorSlot = invHit.slot;
+                ds.sourceContext = 'armor';
                 ds.pointerX = x;
                 ds.pointerY = y;
                 return true;
@@ -1404,6 +1554,15 @@ class Game {
                 invLayout,
                 this.playingState.rerollStationOpen ? (this.playingState.chestSlots ?? []) : undefined
             );
+            if (invHit?.type === 'armor-equipment') {
+                const key = invHit.slot === 'head' ? this.playingState.equippedArmorHeadKey : invHit.slot === 'chest' ? this.playingState.equippedArmorChestKey : invHit.slot === 'hands' ? this.playingState.equippedArmorHandsKey : this.playingState.equippedArmorFeetKey;
+                const durability = invHit.slot === 'head' ? this.playingState.equippedArmorHeadDurability : invHit.slot === 'chest' ? this.playingState.equippedArmorChestDurability : invHit.slot === 'hands' ? this.playingState.equippedArmorHandsDurability : this.playingState.equippedArmorFeetDurability;
+                if (key && key !== 'none') {
+                    this.armorTooltipHover = { armorKey: key, x, y, durability };
+                    this.weaponTooltipHover = null;
+                    return;
+                }
+            }
             if (invHit?.type === 'chest-slot' && invHit.key) {
                 const chestSlots = this.playingState.chestSlots ?? [];
                 const instance = chestSlots[invHit.index];
@@ -1420,6 +1579,12 @@ class Game {
                 return;
             }
             if (invHit?.type === 'inventory-slot' && invHit.weaponKey) {
+                if (getArmor(invHit.weaponKey)) {
+                    this.armorTooltipHover = { armorKey: invHit.weaponKey, x, y, durability: invHit.durability };
+                    this.weaponTooltipHover = null;
+                    return;
+                }
+                this.armorTooltipHover = null;
                 this.weaponTooltipHover = {
                     weaponKey: invHit.weaponKey,
                     x,
@@ -1436,6 +1601,7 @@ class Game {
                     const prefixId = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandPrefixId : this.playingState.equippedOffhandPrefixId;
                     const suffixId = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandSuffixId : this.playingState.equippedOffhandSuffixId;
                     const durability = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandDurability : this.playingState.equippedOffhandDurability;
+                    this.armorTooltipHover = null;
                     this.weaponTooltipHover = { weaponKey: key, x, y, durability, prefixId, suffixId };
                     return;
                 }
@@ -1447,6 +1613,7 @@ class Game {
             const hit = hitTestChest(x, y, layout, chestSlots);
             if (hit?.type === 'weapon-slot' && hit.key) {
                 const instance = chestSlots[hit.index];
+                this.armorTooltipHover = null;
                 this.weaponTooltipHover = {
                     weaponKey: hit.key,
                     x,
@@ -1459,23 +1626,50 @@ class Game {
             }
         }
         this.weaponTooltipHover = null;
+        this.armorTooltipHover = null;
     }
 
     handleInventoryChestPointerUp(x: number, y: number): boolean {
         const ds = this.inventoryDragState;
         if (!ds.isDragging) return false;
         const weaponKey = ds.weaponKey;
+        const armorKey = ds.armorKey;
         const sourceIndex = ds.sourceSlotIndex;
         const sourceContext = ds.sourceContext;
+        const sourceArmorSlot = ds.sourceArmorSlot;
+        const sourceArmorInvIndex = (ds.sourceContext === 'inventory' && ds.armorKey) ? ds.sourceSlotIndex : undefined;
         const dragDurability = ds.durability;
         ds.isDragging = false;
         ds.weaponKey = '';
+        ds.armorKey = undefined;
+        ds.sourceArmorSlot = undefined;
         ds.durability = undefined;
         ds.sourceSlotIndex = -1;
 
         const ps = this.playingState;
         const sync = () => this.syncPlayerWeaponsFromState();
-        if (!ps.inventorySlots || ps.inventorySlots.length < INVENTORY_SLOT_COUNT) return true;
+        if (!ps.inventorySlots || ps.inventorySlots.length < INVENTORY_SLOT_COUNT) {
+            if (armorKey && (this.playingState.inventoryOpen || this.playingState.chestOpen)) {
+                const invLayout = getInventoryLayout(this.canvas);
+                const invHit = hitTestInventory(x, y, ps, invLayout);
+                if (invHit?.type === 'armor-equipment' && sourceArmorSlot !== undefined && canEquipArmorInSlot(armorKey, invHit.slot)) {
+                    swapArmorWithArmor(ps, sourceArmorSlot, invHit.slot);
+                    this.refreshInventoryPanel();
+                } else if (invHit?.type === 'armor-equipment' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex >= 0 && canEquipArmorInSlot(armorKey, invHit.slot)) {
+                    const slotHasItem = (invHit.slot === 'head' ? ps.equippedArmorHeadKey : invHit.slot === 'chest' ? ps.equippedArmorChestKey : invHit.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey) !== 'none';
+                    if (slotHasItem) swapArmorWithInventory(ps, invHit.slot, sourceArmorInvIndex);
+                    else equipArmorFromInventory(ps, sourceArmorInvIndex, invHit.slot);
+                    this.refreshInventoryPanel();
+                } else if (invHit?.type === 'inventory-slot' && sourceArmorSlot !== undefined) {
+                    unequipArmorToInventory(ps, sourceArmorSlot, invHit.index);
+                    this.refreshInventoryPanel();
+                } else if (invHit?.type === 'inventory-slot' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex !== invHit.index) {
+                    swapInventorySlots(ps, sourceArmorInvIndex, invHit.index);
+                    this.refreshInventoryPanel();
+                }
+            }
+            return true;
+        }
 
         if (this.playingState.rerollStationOpen) {
             const rerollLayout = getRerollOverlayLayout(this.canvas, ps);
@@ -1500,6 +1694,28 @@ class Game {
                 invLayout,
                 this.playingState.rerollStationOpen ? (ps.chestSlots ?? []) : undefined
             );
+            if (armorKey && invHit?.type === 'armor-equipment' && sourceArmorSlot !== undefined && canEquipArmorInSlot(armorKey, invHit.slot)) {
+                swapArmorWithArmor(ps, sourceArmorSlot, invHit.slot);
+                this.refreshInventoryPanel();
+                return true;
+            }
+            if (armorKey && invHit?.type === 'armor-equipment' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex >= 0 && canEquipArmorInSlot(armorKey, invHit.slot)) {
+                const slotHasItem = (invHit.slot === 'head' ? ps.equippedArmorHeadKey : invHit.slot === 'chest' ? ps.equippedArmorChestKey : invHit.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey) !== 'none';
+                if (slotHasItem) swapArmorWithInventory(ps, invHit.slot, sourceArmorInvIndex);
+                else equipArmorFromInventory(ps, sourceArmorInvIndex, invHit.slot);
+                this.refreshInventoryPanel();
+                return true;
+            }
+            if (armorKey && invHit?.type === 'inventory-slot' && sourceArmorSlot !== undefined) {
+                unequipArmorToInventory(ps, sourceArmorSlot, invHit.index);
+                this.refreshInventoryPanel();
+                return true;
+            }
+            if (armorKey && invHit?.type === 'inventory-slot' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex !== invHit.index) {
+                swapInventorySlots(ps, sourceArmorInvIndex, invHit.index);
+                this.refreshInventoryPanel();
+                return true;
+            }
             if (invHit?.type === 'chest-slot') {
                 if (sourceContext === 'rerollSlot') {
                     moveFromRerollSlotTo(ps, 'chest', 0);
@@ -1511,6 +1727,7 @@ class Game {
                 } else if (sourceContext === 'equipment') {
                     putInChestFromEquipment(ps, sourceIndex === 0 ? 'mainhand' : 'offhand', sync);
                 }
+                this.refreshInventoryPanel();
                 return true;
             }
             if (invHit?.type === 'equipment') {
@@ -1700,17 +1917,17 @@ class Game {
                     }
                     if (this.playingState.chestOpen) {
                         renderChest(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover);
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover);
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover);
                     }
                     if (this.playingState.shopOpen) {
                         renderShop(this.ctx, this.canvas, this.playingState);
                     }
                     if (this.playingState.rerollStationOpen) {
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, { includeChestInPanel: true });
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover, { includeChestInPanel: true });
                         renderRerollOverlay(this.ctx, this.canvas, this.playingState);
                     }
                     if (this.playingState.inventoryOpen) {
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover);
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover);
                     }
                     if (this.inventoryDragState.isDragging && this.inventoryDragState.weaponKey) {
                         renderDragGhost(this.ctx, this.inventoryDragState);
@@ -1809,7 +2026,7 @@ class Game {
                     this.screenManager.render(this.settings);
                 }
                 if (this.playingState.inventoryOpen) {
-                    renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover);
+                    renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover);
                 }
                 if (this.inventoryDragState.isDragging && this.inventoryDragState.weaponKey) {
                     renderDragGhost(this.ctx, this.inventoryDragState);

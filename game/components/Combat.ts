@@ -91,6 +91,8 @@ export class Combat implements Component {
   currentAttackIsThrust: boolean;
   currentAttackThrustWidth: number;
   isBlocking: boolean;
+  blockStartTime: number;
+  parryFlashUntil: number;
   blockInputBuffered: boolean;
   blockInputBufferedFacingAngle: number | null;
   attackInputBuffered: AttackInputBuffered | null;
@@ -147,6 +149,8 @@ export class Combat implements Component {
     }
     this.windUpTime = windUpTime;
     this.isBlocking = false;
+    this.blockStartTime = 0;
+    this.parryFlashUntil = 0;
     this.blockInputBuffered = false;
     this.blockInputBufferedFacingAngle = null;
     this.attackInputBuffered = null;
@@ -273,6 +277,7 @@ export class Combat implements Component {
       (blockConfig as { enabled?: boolean }).enabled
     ) {
       this.isBlocking = true;
+      this.blockStartTime = Date.now();
       return true;
     }
     return false;
@@ -421,6 +426,26 @@ export class Combat implements Component {
     let angleDiff = Math.abs(attackAngle - facingAngle);
     if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
     return angleDiff <= blockConfig.arcRad / 2;
+  }
+
+  /** True if blocking and block started within the weapon's parry window (e.g. greatsword). */
+  isInParryWindow(): boolean {
+    if (!this.isPlayer || !this.isBlocking) return false;
+    const blockConfig = this._getBlockConfig() as { parryWindowMs?: number } | null;
+    const parryWindowMs = blockConfig?.parryWindowMs ?? 0;
+    if (parryWindowMs <= 0) return false;
+    return (Date.now() - this.blockStartTime) <= parryWindowMs;
+  }
+
+  /** Parry rally percent from block config (0–1). Only meaningful when parryWindowMs > 0. */
+  getParryRallyPercent(): number {
+    const blockConfig = this._getBlockConfig() as { parryRallyPercent?: number } | null;
+    return Math.max(0, Math.min(1, blockConfig?.parryRallyPercent ?? 0));
+  }
+
+  /** Call when a parry succeeds: absorb damage, add rally, trigger white flash. */
+  applyParry(rallyAmount: number, flashDurationMs = 220): void {
+    this.parryFlashUntil = Date.now() + flashDurationMs;
   }
 
   _applyAttackResult(result: Record<string, unknown>): void {

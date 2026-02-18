@@ -103,7 +103,9 @@ const greatswordConfig: WeaponConfigInput = {
         arcDegrees: 100,
         damageReduction: 0.45,
         staminaCost: 22,
-        animationKey: 'block'
+        animationKey: 'block',
+        parryWindowMs: 200,
+        parryRallyPercent: 0.75
     },
     stages: [
         { name: 'slash1', arcDegrees: 120, duration: 480, staminaCost: 16, range: 100, damageMultiplier: 1.0, animationKey: 'melee', stunBuildup: 35 },

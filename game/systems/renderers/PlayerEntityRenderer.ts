@@ -127,6 +127,16 @@ export const PlayerEntityRenderer = {
             if (showPlayerHitboxIndicators && combat && combat.isAttacking && (combat.currentAttackAnimationKey === 'meleeSpin' || combat.currentAttackIsCircular)) {
                 PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement, camera, { comboColors: true });
             }
+            // Parry success: brief white flash
+            if (combat && combat.parryFlashUntil > Date.now()) {
+                ctx.save();
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.ellipse(screenX, screenY, (transform.width / 2 + 6) * camera.zoom, (transform.height / 2 + 6) * camera.zoom, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
         } finally {
             ctx.restore();
         }

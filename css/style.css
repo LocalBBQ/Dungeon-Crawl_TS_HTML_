@@ -502,6 +502,41 @@ body {
     border-bottom: 1px solid rgba(61, 40, 23, 0.4);
 }
 
+.inventory-equipment-armor {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(61, 40, 23, 0.4);
+}
+
+.inventory-armor-bag {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+}
+
+.armor-bag-slot {
+    aspect-ratio: 1;
+    min-width: 0;
+    min-height: 0;
+    background: rgba(18, 12, 8, 0.55);
+    border: 1px solid rgba(61, 40, 23, 0.45);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #c9a86a;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.armor-bag-slot:hover {
+    border-color: rgba(201, 162, 39, 0.4);
+    background: rgba(32, 24, 16, 0.6);
+}
+
 .equipment-slot {
     display: flex;
     flex-direction: column;
@@ -572,8 +607,8 @@ body {
     font-style: italic;
 }
 
-/* Weapon chest overlay (hub: E at chest) */
-.weapon-chest-overlay {
+/* Equipment chest overlay (hub: E at chest) */
+.equipment-chest-overlay {
     position: absolute;
     inset: 0;
     z-index: 100;
@@ -584,12 +619,12 @@ body {
     background: rgba(10, 8, 6, 0.75);
 }
 
-.weapon-chest-overlay.hidden {
+.equipment-chest-overlay.hidden {
     display: none;
     pointer-events: none;
 }
 
-.weapon-chest-panel {
+.equipment-chest-panel {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -602,7 +637,7 @@ body {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(120, 90, 60, 0.15);
 }
 
-.weapon-chest-title {
+.equipment-chest-title {
     font-size: 18px;
     font-weight: 700;
     color: #c9a227;
@@ -611,14 +646,14 @@ body {
     margin: 0;
 }
 
-.weapon-chest-grid {
+.equipment-chest-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     max-width: 100%;
 }
 
-.weapon-chest-slot {
+.equipment-chest-slot {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -637,27 +672,27 @@ body {
     user-select: none;
 }
 
-.weapon-chest-slot:active {
+.equipment-chest-slot:active {
     cursor: grabbing;
 }
 
-.weapon-chest-slot:hover {
+.equipment-chest-slot:hover {
     border-color: rgba(201, 162, 39, 0.5);
     background: rgba(44, 32, 20, 0.6);
 }
 
-.weapon-chest-slot.equipped {
+.equipment-chest-slot.equipped {
     border-color: rgba(201, 162, 39, 0.8);
     background: rgba(201, 162, 39, 0.15);
     color: #e8dcc8;
 }
 
-.weapon-chest-slot.drag-over {
+.equipment-chest-slot.drag-over {
     border-color: rgba(201, 162, 39, 0.8);
     background: rgba(201, 162, 39, 0.12);
 }
 
-.weapon-chest-equipment {
+.equipment-chest-equipment {
     display: flex;
     gap: 14px;
     width: 100%;
@@ -667,7 +702,7 @@ body {
     margin-top: 4px;
 }
 
-.weapon-chest-equipment .equipment-slot {
+.equipment-chest-equipment .equipment-slot {
     min-width: 110px;
 }
 
@@ -729,7 +764,7 @@ body {
     }
 }
 
-.weapon-chest-back {
+.equipment-chest-back {
     padding: 10px 24px;
     font-family: inherit;
     font-size: 14px;
@@ -741,7 +776,7 @@ body {
     cursor: pointer;
 }
 
-.weapon-chest-back:hover {
+.equipment-chest-back:hover {
     color: #c9a86a;
     border-color: #6a4030;
     background: #241810;

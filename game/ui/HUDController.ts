@@ -1,9 +1,11 @@
 /**
- * HUD and inventory panel updates: health/stamina orbs, inventory screen, player portrait, weapon chest overlay.
+ * HUD and inventory panel updates: health/stamina orbs, inventory screen, player portrait, equipment chest overlay.
  */
 import type { Entity } from '../entities/Entity.js';
-import type { InventorySlot, PlayingStateShape } from '../state/PlayingState.js';
-import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY } from '../state/PlayingState.js';
+import type { ArmorSlotId, InventorySlot, PlayingStateShape } from '../state/PlayingState.js';
+import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
+import { swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
+import { getArmor } from '../armor/armorConfigs.js';
 import {
     equipFromChestToHand,
     equipFromInventory,
@@ -41,6 +43,8 @@ export interface HUDControllerContext {
 
 const DRAG_TYPE_WEAPON = 'application/x-arpg-weapon-key';
 const DRAG_SOURCE_SLOT = 'application/x-arpg-source-slot';
+const DRAG_TYPE_ARMOR = 'application/x-arpg-armor-key';
+const DRAG_SOURCE_ARMOR = 'application/x-arpg-armor-source';
 
 export class HUDController {
     private ctx: HUDControllerContext;
@@ -51,13 +55,14 @@ export class HUDController {
         this.setupChestOverlay();
         this.setupEquipmentDropTargets();
         this.setupInventoryGridDropTargets();
+        this.setupArmorDragAndDrop();
     }
 
     private setupChestOverlay(): void {
-        const overlay = document.getElementById('weapon-chest-overlay');
+        const overlay = document.getElementById('equipment-chest-overlay');
         if (!overlay) return;
         overlay.addEventListener('click', (e) => this.handleChestOverlayClick(e));
-        const chestGrid = document.getElementById('weapon-chest-grid');
+        const chestGrid = document.getElementById('equipment-chest-grid');
         if (chestGrid) {
             chestGrid.addEventListener('dragover', (e) => this.handleChestSlotDragover(e));
             chestGrid.addEventListener('dragleave', (e) => this.handleChestSlotDragleave(e));
@@ -66,7 +71,7 @@ export class HUDController {
     }
 
     private handleChestSlotDragover(e: DragEvent): void {
-        const slot = (e.target as HTMLElement).closest?.('.weapon-chest-slot');
+        const slot = (e.target as HTMLElement).closest?.('.equipment-chest-slot');
         if (!slot || !e.dataTransfer || !this.getWeaponKeyFromDrag(e)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
@@ -74,12 +79,12 @@ export class HUDController {
     }
 
     private handleChestSlotDragleave(e: DragEvent): void {
-        const slot = (e.target as HTMLElement).closest?.('.weapon-chest-slot');
+        const slot = (e.target as HTMLElement).closest?.('.equipment-chest-slot');
         if (slot) (slot as HTMLElement).classList.remove('drag-over');
     }
 
     private handleChestSlotDrop(e: DragEvent): void {
-        const slot = (e.target as HTMLElement).closest?.('.weapon-chest-slot');
+        const slot = (e.target as HTMLElement).closest?.('.equipment-chest-slot');
         if (!slot) return;
         (slot as HTMLElement).classList.remove('drag-over');
         e.preventDefault();
@@ -158,14 +163,24 @@ export class HUDController {
 
     private handleDragOver(e: DragEvent): void {
         if (!e.dataTransfer) return;
+        const target = e.currentTarget as HTMLElement;
+        const slot = target.getAttribute('data-equip-slot');
+        const armorKey = this.getArmorKeyFromDrag(e);
+        if (armorKey && (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'feet')) {
+            if (canEquipArmorInSlot(armorKey, slot as ArmorSlotId)) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                target.classList.add('drag-over');
+            }
+            return;
+        }
         const weaponKey = this.getWeaponKeyFromDrag(e);
         if (!weaponKey) return;
-        const slot = (e.currentTarget as HTMLElement).getAttribute('data-equip-slot');
         if (slot !== 'mainhand' && slot !== 'offhand') return;
         if (!canEquipWeaponInSlot(weaponKey, slot)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        (e.currentTarget as HTMLElement).classList.add('drag-over');
+        target.classList.add('drag-over');
     }
 
     private handleDragLeave(e: DragEvent): void {
@@ -177,22 +192,92 @@ export class HUDController {
         return key && Weapons[key] ? key : null;
     }
 
+    private getArmorKeyFromDrag(e: DragEvent): string | null {
+        const key = e.dataTransfer?.getData(DRAG_TYPE_ARMOR);
+        return key && getArmor(key) ? key : null;
+    }
+
     private handleDrop(e: DragEvent): void {
-        (e.currentTarget as HTMLElement).classList.remove('drag-over');
+        const target = e.currentTarget as HTMLElement;
+        target.classList.remove('drag-over');
         e.preventDefault();
+        const ps = this.ctx.playingState;
+        const slot = target.getAttribute('data-equip-slot');
+        const armorKey = this.getArmorKeyFromDrag(e);
+        const armorSource = e.dataTransfer?.getData(DRAG_SOURCE_ARMOR) ?? '';
+
+        if (armorKey && (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'feet')) {
+            const armorSlot = slot as ArmorSlotId;
+            if (armorSource.startsWith('equip:')) {
+                const otherSlot = armorSource.slice(6) as ArmorSlotId;
+                if (otherSlot !== armorSlot) swapArmorWithArmor(ps, otherSlot, armorSlot);
+            }
+            this.refreshArmorLabels();
+            return;
+        }
+
         const weaponKey = this.getWeaponKeyFromDrag(e);
-        const slot = (e.currentTarget as HTMLElement).getAttribute('data-equip-slot');
         if (!weaponKey || (slot !== 'mainhand' && slot !== 'offhand')) return;
         if (!canEquipWeaponInSlot(weaponKey, slot)) return;
         const sourceStr = e.dataTransfer?.getData(DRAG_SOURCE_SLOT) ?? '';
         const sourceIndex = sourceStr === '' ? -1 : parseInt(sourceStr, 10);
-        const ps = this.ctx.playingState;
         if (sourceIndex >= 0 && sourceIndex < INVENTORY_SLOT_COUNT && !isNaN(sourceIndex)) {
             equipFromInventory(ps, sourceIndex, slot as 'mainhand' | 'offhand', () => this.syncPlayerWeapons());
         }
         this.refreshChestEquipmentLabels();
         this.refreshInventoryEquipmentLabels();
         this.refreshChestGridEquippedState();
+    }
+
+    private getEquippedArmorKey(slot: ArmorSlotId): string {
+        const ps = this.ctx.playingState;
+        switch (slot) {
+            case 'head': return ps.equippedArmorHeadKey;
+            case 'chest': return ps.equippedArmorChestKey;
+            case 'hands': return ps.equippedArmorHandsKey;
+            case 'feet': return ps.equippedArmorFeetKey;
+        }
+    }
+
+    private setupArmorDragAndDrop(): void {
+        document.querySelectorAll('[data-equip-slot="head"], [data-equip-slot="chest"], [data-equip-slot="hands"], [data-equip-slot="feet"]').forEach((el) => {
+            const target = el as HTMLElement;
+            if (target.getAttribute('data-drop-context') !== 'armor') return;
+            target.addEventListener('dragstart', (e) => this.handleArmorEquipmentDragStart(e));
+        });
+    }
+
+    private handleArmorEquipmentDragStart(e: DragEvent): void {
+        const slot = (e.target as HTMLElement).closest?.('[data-equip-slot]')?.getAttribute('data-equip-slot') as ArmorSlotId | null;
+        if (!slot || !e.dataTransfer) return;
+        const key = this.getEquippedArmorKey(slot);
+        if (!key || key === 'none') return;
+        e.dataTransfer.setData(DRAG_TYPE_ARMOR, key);
+        e.dataTransfer.setData(DRAG_SOURCE_ARMOR, 'equip:' + slot);
+        e.dataTransfer.effectAllowed = 'move';
+    }
+
+    private refreshArmorLabels(): void {
+        const ps = this.ctx.playingState;
+        const slots: ArmorSlotId[] = ['head', 'chest', 'hands', 'feet'];
+        for (const slot of slots) {
+            const el = document.getElementById('inventory-equip-armor-' + slot);
+            if (!el) continue;
+            const key = this.getEquippedArmorKey(slot);
+            const dur = slot === 'head' ? ps.equippedArmorHeadDurability : slot === 'chest' ? ps.equippedArmorChestDurability : slot === 'hands' ? ps.equippedArmorHandsDurability : ps.equippedArmorFeetDurability;
+            if (key && key !== 'none') {
+                const config = getArmor(key);
+                el.textContent = config ? `${config.name} (${dur}/${MAX_ARMOR_DURABILITY})` : `${key} (${dur})`;
+                el.classList.remove('empty');
+                el.closest('.equipment-slot')?.classList.add('equipped');
+                (el.closest('.equipment-slot') as HTMLElement)?.setAttribute('draggable', 'true');
+            } else {
+                el.textContent = '—';
+                el.classList.add('empty');
+                el.closest('.equipment-slot')?.classList.remove('equipped');
+                (el.closest('.equipment-slot') as HTMLElement)?.setAttribute('draggable', 'false');
+            }
+        }
     }
 
     private syncPlayerWeapons(): void {
@@ -305,13 +390,13 @@ export class HUDController {
 
     private initChestGrid(): void {
         if (this.chestGridInitialized) return;
-        const grid = document.getElementById('weapon-chest-grid');
+        const grid = document.getElementById('equipment-chest-grid');
         if (!grid) return;
         for (const key of CHEST_WEAPON_ORDER) {
             if (!Weapons[key]) continue;
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'weapon-chest-slot';
+            btn.className = 'equipment-chest-slot';
             btn.setAttribute('data-weapon-key', key);
             btn.draggable = true;
             btn.textContent = getWeaponSymbol(key);
@@ -333,11 +418,11 @@ export class HUDController {
     }
 
     private refreshChestGridEquippedState(): void {
-        const grid = document.getElementById('weapon-chest-grid');
+        const grid = document.getElementById('equipment-chest-grid');
         if (!grid) return;
         const mainhand = this.ctx.playingState.equippedMainhandKey;
         const offhand = this.ctx.playingState.equippedOffhandKey;
-        for (const el of grid.querySelectorAll('.weapon-chest-slot')) {
+        for (const el of grid.querySelectorAll('.equipment-chest-slot')) {
             const slot = el as HTMLElement;
             const key = slot.getAttribute('data-weapon-key');
             slot.classList.toggle('equipped', key === mainhand || key === offhand);
@@ -345,7 +430,7 @@ export class HUDController {
     }
 
     setChestOverlayVisible(visible: boolean): void {
-        const el = document.getElementById('weapon-chest-overlay');
+        const el = document.getElementById('equipment-chest-overlay');
         if (el) {
             el.classList.toggle('hidden', !visible);
             if (visible) {
@@ -482,6 +567,7 @@ export class HUDController {
         if (goldEl) goldEl.textContent = String(this.ctx.playingState.gold);
 
         this.refreshInventoryEquipmentLabels();
+        this.refreshArmorLabels();
         this.refreshInventoryGridFromState();
         this.drawInventoryPlayerPortrait();
     }

@@ -27,6 +27,8 @@ import { WanderBehavior } from '../behaviors/WanderBehavior.ts';
 import type { Quest } from '../types/quest.ts';
 import type { HitCategory } from '../types/combat.js';
 import { rollWeaponDrop } from '../config/lootConfig.js';
+import type { PlayingStateShape } from '../state/PlayingState.js';
+import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 
 /** Base enemy type -> tier-2 variant (used when difficulty has enemyTier2Chance > 0). */
 const TIER2_MAP: Record<string, string> = {
@@ -43,6 +45,17 @@ interface ObstacleManagerLike {
     canMoveTo(x: number, y: number, w: number, h: number): boolean;
 }
 
+/** One deferred scene-tile spawn: spawn when player is within 2 tiles. Resolve entityManager/obstacleManager from systems at spawn time. */
+interface PendingTileSpawn {
+    centerX: number;
+    centerY: number;
+    tileSize: number;
+    count: number;
+    enemyTypes: string[] | null;
+    effectivePackSize: { min: number; max: number };
+    tilePackOptions: Record<string, unknown>;
+}
+
 export class EnemyManager {
     enemies: Entity[] = [];
     spawnTimer = 0;
@@ -52,6 +65,8 @@ export class EnemyManager {
     enemiesSpawned = false;
     enemiesKilledThisLevel = 0;
     _packUpdateTick = 0;
+    /** Scene-tile packs deferred until player is within 2 tiles; cleared on changeLevel, filled in spawnLevelEnemies. */
+    pendingSceneTileSpawns: PendingTileSpawn[] = [];
     private config: GameConfigShape = GameConfig;
     private activeQuest: Quest | null = null;
 
@@ -423,7 +438,7 @@ export class EnemyManager {
 
         const SPAWN_EXCLUDE_RADIUS = 300;
 
-        // Scene-tile spawn hints: extra packs on tiles that define spawn (e.g. goblinCamp, banditAmbush)
+        // Scene-tile spawn hints: defer until player is within 2 tiles (see update())
         const obstacles = levelConfig.obstacles || {};
         if (obstacles.useSceneTiles && obstacleManager && typeof obstacleManager.getLastPlacedTiles === 'function') {
             const placed = obstacleManager.getLastPlacedTiles();
@@ -439,7 +454,7 @@ export class EnemyManager {
                 }
                 const count = (tile.spawn.count != null && tile.spawn.count > 0) ? tile.spawn.count : 1;
                 const tileWanderRadius = tileSize * 0.45;
-                const tilePackOptions = {
+                const tilePackOptions: Record<string, unknown> = {
                     patrol: !!packConfig.patrol,
                     packSpread: packConfig.packSpread || null,
                     wanderRadius: tileWanderRadius,
@@ -447,17 +462,15 @@ export class EnemyManager {
                     idleBehaviorConfig: WanderBehavior.createWanderConfig(centerX, centerY, tileWanderRadius)
                 };
                 const tileEnemyTypes = (tile.spawn.enemyTypes && tile.spawn.enemyTypes.length > 0) ? tile.spawn.enemyTypes : enemyTypes;
-                for (let i = 0; i < count; i++) {
-                    this.spawnPackAt(
-                        centerX, centerY,
-                        tileSize * 0.35,
-                        effectivePackSize,
-                        entityManager,
-                        obstacleManager,
-                        tileEnemyTypes,
-                        tilePackOptions
-                    );
-                }
+                this.pendingSceneTileSpawns.push({
+                    centerX,
+                    centerY,
+                    tileSize,
+                    count,
+                    enemyTypes: tileEnemyTypes,
+                    effectivePackSize,
+                    tilePackOptions
+                });
             }
         }
     }
@@ -469,6 +482,46 @@ export class EnemyManager {
         const packRadius = packConfig.radius;
         const minAllies = packConfig.minAllies;
         const packModifiers = this.config.packModifiers || {};
+
+        // Spawn deferred scene-tile packs when player is within 2 tiles (ease: max 1–2 tiles per frame)
+        const SPAWN_TILES_AWAY = 2;
+        const MAX_TILE_SPAWNS_PER_FRAME = 2;
+        const levelConfig = this.config.levels[this.currentLevel] as { obstacles?: { sceneTileLayout?: { tileSize?: number } } } | undefined;
+        const sceneTileSize = levelConfig?.obstacles?.sceneTileLayout?.tileSize ?? SceneTiles.defaultTileSize;
+        const playerEntity = systems?.get('entities')?.get('player');
+        const playerTransform = playerEntity?.getComponent(Transform);
+        if (playerTransform && entityManager && obstacleManager && this.pendingSceneTileSpawns.length > 0) {
+            const playerTileCol = Math.floor(playerTransform.x / sceneTileSize);
+            const playerTileRow = Math.floor(playerTransform.y / sceneTileSize);
+            const inRange: PendingTileSpawn[] = [];
+            for (const p of this.pendingSceneTileSpawns) {
+                const tileCol = Math.floor(p.centerX / sceneTileSize);
+                const tileRow = Math.floor(p.centerY / sceneTileSize);
+                const distTiles = Math.max(Math.abs(playerTileCol - tileCol), Math.abs(playerTileRow - tileRow));
+                if (distTiles <= SPAWN_TILES_AWAY) inRange.push(p);
+            }
+            // Closer tiles first
+            inRange.sort((a, b) => {
+                const da = Math.max(Math.abs(playerTileCol - Math.floor(a.centerX / sceneTileSize)), Math.abs(playerTileRow - Math.floor(a.centerY / sceneTileSize)));
+                const db = Math.max(Math.abs(playerTileCol - Math.floor(b.centerX / sceneTileSize)), Math.abs(playerTileRow - Math.floor(b.centerY / sceneTileSize)));
+                return da - db;
+            });
+            const toSpawn = inRange.slice(0, MAX_TILE_SPAWNS_PER_FRAME);
+            for (const p of toSpawn) {
+                for (let i = 0; i < p.count; i++) {
+                    this.spawnPackAt(
+                        p.centerX, p.centerY,
+                        p.tileSize * 0.35,
+                        p.effectivePackSize,
+                        entityManager,
+                        obstacleManager,
+                        p.enemyTypes,
+                        p.tilePackOptions
+                    );
+                }
+                this.pendingSceneTileSpawns = this.pendingSceneTileSpawns.filter((x) => x !== p);
+            }
+        }
 
         // Run pack detection only every 2 frames (saves significant CPU on level 2+ with many enemies)
         const runPackThisFrame = this._packUpdateTick === 0;
@@ -729,19 +782,30 @@ export class EnemyManager {
                     const attackerStatusLunge = enemy.getComponent(StatusEffects);
                     if (attackerStatusLunge && attackerStatusLunge.packDamageMultiplier != null) finalDamage *= attackerStatusLunge.packDamageMultiplier;
                     let blocked = false;
+                    let parried = false;
                     if (playerCombat && playerCombat.isBlocking && playerMovement) {
                         const attackAngle = Utils.angleTo(
                             playerTransform.x, playerTransform.y,
                             enemyTransform.x, enemyTransform.y
                         );
                         if (playerCombat.canBlockAttack(attackAngle, playerMovement.facingAngle)) {
-                            if (playerCombat.consumeBlockStamina('lunge')) {
-                                finalDamage = lungeDamage * (1 - playerCombat.blockDamageReduction);
+                            if (playerCombat.isInParryWindow() && playerCombat.getParryRallyPercent() > 0) {
+                                const rallyAmount = finalDamage * playerCombat.getParryRallyPercent();
+                                const rally = player.getComponent(Rally);
+                                if (rally) rally.addToPool(rallyAmount);
+                                playerCombat.applyParry(rallyAmount, 220);
+                                finalDamage = 0;
+                                blocked = true;
+                                parried = true;
+                            } else if (playerCombat.consumeBlockStamina('lunge')) {
+                                finalDamage = lungeDamage * (1 - playerCombat.getEffectiveBlockDamageReduction('lunge'));
                                 blocked = true;
                             }
                         }
                     }
-                    playerHealth.takeDamage(finalDamage, blocked);
+                    const ps = this.systems?.get<PlayingStateShape>('playingState');
+                    if (ps) finalDamage *= Math.max(0, 1 - getPlayerArmorReduction(ps));
+                    playerHealth.takeDamage(finalDamage, blocked, parried);
                     const playerStatus = player.getComponent(StatusEffects);
                     if (playerStatus) {
                         let baseStun = enemyConfig.stunBuildupPerHit ?? 0;
@@ -815,6 +879,7 @@ export class EnemyManager {
                     }
                     if (attackerStatus && attackerStatus.packDamageMultiplier != null) finalDamage *= attackerStatus.packDamageMultiplier;
                     let blocked = false;
+                    let parried = false;
 
                     const ai = enemy.getComponent(AI);
                     const enemyTypeForCategory = ai ? ai.enemyType : 'goblin';
@@ -823,20 +888,31 @@ export class EnemyManager {
                             ? 'heavy'
                             : 'light';
 
-                    // Check if player is blocking and can block this attack
+                    // Check if player is blocking and can block this attack (or parry within window)
                     if (playerCombat && playerCombat.isBlocking && playerMovement) {
                         const attackAngle = Utils.angleTo(
                             playerTransform.x, playerTransform.y,
                             enemyTransform.x, enemyTransform.y
                         );
                         if (playerCombat.canBlockAttack(attackAngle, playerMovement.facingAngle)) {
-                            if (playerCombat.consumeBlockStamina(hitCategory)) {
+                            if (playerCombat.isInParryWindow() && playerCombat.getParryRallyPercent() > 0) {
+                                const rallyAmount = finalDamage * playerCombat.getParryRallyPercent();
+                                const rally = player.getComponent(Rally);
+                                if (rally) rally.addToPool(rallyAmount);
+                                playerCombat.applyParry(rallyAmount, 220);
+                                finalDamage = 0;
+                                blocked = true;
+                                parried = true;
+                            } else if (playerCombat.consumeBlockStamina(hitCategory)) {
                                 finalDamage = finalDamage * (1 - playerCombat.getEffectiveBlockDamageReduction(hitCategory));
                                 blocked = true;
                             }
                         }
                     }
-                    playerHealth.takeDamage(finalDamage, blocked);
+
+                    const ps = this.systems?.get<PlayingStateShape>('playingState');
+                    if (ps) finalDamage *= Math.max(0, 1 - getPlayerArmorReduction(ps));
+                    playerHealth.takeDamage(finalDamage, blocked, parried);
                     const enemyTypeForStun = ai ? ai.enemyType : 'goblin';
                     const enemyConfigForStun = this.config.enemy.types[enemyTypeForStun] || this.config.enemy.types.goblin;
                     const playerStatus = player.getComponent(StatusEffects);
@@ -887,6 +963,7 @@ export class EnemyManager {
         obstacleManager: ObstacleManagerLike | null,
         playerSpawn: { x: number; y: number } | null = null
     ): void {
+        this.pendingSceneTileSpawns = [];
         this.enemiesKilledThisLevel = 0;
         const hazardManager = this.systems ? this.systems.get('hazards') : null;
         if (hazardManager && hazardManager.clearFlamePillars) {

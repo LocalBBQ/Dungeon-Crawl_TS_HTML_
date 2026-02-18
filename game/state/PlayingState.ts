@@ -46,11 +46,23 @@ export type WeaponInstance = {
 /** One inventory bag slot: weapon instance or empty. */
 export type InventorySlot = WeaponInstance | null;
 
+/** Armor equipment slot id (head, chest, hands, feet). */
+export type ArmorSlotId = 'head' | 'chest' | 'hands' | 'feet';
+
+/** One armor instance: key + durability. Same shape as WeaponInstance. */
+export type ArmorInstance = { key: string; durability: number };
+
+export const MAX_ARMOR_DURABILITY = 100;
+
 export function getSlotKey(slot: InventorySlot): string | null {
   return slot?.key ?? null;
 }
 
-export const INVENTORY_SLOT_COUNT = 24;
+/** Player inventory: 12 slots holding weapons and/or armor. */
+export const INVENTORY_SLOT_COUNT = 12;
+
+/** Chest: 24 slots for weapons (and/or armor). */
+export const CHEST_SLOT_COUNT = 24;
 
 export interface PlayingStateShape {
   portal: PortalState | null;
@@ -103,8 +115,18 @@ export interface PlayingStateShape {
   equippedOffhandSuffixId?: string;
   /** 24 slots: weapon instance or null. Starts empty; filled only by taking from chest. */
   inventorySlots: InventorySlot[];
-  /** Weapon instances in the chest. Each instance has its own durability. */
-  chestSlots: WeaponInstance[];
+  /** Chest: 24 slots. Weapons (and optionally armor) stored here. */
+  chestSlots: (WeaponInstance | null)[];
+  /** Equipped armor: key per slot, 'none' when empty. */
+  equippedArmorHeadKey: string;
+  equippedArmorChestKey: string;
+  equippedArmorHandsKey: string;
+  equippedArmorFeetKey: string;
+  /** Current durability for each equipped armor slot (0..MAX_ARMOR_DURABILITY). */
+  equippedArmorHeadDurability: number;
+  equippedArmorChestDurability: number;
+  equippedArmorHandsDurability: number;
+  equippedArmorFeetDurability: number;
   hubSelectedLevel: number;
   /** Index into questList for the selected quest on the board. */
   hubSelectedQuestIndex: number;
@@ -125,9 +147,12 @@ const INITIAL_CHEST_WEAPON_KEYS = [
   'sword_rusty', 'shield', 'defender_rusty', 'dagger_rusty', 'greatsword_rusty', 'crossbow_rusty', 'mace_rusty'
 ] as const;
 
-/** Initial chest contents: one instance of each, full durability. */
-export function getInitialChestWeapons(): WeaponInstance[] {
-  return INITIAL_CHEST_WEAPON_KEYS.map((key) => ({ key, durability: MAX_WEAPON_DURABILITY }));
+/** Initial chest contents: 24 slots, first 7 filled with one of each base weapon, rest empty. */
+export function getInitialChestWeapons(): (WeaponInstance | null)[] {
+  const filled = INITIAL_CHEST_WEAPON_KEYS.map((key) => ({ key, durability: MAX_WEAPON_DURABILITY } as WeaponInstance));
+  const slots: (WeaponInstance | null)[] = Array(CHEST_SLOT_COUNT).fill(null);
+  filled.forEach((w, i) => { slots[i] = w; });
+  return slots;
 }
 
 /** Max durability per weapon. Each confirmed hit costs 1. */
@@ -138,7 +163,7 @@ export function resolveDefaultWeapons(defaultWeapon: string, defaultOffhand?: st
   return { mainhand: defaultWeapon, offhand: defaultOffhand ?? 'none' };
 }
 
-const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, chestSlots: WeaponInstance[]): PlayingStateShape => ({
+const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, chestSlots: (WeaponInstance | null)[]): PlayingStateShape => ({
   portal: null,
   portalUseCooldown: 0,
   playerNearPortal: false,
@@ -176,7 +201,15 @@ const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, ch
   equippedMainhandDurability: MAX_WEAPON_DURABILITY,
   equippedOffhandDurability: MAX_WEAPON_DURABILITY,
   inventorySlots: Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[],
-  chestSlots: chestSlots.map((i) => ({ key: i.key, durability: i.durability, prefixId: i.prefixId, suffixId: i.suffixId })),
+  chestSlots: chestSlots.map((i) => i ? { key: i.key, durability: i.durability, prefixId: i.prefixId, suffixId: i.suffixId } : null),
+  equippedArmorHeadKey: 'none',
+  equippedArmorChestKey: 'none',
+  equippedArmorHandsKey: 'none',
+  equippedArmorFeetKey: 'none',
+  equippedArmorHeadDurability: MAX_ARMOR_DURABILITY,
+  equippedArmorChestDurability: MAX_ARMOR_DURABILITY,
+  equippedArmorHandsDurability: MAX_ARMOR_DURABILITY,
+  equippedArmorFeetDurability: MAX_ARMOR_DURABILITY,
   hubSelectedLevel: 1,
   hubSelectedQuestIndex: 0,
   questList: [],
@@ -223,7 +256,15 @@ export class PlayingState implements PlayingStateShape {
   equippedMainhandDurability = MAX_WEAPON_DURABILITY;
   equippedOffhandDurability = MAX_WEAPON_DURABILITY;
   inventorySlots: InventorySlot[] = Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[];
-  chestSlots: WeaponInstance[] = getInitialChestWeapons();
+  chestSlots: (WeaponInstance | null)[] = getInitialChestWeapons();
+  equippedArmorHeadKey = 'none';
+  equippedArmorChestKey = 'none';
+  equippedArmorHandsKey = 'none';
+  equippedArmorFeetKey = 'none';
+  equippedArmorHeadDurability = MAX_ARMOR_DURABILITY;
+  equippedArmorChestDurability = MAX_ARMOR_DURABILITY;
+  equippedArmorHandsDurability = MAX_ARMOR_DURABILITY;
+  equippedArmorFeetDurability = MAX_ARMOR_DURABILITY;
   hubSelectedLevel = 1;
   hubSelectedQuestIndex = 0;
   questList: Quest[] = [];

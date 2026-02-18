@@ -752,7 +752,7 @@ export class ScreenManager {
         this.ctx.textBaseline = 'middle';
         this.ctx.fillStyle = '#c9a227';
         this.ctx.font = '700 26px Cinzel, Georgia, serif';
-        this.ctx.fillText('Choose weapon', cx, height / 2 - 90);
+        this.ctx.fillText('Equipment', cx, height / 2 - 90);
 
         const b = this.getWeaponChestOverlayBounds();
         for (const row of b.rows) {
@@ -1020,7 +1020,7 @@ export class ScreenManager {
             'Shift + Left click — Dash attack',
             'E — Portal to next area',
             'B — Return to Sanctuary',
-            'In Sanctuary: E at board — Level select · E at chest — Change weapon · E at shop — Buy weapons'
+            'In Sanctuary: E at board — Level select · E at chest — Equipment · E at shop — Buy weapons'
         ];
         this.ctx.fillStyle = '#e8dcc8';
         this.ctx.font = '500 15px Cinzel, Georgia, serif';

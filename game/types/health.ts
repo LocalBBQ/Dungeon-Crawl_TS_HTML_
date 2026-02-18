@@ -9,6 +9,6 @@ export interface HealthShape {
   wasJustHit: boolean;
   readonly isDead: boolean;
   readonly percent: number;
-  takeDamage(amount: number, isBlocked?: boolean): boolean;
+  takeDamage(amount: number, isBlocked?: boolean, isParry?: boolean): boolean;
   heal(amount: number): void;
 }
