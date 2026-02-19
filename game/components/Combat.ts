@@ -506,6 +506,9 @@ export class Combat implements Component {
     if (this.isPlayer) {
       if (this.isAttacking) {
         this.attackInputBuffered = { targetX, targetY, chargeDuration, options: options || {} };
+        // #region agent log
+        if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38aa30'},body:JSON.stringify({sessionId:'38aa30',location:'Combat.ts:attack',message:'buffered (isAttacking)',data:{chargeDuration},timestamp:Date.now(),hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         return false;
       }
       const staminaCost =
@@ -513,6 +516,9 @@ export class Combat implements Component {
           .getNextAttackStaminaCost?.(chargeDuration, options) ?? 0;
       const stamina = this.entity?.getComponent(Stamina) ?? null;
       if (stamina && stamina.currentStamina < staminaCost) return false;
+      // #region agent log
+      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38aa30'},body:JSON.stringify({sessionId:'38aa30',location:'Combat.ts:attack',message:'calling startAttack',data:{chargeDuration},timestamp:Date.now(),hypothesisId:'G'})}).catch(()=>{});
+      // #endregion
       const result = this.attackHandler.startAttack?.(
         targetX,
         targetY,
@@ -542,6 +548,13 @@ export class Combat implements Component {
           : Math.round((result.duration as number) || 0 * 1000);
       const combatRef = this;
       setTimeout(() => {
+        // #region agent log
+        if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38aa30'},body:JSON.stringify({sessionId:'38aa30',location:'Combat.ts:setTimeout',message:'player attack timeout',data:{isAttacking:combatRef.isAttacking,hasBuffered:!!combatRef.attackInputBuffered},timestamp:Date.now(),hypothesisId:'H',runId:'post-fix'})}).catch(()=>{});
+        // #endregion
+        // End the player attack here (single authority) so the buffer is only flushed after full duration; prevents game-loop endAttack() from making isAttacking false early and letting a rapid click/timeout restart the animation.
+        if (combatRef.isPlayer && combatRef.attackHandler && typeof combatRef.attackHandler.endAttack === 'function') {
+          combatRef.attackHandler.endAttack();
+        }
         if (!combatRef.isAttacking) combatRef._clearAttackState();
         if (combatRef.isPlayer && combatRef.blockInputBuffered) {
           combatRef.blockInputBuffered = false;

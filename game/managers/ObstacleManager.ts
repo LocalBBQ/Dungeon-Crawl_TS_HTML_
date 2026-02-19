@@ -188,10 +188,11 @@ export class ObstacleManager {
         const arcCenter = facingAngle + (combat.attackArcOffset ?? 0);
         const thrustWidth = (combat.currentAttackThrustWidth ?? 40) / 2 + rangeSensitivity * 0.5;
 
+        const hitSet = hitBreakables && typeof hitBreakables.has === 'function' ? hitBreakables : new Set<string>();
         const toDamage: Obstacle[] = [];
         for (const obstacle of this.obstacles) {
             if (!obstacle.breakable || obstacle.hp == null || obstacle.hp <= 0) continue;
-            if (obstacle.id && hitBreakables.has(obstacle.id)) continue;
+            if (obstacle.id && hitSet.has(obstacle.id)) continue;
             const cx = obstacle.x + obstacle.width / 2;
             const cy = obstacle.y + obstacle.height / 2;
             const distToEdge = Math.max(0, Utils.distance(px, py, cx, cy) - Math.max(obstacle.width, obstacle.height) / 2);
@@ -207,11 +208,12 @@ export class ObstacleManager {
             }
             if (hit) {
                 toDamage.push(obstacle);
-                if (obstacle.id) hitBreakables.add(obstacle.id);
+                if (obstacle.id) hitSet.add(obstacle.id);
             }
         }
+        const damageAmount = combat.attackDamage ?? 1;
         for (const obstacle of toDamage) {
-            this.damageObstacle(obstacle, combat.attackDamage);
+            this.damageObstacle(obstacle, damageAmount);
         }
     }
 

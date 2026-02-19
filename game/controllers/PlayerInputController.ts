@@ -301,9 +301,15 @@ export class PlayerInputController {
                 const minChargeForStab = (weapon.chargeAttack && weapon.chargeAttack.minChargeTime) ? weapon.chargeAttack.minChargeTime - 0.05 : 0.5;
                 // Don't send 0-charge attack while a thrust (stab) is playing - backup guard
                 if (chargeDuration === 0 && combat.isAttacking && combat.currentAttackIsThrust) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38aa30'},body:JSON.stringify({sessionId:'38aa30',location:'PlayerInputController.ts:mouseup',message:'thrust guard skip',data:{isAttacking:combat.isAttacking},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     return;
                 }
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/e535072a-96e6-4390-b673-9e50f66af7db',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38aa30'},body:JSON.stringify({sessionId:'38aa30',location:'PlayerInputController.ts:mouseup',message:'calling combat.attack',data:{chargeDuration,isAttacking:combat.isAttacking,attackPressId:this.attackPressId},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 if (useDashAttack) {
                     const dashProps = weapon.getDashAttackProperties();
                     if (dashProps) {

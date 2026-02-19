@@ -30,6 +30,8 @@ export class WeaponAttackHandler {
     comboTimer: number;
     comboWindow: number;
     hitEnemies: Set<string>;
+    /** Obstacle ids hit this attack (breakables). Avoids double-hit. */
+    hitBreakables: Set<string>;
     attackTimer: number;
     attackDuration: number;
     attackBuffer: number;
@@ -69,6 +71,7 @@ export class WeaponAttackHandler {
             this.comboTimer = 0;
             this.comboWindow = (weapon as { comboWindow?: number })?.comboWindow ?? options.comboWindow ?? 1.5;
             this.hitEnemies = new Set();
+            this.hitBreakables = new Set();
 
             // Player: attack timer and buffer (no wind-up)
             this.attackTimer = 0;
@@ -184,6 +187,7 @@ export class WeaponAttackHandler {
             this.comboStage = nextComboStage;
             this.comboTimer = this.comboWindow;
             this.hitEnemies.clear();
+            this.hitBreakables.clear();
             let durationMs = stageProps.duration;
             if (durationMs < 50) durationMs = Math.round(durationMs * 1000);
             if (dashDuration != null && dashDuration > 0) {
@@ -251,6 +255,7 @@ export class WeaponAttackHandler {
             this.comboStage = nextComboStage;
             this.comboTimer = this.comboWindow;
             this.hitEnemies.clear();
+            this.hitBreakables.clear();
             let durationMs = stageProps.duration;
             if (durationMs < 50) durationMs = Math.round(durationMs * 1000);
             const durationMult = (this.options && this.options.attackDurationMultiplier != null) ? this.options.attackDurationMultiplier : 1;
@@ -396,6 +401,7 @@ export class WeaponAttackHandler {
             }
             this.attackDurationEnemy = this.chargeTime + this.releaseDuration;
             this.hitEnemies.clear();
+            this.hitBreakables.clear();
             this.attackTimer = 0.001;
             this.attackBuffer = this.attackBufferDuration;
             return {
@@ -417,10 +423,12 @@ export class WeaponAttackHandler {
             if (this.isPlayer) {
                 if (this.attackTimer > 0) {
                     this.attackTimer += deltaTime;
-                    // Clamp to duration so hit-window progress never wraps or extends past 1
-                    if (this.attackDuration > 0 && this.attackTimer >= this.attackDuration) {
+                    // Clamp to duration so hit-window progress never wraps or extends past 1.
+                    // Do NOT call endAttack() here: Combat's setTimeout is the single authority for
+                    // ending the player attack and flushing the buffer, so rapid clicks cannot
+                    // cause the game loop to end the attack early and let the timeout start a new one (animation cancel).
+                    if (this.attackDuration > 0 && this.attackTimer > this.attackDuration) {
                         this.attackTimer = this.attackDuration;
-                        this.endAttack();
                     }
                 }
                 if (this.attackBuffer > 0) this.attackBuffer = Math.max(0, this.attackBuffer - deltaTime);
@@ -514,6 +522,7 @@ export class WeaponAttackHandler {
                 this.attackTimer = 0;
                 this.attackBuffer = 0;
                 this.hitEnemies.clear();
+                this.hitBreakables.clear();
                 return;
             }
             if (this.behaviorType === 'chargeRelease') {
@@ -521,6 +530,7 @@ export class WeaponAttackHandler {
                 this.attackTimer = 0;
                 this.attackBuffer = this.attackBufferDuration;
                 this.hitEnemies.clear();
+                this.hitBreakables.clear();
                 return;
             }
             if (this.behaviorType === 'comboAndCharge') {
@@ -529,6 +539,7 @@ export class WeaponAttackHandler {
                 this.isWindingUp = false;
                 this.windUpTimer = 0;
                 this.hitEnemies.clear();
+                this.hitBreakables.clear();
             }
         }
 
@@ -536,6 +547,7 @@ export class WeaponAttackHandler {
             this.comboStage = 0;
             this.comboTimer = 0;
             this.hitEnemies.clear();
+            this.hitBreakables.clear();
         }
 
         canAttack() {
