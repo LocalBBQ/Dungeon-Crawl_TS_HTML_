@@ -12,7 +12,7 @@ export interface IWorldGenPlacer {
     exclusionZones: { x: number; y: number; radius: number }[];
     addObstacle(x: number, y: number, width: number, height: number, type: string, spritePath: string | null, customProps?: Record<string, unknown> | null): unknown;
     wouldOverlap(x: number, y: number, width: number, height: number): boolean;
-    placeSceneTilesGrid(layout: unknown): void;
+    placeSceneTilesGrid(layout: unknown, worldWidth?: number, worldHeight?: number): void;
 }
 
 export class WorldGenerator {
@@ -38,7 +38,7 @@ export class WorldGenerator {
         this.generateBorderTrees(placer, worldWidth, worldHeight, borderSpacing, borderType);
 
         if (config.useSceneTiles && config.sceneTileLayout) {
-            placer.placeSceneTilesGrid(config.sceneTileLayout);
+            placer.placeSceneTilesGrid(config.sceneTileLayout, worldWidth, worldHeight);
             return;
         }
 

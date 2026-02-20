@@ -1,4 +1,28 @@
 // Object Factory - defines configurations for different object types
+//
+// Procedurally drawn (custom canvas in ObstacleLayerRenderer, no/skip sprite):
+//   firepit  - stone ring + animated campfire
+//   brazier  - bowl + animated fire
+//   tree     - trunk + green canopy (fallback when no sprite)
+//   deadTree - trunk + bare branches
+//   mushroom - stalk + cap or leafless branches
+//   grave    - slab + cross shapes
+//   swampPool- gradient ellipse
+//   demonPillar - dark pillar + base + glow
+//   lavaRock - dark rock + orange glow
+//   ironFence- vertical bars
+//   barrel   - wooden hoops + bulging body
+//   rock     - irregular blob + highlight
+//   well     - stone ring + dark shaft + roof/crank
+//   fence    - wooden post + horizontal rails
+//   pillar   - rounded column with base and cap
+//   bush     - leafy blob (overlapping ellipses)
+//   rubble   - irregular pile of small stones
+//
+// Sprite-first (fallback to procedural or solid rect when sprite missing):
+//   house, wall, door, shed, brokenPillar, crumblingWall, arch, statueBase,
+//   column, stoneDebris, elderTrunk
+//
 import { Utils } from '../utils/Utils.ts';
 
 export interface ObjectConfig {
@@ -29,7 +53,7 @@ export class ObjectFactory {
     this.configs = {
       tree: { minSize: 30, maxSize: 90, defaultSpritePath: 'assets/sprites/environment/Trees.png', color: '#2d5016' },
       rock: { minSize: 30, maxSize: 50, defaultSpritePath: 'assets/sprites/environment/rock.png', color: '#555555' },
-      bush: { minSize: 25, maxSize: 35, defaultSpritePath: 'assets/bush.png', color: '#3a5a2a', breakable: true, hp: 1 },
+      bush: { minSize: 25, maxSize: 35, defaultSpritePath: 'assets/bush.png', color: '#3a5a2a' },
       house: { minSize: 160, maxSize: 240, defaultSpritePath: 'assets/sprites/environment/house.png', color: '#8b4513' },
       wall: { minSize: 20, maxSize: 20, defaultSpritePath: 'assets/sprites/environment/wall.png', color: '#696969' },
       door: { minSize: 60, maxSize: 80, defaultSpritePath: 'assets/sprites/environment/door.png', color: '#654321' },
@@ -41,17 +65,19 @@ export class ObjectFactory {
       barrel: { minSize: 25, maxSize: 35, defaultSpritePath: 'assets/sprites/environment/barrel.png', color: '#4a4a4a', breakable: true, hp: 1 },
       pillar: { minSize: 35, maxSize: 55, defaultSpritePath: 'assets/sprites/environment/pillar.png', color: '#6b6b6b' },
       brokenPillar: { minSize: 40, maxSize: 70, defaultSpritePath: 'assets/sprites/environment/broken_pillar.png', color: '#5a5a5a' },
-      rubble: { minSize: 25, maxSize: 45, defaultSpritePath: 'assets/sprites/environment/rubble.png', color: '#4a4a4a', breakable: true, hp: 1 },
-      crumblingWall: { minSize: 20, maxSize: 35, defaultSpritePath: 'assets/sprites/environment/crumbling_wall.png', color: '#5c5c5c', breakable: true, hp: 2 },
+      rubble: { minSize: 25, maxSize: 45, defaultSpritePath: 'assets/sprites/environment/rubble.png', color: '#4a4a4a' },
+      crumblingWall: { minSize: 20, maxSize: 35, defaultSpritePath: 'assets/sprites/environment/crumbling_wall.png', color: '#5c5c5c' },
       arch: { minSize: 60, maxSize: 90, defaultSpritePath: 'assets/sprites/environment/arch.png', color: '#636363' },
       statueBase: { minSize: 45, maxSize: 65, defaultSpritePath: 'assets/sprites/environment/statue_base.png', color: '#707070' },
       column: { minSize: 30, maxSize: 50, defaultSpritePath: 'assets/sprites/environment/column.png', color: '#656565' },
-      stoneDebris: { minSize: 18, maxSize: 32, defaultSpritePath: 'assets/sprites/environment/stone_debris.png', color: '#555555', breakable: true, hp: 1 },
+      stoneDebris: { minSize: 18, maxSize: 32, defaultSpritePath: 'assets/sprites/environment/stone_debris.png', color: '#555555' },
       mushroom: { minSize: 13, maxSize: 85, defaultSpritePath: null, color: '#3d3028' },
       deadTree: { minSize: 30, maxSize: 90, defaultSpritePath: null, color: '#2a2520' },
       lavaRock: { minSize: 32, maxSize: 55, defaultSpritePath: null, color: '#4a2520' },
       demonPillar: { minSize: 38, maxSize: 58, defaultSpritePath: null, color: '#3a1518' },
       brazier: { minSize: 35, maxSize: 50, defaultSpritePath: null, color: '#4a3020' },
+      /** Massive ancient tree trunk (Elder Woods); scene tiles use explicit large width/height. */
+      elderTrunk: { minSize: 200, maxSize: 400, defaultSpritePath: 'assets/sprites/environment/Trees.png', color: '#1e3d0f' },
     };
   }
 

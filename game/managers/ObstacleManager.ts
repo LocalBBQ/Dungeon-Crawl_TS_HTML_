@@ -19,6 +19,8 @@ export class ObstacleManager {
     exclusionZones: unknown[];
     lastPlacedTiles: unknown[];
     suggestedPlayerStart: { x: number; y: number } | null;
+    /** When the last grid was 1x1 and centered, this is the offset (world position of tile top-left). Used for boss spawn. */
+    last1x1Offset: { x: number; y: number } | null;
     systems: SystemManager | null;
     private config: GameConfigShape = GameConfig;
     private worldGenerator: WorldGenerator;
@@ -31,6 +33,7 @@ export class ObstacleManager {
         this.exclusionZones = [];
         this.lastPlacedTiles = [];
         this.suggestedPlayerStart = null;
+        this.last1x1Offset = null;
         this.systems = null;
     }
 
@@ -251,6 +254,7 @@ export class ObstacleManager {
         this.exclusionZones = [];
         this.lastPlacedTiles = [];
         this.suggestedPlayerStart = null;
+        this.last1x1Offset = null;
         const gm = this.getGatherableManager();
         if (gm && typeof gm.clear === 'function') gm.clear();
     }
@@ -305,6 +309,60 @@ export class ObstacleManager {
             }
         }
         return segments;
+    }
+
+    /**
+     * Generate fence segments along an arbitrary rectangle in world space.
+     * @param originX - left of rect
+     * @param originY - top of rect
+     * @param rectWidth - width of rect
+     * @param rectHeight - height of rect
+     * @param options - spacing (default 36), size (default 32), gapSide: 'top'|'bottom'|'left'|'right'|null (default 'bottom'), gapWidth (default 120)
+     * @returns Array of { x, y, width, height, axis: 'x'|'y' } in world space (axis: top/bottom = 'x', left/right = 'y')
+     */
+    getRectPerimeterFenceSegments(originX: number, originY: number, rectWidth: number, rectHeight: number, options: { spacing?: number; size?: number; gapSide?: 'top' | 'bottom' | 'left' | 'right' | null; gapWidth?: number } = {}): Array<{ x: number; y: number; width: number; height: number; axis: 'x' | 'y' }> {
+        const spacing = options.spacing ?? 36;
+        const size = options.size ?? 32;
+        const gapSide = options.gapSide ?? 'bottom';
+        const gapWidth = options.gapWidth ?? 120;
+        const centerX = originX + rectWidth / 2;
+        const centerY = originY + rectHeight / 2;
+        const segments: Array<{ x: number; y: number; width: number; height: number; axis: 'x' | 'y' }> = [];
+
+        const inGap = (side: string, pos: number, isHorizontal: boolean) => {
+            if (gapSide !== side) return false;
+            const center = isHorizontal ? centerX : centerY;
+            return Math.abs(pos + size / 2 - center) < gapWidth / 2;
+        };
+
+        for (let x = originX; x < originX + rectWidth - size; x += spacing) {
+            if (!inGap('top', x, true)) segments.push({ x, y: originY, width: size, height: size, axis: 'x' });
+        }
+        for (let x = originX; x < originX + rectWidth - size; x += spacing) {
+            if (!inGap('bottom', x, true)) segments.push({ x, y: originY + rectHeight - size, width: size, height: size, axis: 'x' });
+        }
+        for (let y = originY + spacing; y < originY + rectHeight - size; y += spacing) {
+            if (!inGap('left', y, false)) segments.push({ x: originX, y, width: size, height: size, axis: 'y' });
+        }
+        for (let y = originY + spacing; y < originY + rectHeight - size; y += spacing) {
+            if (!inGap('right', y, false)) segments.push({ x: originX + rectWidth - size, y, width: size, height: size, axis: 'y' });
+        }
+        return segments;
+    }
+
+    /**
+     * Add fence obstacles along a rectangle perimeter (e.g. hub settlement). Uses factory 'fence' config unless overridden.
+     * Segments on top/bottom use axis 'x' (horizontal rails); segments on left/right use axis 'y' (vertical rails).
+     */
+    addRectPerimeterFence(originX: number, originY: number, rectWidth: number, rectHeight: number, options: { spacing?: number; size?: number; gapSide?: 'top' | 'bottom' | 'left' | 'right' | null; gapWidth?: number; fenceColor?: string } = {}): void {
+        const { fenceColor, ...segmentOpts } = options;
+        const fenceConfig = this.factory.getConfig('fence');
+        const spritePath = fenceConfig?.defaultSpritePath ?? null;
+        const color = fenceColor ?? fenceConfig?.color ?? '#8b7355';
+        const segments = this.getRectPerimeterFenceSegments(originX, originY, rectWidth, rectHeight, segmentOpts);
+        for (const seg of segments) {
+            this.addObstacle(seg.x, seg.y, seg.width, seg.height, 'fence', spritePath, { color, fenceAxis: seg.axis });
+        }
     }
 
     /** Design-space size for scene tile defs (obstacle coords are in 0..DESIGN_TILE_SIZE). */
@@ -398,12 +456,17 @@ export class ObstacleManager {
      * layout.rotateTiles: if true (default), each tile gets a random 90° rotation (0/90/180/270 CW).
      * Fills lastPlacedTiles for spawn hints: [{ tileId, originX, originY, tileSize, rotation }, ...].
      */
-    placeSceneTilesGrid(layout) {
+    placeSceneTilesGrid(layout: { tileSize?: number; rotateTiles?: boolean; pool?: unknown[]; cols?: number; rows?: number; grid?: string[][] }, worldWidth?: number, worldHeight?: number) {
         if (!layout) return;
         this.lastPlacedTiles = [];
         this.suggestedPlayerStart = null;
+        this.last1x1Offset = null;
         const tileSize = layout.tileSize || SceneTiles.defaultTileSize;
         const rotateTiles = layout.rotateTiles !== false;
+        const is1x1 = layout.cols === 1 && layout.rows === 1 && worldWidth != null && worldHeight != null;
+        const offsetX = is1x1 ? (worldWidth! - tileSize) / 2 : 0;
+        const offsetY = is1x1 ? (worldHeight! - tileSize) / 2 : 0;
+        if (is1x1) this.last1x1Offset = { x: offsetX, y: offsetY };
         let grid;
         if (layout.pool && layout.pool.length && layout.cols != null && layout.rows != null) {
             grid = [];
@@ -460,8 +523,8 @@ export class ObstacleManager {
             for (let col = 0; col < rowTiles.length; col++) {
                 const tileId = rowTiles[col];
                 if (tileId) {
-                    const originX = col * tileSize;
-                    const originY = row * tileSize;
+                    const originX = offsetX + col * tileSize;
+                    const originY = offsetY + row * tileSize;
                     const rotation = rotateTiles ? Utils.randomInt(0, 3) : 0;
                     this.placeSceneTile(originX, originY, tileId, rotation);
                     this.lastPlacedTiles.push({ tileId, originX, originY, tileSize, rotation });
@@ -471,8 +534,8 @@ export class ObstacleManager {
         const entityW = (this.config.player && this.config.player.width != null) ? this.config.player.width + 4 : 34;
         const entityH = (this.config.player && this.config.player.height != null) ? this.config.player.height + 4 : 34;
         if (spawnCell) {
-            const originX = spawnCell.col * tileSize;
-            const originY = spawnCell.row * tileSize;
+            const originX = offsetX + spawnCell.col * tileSize;
+            const originY = offsetY + spawnCell.row * tileSize;
             const walkable = this.findWalkableInTile(originX, originY, tileSize, entityW, entityH);
             if (walkable) {
                 this.suggestedPlayerStart = walkable;
@@ -480,8 +543,8 @@ export class ObstacleManager {
                 for (let i = 0; i < safeCells.length; i++) {
                     const c = safeCells[i];
                     if (c.row === spawnCell.row && c.col === spawnCell.col) continue;
-                    const ox = c.col * tileSize;
-                    const oy = c.row * tileSize;
+                    const ox = offsetX + c.col * tileSize;
+                    const oy = offsetY + c.row * tileSize;
                     const w = this.findWalkableInTile(ox, oy, tileSize, entityW, entityH);
                     if (w) {
                         this.suggestedPlayerStart = w;
@@ -493,6 +556,10 @@ export class ObstacleManager {
                 }
             }
         }
+    }
+
+    getLast1x1Offset(): { x: number; y: number } | null {
+        return this.last1x1Offset ?? null;
     }
 
     getSuggestedPlayerStart() {

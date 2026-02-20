@@ -74,6 +74,14 @@ export class PlayerMovement extends Movement {
       this.velocityY = 0;
       return;
     }
+    if (statusEffects?.isAirborne) {
+      const air = statusEffects.getAirborneVelocity(transform.x, transform.y);
+      this.velocityX = air.vx;
+      this.velocityY = air.vy;
+      this.applyMovement(deltaTime, systems);
+      this.updateFacingAngle(deltaTime, systems);
+      return;
+    }
 
     if (this.dodgeCooldown > 0) {
       this.dodgeCooldown = Math.max(0, this.dodgeCooldown - deltaTime);

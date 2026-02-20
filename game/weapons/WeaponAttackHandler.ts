@@ -2,8 +2,15 @@
 import { Movement } from '../components/Movement.ts';
 import { Transform } from '../components/Transform.ts';
 import { Combat } from '../components/Combat.ts';
+import { StatusEffects } from '../components/StatusEffects.ts';
 import { Utils } from '../utils/Utils.ts';
 import type { EntityShape } from '../types/entity.ts';
+
+/** Storm Release (Blessed Winds 3rd hit): tornado projectile damage, range, speed, airborne duration. */
+const STORM_RELEASE_DAMAGE = 28;
+const STORM_RELEASE_RANGE = 420;
+const STORM_RELEASE_SPEED = 720;
+const STORM_RELEASE_AIRBORNE = 1.0;
 
 export type AttackHandlerBehaviorType = 'slashOnly' | 'slashAndLeap' | 'chargeRelease' | 'rangedOnly' | 'comboAndCharge';
 
@@ -180,8 +187,18 @@ export class WeaponAttackHandler {
             if (!this.canAttack()) return null;
             const w = this.weapon;
             if (!w || typeof w.getResolvedAttack !== 'function') return null;
-            const resolved = w.getResolvedAttack(chargeDuration, this.comboStage, options);
+
+            const weaponName = (w as { name?: string }).name;
+            const statusEffects = entity && typeof entity.getComponent === 'function' ? entity.getComponent(StatusEffects) : null;
+            const hasTwoStacks = statusEffects && statusEffects.risingGaleStacks >= 2;
+            const wouldBeThirdHit = weaponName === 'Blessed Winds' && this.comboStage === 2;
+            const useThirdHit = weaponName === 'Blessed Winds' && hasTwoStacks;
+            const effectiveComboStage = useThirdHit ? 2 : (wouldBeThirdHit && !hasTwoStacks ? 0 : this.comboStage);
+
+            const resolved = w.getResolvedAttack(chargeDuration, effectiveComboStage, options);
             if (!resolved) return null;
+
+            const isThirdHitStormRelease = useThirdHit;
 
             const { stageProps, finalDamage, finalRange, finalStaminaCost, dashSpeed, dashDuration, nextComboStage } = resolved;
             this.comboStage = nextComboStage;
@@ -210,7 +227,7 @@ export class WeaponAttackHandler {
                 }
             }
 
-            return {
+            const result: Record<string, unknown> = {
                 range: finalRange,
                 damage: finalDamage,
                 arc: stageProps.arc,
@@ -230,6 +247,20 @@ export class WeaponAttackHandler {
                 chargeMultiplier: resolved.chargeMultiplier,
                 isDashAttack: !!(options.useDashAttack && w.dashAttack)
             };
+            if (isThirdHitStormRelease && entity) {
+                if (statusEffects) statusEffects.consumeRisingGale();
+                const transform = entity.getComponent(Transform);
+                const angle = transform && targetX != null && targetY != null
+                    ? Utils.angleTo(transform.x, transform.y, targetX, targetY)
+                    : (entity.getComponent(Movement)?.facingAngle ?? 0);
+                result.isStormRelease = true;
+                result.stormReleaseAngle = angle;
+                result.stormReleaseDamage = STORM_RELEASE_DAMAGE;
+                result.stormReleaseRange = STORM_RELEASE_RANGE;
+                result.stormReleaseSpeed = STORM_RELEASE_SPEED;
+                result.stormReleaseAirborneDuration = STORM_RELEASE_AIRBORNE;
+            }
+            return result;
         }
 
         _startEnemyAttack(targetX, targetY, entity, chargeDuration, options) {
@@ -609,9 +640,10 @@ export class WeaponAttackHandler {
             this.hitEnemies.add(enemyId);
         }
 
-        getNextAttackStaminaCost(chargeDuration: number, options: object): number {
+        getNextAttackStaminaCost(chargeDuration: number, options: object, entity?: EntityShape | null): number {
             if (!this.isPlayer || !this.weapon) return 0;
-            return this.weapon.getStaminaCostForAttack ? this.weapon.getStaminaCostForAttack(chargeDuration, this.comboStage, options || {}) : 0;
+            const w = this.weapon as { name?: string; getStaminaCostForAttack?(a: number, b: number, c: object): number };
+            return w.getStaminaCostForAttack ? w.getStaminaCostForAttack(chargeDuration, this.comboStage, options || {}) : 0;
         }
 
         /** Forwards to startAttack (e.g. Combat may call .attack(x, y, entity, cooldownMult)). */

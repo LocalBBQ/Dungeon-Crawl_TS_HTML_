@@ -23,6 +23,8 @@ export interface GameLike {
     gold?: number;
     pointerDownConsumedByUI?: boolean;
     clearPointerDownConsumedByUI?(): void;
+    /** When set, dodge (Space) is ignored until this timestamp (used after title/death transition). */
+    suppressDodgeUntil?: number;
     [key: string]: unknown;
 }
 
@@ -286,7 +288,8 @@ export class PlayerInputController {
                 const useDashAttack = data.shiftKey && weapon.dashAttack;
                 const staminaCost = combat.playerAttack.getNextAttackStaminaCost(
                     useDashAttack ? 0 : chargeDuration,
-                    useDashAttack ? { useDashAttack: true } : {}
+                    useDashAttack ? { useDashAttack: true } : {},
+                    player
                 );
                 if (stamina.currentStamina < staminaCost) {
                     return;
@@ -457,6 +460,9 @@ export class PlayerInputController {
         // Handle dodge roll (Space key)
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
             if (key !== ' ') return;
+
+            // Don't dodge when Space was just used to leave title or death screen
+            if (typeof this.game.suppressDodgeUntil === 'number' && Date.now() < this.game.suppressDodgeUntil) return;
 
             // Only allow dodge input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;

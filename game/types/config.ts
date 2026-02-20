@@ -47,6 +47,8 @@ export interface LevelConfig {
   shopkeeper?: { x: number; y: number; width: number; height: number };
   rerollStation?: { x: number; y: number; width: number; height: number };
   trainingDummy?: { x: number; y: number };
+  /** When set, level spawns only this boss (no pack spawn). */
+  bossSpawn?: { x: number; y: number; type: string };
   walls?: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
@@ -62,7 +64,7 @@ export interface GameConfigShape {
     spawn?: { maxEnemies: number };
   };
   packModifiers?: Record<string, { damageMultiplier?: number; healthMultiplier?: number; speedMultiplier?: number; color?: string; knockbackResist?: number; attackCooldownMultiplier?: number; stunBuildupPerHitMultiplier?: number }>;
-  portal?: { x: number; y: number; width: number; height: number };
+  portal?: { x: number; y: number; width: number; height: number; /** Seconds to hold E/B to complete portal/stairs use. */ channelTime?: number };
   hub?: {
     name?: string;
     tileSize?: number;

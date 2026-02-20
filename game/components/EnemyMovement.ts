@@ -93,6 +93,13 @@ export class EnemyMovement extends Movement {
       this.velocityY = 0;
       return;
     }
+    if (statusEffects?.isAirborne) {
+      const air = statusEffects.getAirborneVelocity(transform.x, transform.y);
+      this.velocityX = air.vx;
+      this.velocityY = air.vy;
+      this.applyMovement(deltaTime, systems);
+      return;
+    }
 
     if (this.hopBackDelayRemaining > 0) {
       this.hopBackDelayRemaining = Math.max(0, this.hopBackDelayRemaining - deltaTime);

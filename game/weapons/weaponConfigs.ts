@@ -265,6 +265,38 @@ const chieftainClubConfig: WeaponConfigInput = {
     }
 };
 
+/** Legendary: 1–2 Tempest Thrust (thrust), 3 Storm Release (arcing sweep + tornado projectile). */
+const blessedWindsConfig: WeaponConfigInput = {
+    name: 'Blessed Winds',
+    visual: 'sword',
+    twoHanded: true,
+    baseRange: 100,
+    baseDamage: 18,
+    baseArcDegrees: 24,
+    cooldown: 0.2,
+    speed: 1.1,
+    comboWindow: 1.2,
+    baseStunBuildup: 22,
+    weaponLength: 55,
+    maxComboStage: 3,
+    block: {
+        enabled: true,
+        arcDegrees: 100,
+        damageReduction: 0.38,
+        staminaCost: 22,
+        animationKey: 'block'
+    },
+    stages: [
+        { name: 'Tempest Thrust', arcDegrees: 24, duration: 320, staminaCost: 12, range: 140, damageMultiplier: 1.0, animationKey: 'melee2', stunBuildup: 22, thrust: true, thrustWidth: 48 },
+        { name: 'Tempest Thrust', arcDegrees: 24, duration: 300, staminaCost: 12, range: 140, damageMultiplier: 1.05, animationKey: 'melee2', stunBuildup: 22, thrust: true, thrustWidth: 48 },
+        { name: 'Storm Release', arcDegrees: 130, duration: 420, staminaCost: 18, range: 120, damageMultiplier: 1.3, animationKey: 'melee', stunBuildup: 28, knockbackForce: 180 }
+    ],
+    attackVisual: {
+        thrustLungeForwardWorld: 28,
+        thrustAnticipationRatio: 0.3
+    }
+};
+
 const goblinDaggerConfig: WeaponConfigInput = {
     name: 'Goblin Shiv',
     baseRange: 36,
@@ -305,6 +337,7 @@ export const BowWeaponInstance = Weapon.fromConfig(bowConfig);
 export const MaceWeaponInstance = Weapon.fromConfig(maceConfig);
 export const ChieftainClubWeaponInstance = Weapon.fromConfig(chieftainClubConfig);
 export const GoblinDaggerWeaponInstance = Weapon.fromConfig(goblinDaggerConfig);
+export const BlessedWindsWeaponInstance = Weapon.fromConfig(blessedWindsConfig);
 
 /** Base configs for tiered player weapons (used by WeaponsRegistry to build material variants). */
 export const BASE_WEAPON_CONFIGS: Record<string, WeaponConfigInput> = {
@@ -315,4 +348,4 @@ export const BASE_WEAPON_CONFIGS: Record<string, WeaponConfigInput> = {
     crossbow: crossbowConfig,
     bow: bowConfig
 };
-export { shieldConfig, defenderConfig };
+export { shieldConfig, defenderConfig, blessedWindsConfig };

@@ -49,7 +49,8 @@ const goblinConfig = {
   attackStaminaCost: 12,
   goldDrop: 2,
   weaponDropChance: 0.04,
-  weaponDropPoolId: 'goblin'
+  weaponDropPoolId: 'goblin',
+  whetstoneDropChance: 0.06
 };
 
 // Skeleton: ranged projectile, no melee
@@ -74,7 +75,8 @@ const skeletonConfig = {
   },
   goldDrop: 3,
   weaponDropChance: 0.05,
-  weaponDropPoolId: 'skeleton'
+  weaponDropPoolId: 'skeleton',
+  whetstoneDropChance: 0.07
 };
 
 // Lesser demon: claw + lunge
@@ -101,7 +103,8 @@ const lesserDemonConfig = {
   },
   goldDrop: 4,
   weaponDropChance: 0.06,
-  weaponDropPoolId: 'lesserDemon'
+  weaponDropPoolId: 'lesserDemon',
+  whetstoneDropChance: 0.08
 };
 
 // Greater demon: pillar flame
@@ -128,7 +131,8 @@ const greaterDemonConfig = {
   },
   goldDrop: 8,
   weaponDropChance: 0.12,
-  weaponDropPoolId: 'greaterDemon'
+  weaponDropPoolId: 'greaterDemon',
+  whetstoneDropChance: 0.10
 };
 
 // Goblin chieftain: stats from ChieftainClub heavySmash
@@ -171,7 +175,8 @@ const goblinChieftainConfig = {
     speedMultiplier: 1.2,
     damageMultiplier: 1.2
   },
-  goldDrop: 5
+  goldDrop: 5,
+  whetstoneDropChance: 0.08
 };
 
 // Bandit: mace — stats from Weapons.mace
@@ -209,7 +214,8 @@ const banditConfig = {
   attackStaminaCost: 25,
   goldDrop: 5,
   weaponDropChance: 0.06,
-  weaponDropPoolId: 'bandit'
+  weaponDropPoolId: 'bandit',
+  whetstoneDropChance: 0.07
 };
 
 // Bandit dagger: stats from Weapons.dagger
@@ -267,7 +273,8 @@ const banditDaggerConfig = {
   maxStamina: 45,
   staminaRegen: 3,
   attackStaminaCost: 10,
-  goldDrop: 3
+  goldDrop: 3,
+  whetstoneDropChance: 0.06
 };
 
 // Tier-2: Goblin Brute — stronger goblin variant for harder quests
@@ -306,7 +313,7 @@ const skeletonVeteranConfig = {
 
 // Zombie: slow melee, no lunge — spawns in Cursed Wilds and Demon Approach
 const zombieWeapon = EnemyWeapons.resolveWeapon?.('zombieClaw') ?? null;
-let zombieAttackRange = 42, zombieAttackDamage = 6, zombieAttackCooldown = 1.4;
+let zombieAttackRange = 58, zombieAttackDamage = 6, zombieAttackCooldown = 1.0;
 if (zombieWeapon) {
   const first = (zombieWeapon as { getComboStageProperties?(n: number): { range: number; damage: number } }).getComboStageProperties?.(1);
   if (first) {
@@ -334,7 +341,8 @@ const zombieConfig = {
   knockback: { force: 140, decay: 0.88 },
   goldDrop: 3,
   weaponDropChance: 0.04,
-  weaponDropPoolId: 'zombie'
+  weaponDropPoolId: 'zombie',
+  whetstoneDropChance: 0.06
 };
 
 // Training dummy: immobile, never attacks, high health, no gold, resets health on "death" (handled in EnemyManager)
@@ -353,6 +361,58 @@ const trainingDummyConfig = {
   goldDrop: 0
 };
 
+// Boss: fire dragon — large fire projectile, lunge to close gaps, claw melee
+const dragonClawWeapon = EnemyWeapons.resolveWeapon?.('dragonClaw') ?? null;
+let fireDragonAttackRange = 58, fireDragonAttackDamage = 14, fireDragonAttackCooldown = 1.1;
+if (dragonClawWeapon) {
+  const first = (dragonClawWeapon as { getComboStageProperties?(n: number): { range: number; damage: number } }).getComboStageProperties?.(1);
+  if (first) {
+    fireDragonAttackRange = first.range;
+    fireDragonAttackDamage = first.damage;
+  }
+  if ((dragonClawWeapon as { cooldown?: number }).cooldown != null) fireDragonAttackCooldown = (dragonClawWeapon as { cooldown: number }).cooldown;
+}
+
+const fireDragonConfig = {
+  maxHealth: 440,
+  moveSpeed: 32,
+  weaponId: 'dragonClaw',
+  attackRange: fireDragonAttackRange,
+  attackDamage: fireDragonAttackDamage,
+  detectionRange: 460,
+  color: '#c44c22',
+  attackCooldown: fireDragonAttackCooldown,
+  windUpTime: 0.4,
+  stunThreshold: 160,
+  stunBuildupPerHit: 14,
+  knockbackResist: 0.52,
+  knockback: { force: 220, decay: 0.85 },
+  lunge: {
+    enabled: true,
+    chargeRange: 320,
+    chargeTime: 0.72,
+    lungeSpeed: 300,
+    lungeDistance: 220,
+    lungeDamage: 26,
+    knockback: { force: 380 }
+  },
+  projectile: {
+    enabled: true,
+    speed: 220,
+    damage: 30,
+    range: 520,
+    cooldown: 3.6,
+    stunBuildup: 32,
+    width: 32,
+    height: 32,
+    color: '#ff6600'
+  },
+  goldDrop: 32,
+  weaponDropChance: 0.18,
+  weaponDropPoolId: 'fireDragon',
+  whetstoneDropChance: 0.12
+};
+
 export const EnemyGoblin = EnemyType.fromConfig(goblinConfig);
 export const EnemySkeleton = EnemyType.fromConfig(skeletonConfig);
 export const EnemyLesserDemon = EnemyType.fromConfig(lesserDemonConfig);
@@ -364,3 +424,4 @@ export const EnemyGoblinBrute = EnemyType.fromConfig(goblinBruteConfig);
 export const EnemySkeletonVeteran = EnemyType.fromConfig(skeletonVeteranConfig);
 export const EnemyZombie = EnemyType.fromConfig(zombieConfig);
 export const EnemyTrainingDummy = EnemyType.fromConfig(trainingDummyConfig);
+export const EnemyFireDragon = EnemyType.fromConfig(fireDragonConfig);

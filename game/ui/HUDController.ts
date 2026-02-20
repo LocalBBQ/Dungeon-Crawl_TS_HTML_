@@ -3,7 +3,7 @@
  */
 import type { Entity } from '../entities/Entity.js';
 import type { ArmorSlotId, InventorySlot, PlayingStateShape } from '../state/PlayingState.js';
-import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
+import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, isWhetstoneSlot, isWeaponInstance } from '../state/PlayingState.js';
 import { swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
 import { getArmor } from '../armor/armorConfigs.js';
 import {
@@ -27,6 +27,7 @@ import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { CHEST_WEAPON_ORDER, getWeaponDisplayName, getWeaponSymbol } from './InventoryChestCanvas.js';
+import { DELVE_LEVEL } from '../config/questConfig.js';
 
 export interface SystemsLike {
     get(name: string): unknown;
@@ -463,7 +464,7 @@ export class HUDController {
         }
     }
 
-    update(player: Entity | undefined) {
+    update(player: Entity | undefined, currentLevel?: number) {
         if (!player) return;
 
         const health = player.getComponent(Health);
@@ -538,6 +539,50 @@ export class HUDController {
                 stunDurationRow.style.display = 'none';
             }
         }
+
+        const weapon = combat?.attackHandler?.weapon ?? combat?.playerAttack?.weapon;
+        const weaponName = weapon && typeof weapon === 'object' && (weapon as { name?: string }).name;
+        const risingGaleBox = document.getElementById('rising-gale-box');
+        const risingGaleCountEl = document.getElementById('rising-gale-count');
+        const risingGaleDurationBar = document.getElementById('rising-gale-duration-bar');
+        if (risingGaleBox) {
+            if (weaponName === 'Blessed Winds' && statusEffects) {
+                risingGaleBox.classList.remove('hidden');
+                const stacks = statusEffects.risingGaleStacks ?? 0;
+                if (risingGaleCountEl) {
+                    risingGaleCountEl.textContent = String(stacks);
+                    risingGaleCountEl.classList.toggle('ready', stacks >= 2);
+                }
+                const now = performance.now() / 1000;
+                const durationTotal = 6;
+                const remaining = Math.max(0, (statusEffects.risingGaleUntil ?? 0) - now);
+                const pct = durationTotal > 0 && stacks > 0 ? (remaining / durationTotal) * 100 : 0;
+                if (risingGaleDurationBar) risingGaleDurationBar.style.width = pct + '%';
+            } else {
+                risingGaleBox.classList.add('hidden');
+            }
+        }
+
+        const whetstoneBox = document.getElementById('whetstone-box');
+        const whetstoneCountEl = document.getElementById('whetstone-count');
+        if (whetstoneBox && whetstoneCountEl) {
+            const slots = this.ctx.playingState.inventorySlots ?? [];
+            const n = slots.reduce((sum, s) => sum + (isWhetstoneSlot(s) ? s.count : 0), 0);
+            whetstoneCountEl.textContent = String(n);
+            whetstoneBox.classList.toggle('hidden', n <= 0);
+        }
+
+        // Delve quest: show floor counter when in delve level
+        const delveFloorEl = document.getElementById('delve-floor-indicator');
+        if (delveFloorEl) {
+            const inDelve = currentLevel === DELVE_LEVEL && this.ctx.playingState.delveFloor > 0;
+            if (inDelve) {
+                delveFloorEl.textContent = 'Floor ' + this.ctx.playingState.delveFloor;
+                delveFloorEl.classList.remove('hidden');
+            } else {
+                delveFloorEl.classList.add('hidden');
+            }
+        }
     }
 
     setInventoryPanelVisible(visible: boolean) {
@@ -587,6 +632,11 @@ export class HUDController {
         }
         if (killsEl) killsEl.textContent = String(this.ctx.playingState.killsThisLife);
         if (goldEl) goldEl.textContent = String(this.ctx.playingState.gold);
+        const whetstoneEl = document.getElementById('inventory-stat-whetstone');
+        if (whetstoneEl) {
+            const slots = this.ctx.playingState.inventorySlots ?? [];
+            whetstoneEl.textContent = String(slots.reduce((sum, s) => sum + (isWhetstoneSlot(s) ? s.count : 0), 0));
+        }
 
         this.refreshInventoryEquipmentLabels();
         this.refreshArmorLabels();
@@ -642,11 +692,16 @@ export class HUDController {
             const slot = slots[i] as HTMLElement;
             const item = list[i];
             const key = getSlotKey(item);
-            if (key && Weapons[key]) {
+            if (isWhetstoneSlot(item)) {
+                slot.removeAttribute('data-weapon-key');
+                slot.textContent = '◉';
+                slot.title = item.count > 1 ? `Whetstone ×${item.count} — drag onto weapon to repair` : 'Whetstone — drag onto weapon to repair';
+                slot.draggable = true;
+            } else if (key && Weapons[key]) {
                 slot.setAttribute('data-weapon-key', key);
                 slot.textContent = getWeaponSymbol(key);
                 const name = getWeaponDisplayName(key);
-                const pct = item && item.durability != null ? Math.round((100 * item.durability) / MAX_WEAPON_DURABILITY) : null;
+                const pct = item && isWeaponInstance(item) && item.durability != null ? Math.round((100 * item.durability) / MAX_WEAPON_DURABILITY) : null;
                 slot.title = pct != null ? `${name} (${pct}%)` : name;
                 slot.draggable = true;
             } else {

@@ -484,6 +484,125 @@ export const PlayerCombatRenderer = {
     },
 
     /**
+     * Blessed Winds: slender curved blade, ornate wind-themed guard and pommel, warm grip.
+     * part: 'handle' = pommel + grip; 'blade' = guard + blade; 'all' = full.
+     */
+    drawBlessedWindsAt(ctx, gripX, gripY, angle, baseLength, camera, options = {}) {
+        const part = options.part || 'all';
+        const z = camera.zoom;
+        const swordLength = baseLength * z * 1.05;
+        const lw = Math.max(0.8, 1.2 / z);
+        ctx.save();
+        ctx.translate(gripX, gripY);
+        ctx.rotate(angle);
+        ctx.lineWidth = lw;
+
+        if (part === 'handle' || part === 'all') {
+            const pommelX = -18 * z;
+            const pommelR = 2.8 * z;
+            ctx.fillStyle = '#2a2835';
+            ctx.strokeStyle = '#4a4565';
+            ctx.beginPath();
+            ctx.arc(pommelX, 0, pommelR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(180, 160, 220, 0.5)';
+            ctx.lineWidth = lw * 0.6;
+            ctx.beginPath();
+            ctx.arc(pommelX, 0, pommelR * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.lineWidth = lw;
+            const spiralTipX = pommelX - pommelR * 1.4;
+            ctx.strokeStyle = '#3d3850';
+            ctx.fillStyle = '#352f45';
+            ctx.beginPath();
+            ctx.moveTo(pommelX - pommelR, 0);
+            ctx.quadraticCurveTo(pommelX - pommelR * 1.2, -pommelR * 0.8, spiralTipX, -pommelR * 0.3);
+            ctx.quadraticCurveTo(pommelX - pommelR * 0.9, 0, spiralTipX, pommelR * 0.3);
+            ctx.quadraticCurveTo(pommelX - pommelR * 1.2, pommelR * 0.8, pommelX - pommelR, 0);
+            ctx.fill();
+            ctx.stroke();
+
+            const hiltHalfLen = 14 * z;
+            const hiltThick = 5.5 * z;
+            ctx.fillStyle = '#8b6914';
+            ctx.strokeStyle = '#5c4810';
+            ctx.fillRect(-hiltHalfLen, -hiltThick / 2, hiltHalfLen * 2, hiltThick);
+            ctx.strokeRect(-hiltHalfLen, -hiltThick / 2, hiltHalfLen * 2, hiltThick);
+            for (let i = -2; i <= 2; i++) {
+                const dx = i * 5 * z;
+                ctx.fillStyle = '#a07818';
+                ctx.fillRect(-hiltHalfLen + 4 + dx, -hiltThick / 2 + 1, 2.5 * z, hiltThick - 2);
+                ctx.fillStyle = '#6b5012';
+                ctx.fillRect(-hiltHalfLen + 5.5 + dx, -hiltThick / 2 + 1.5, 1 * z, hiltThick - 3);
+            }
+        }
+
+        if (part === 'blade' || part === 'all') {
+            const guardHalfW = 8 * z;
+            const guardThick = 2.5 * z;
+            ctx.fillStyle = '#2a2838';
+            ctx.strokeStyle = '#4a4568';
+            ctx.beginPath();
+            ctx.moveTo(-guardThick / 2, -guardHalfW * 0.5);
+            ctx.lineTo(-guardThick / 2, -guardHalfW);
+            ctx.quadraticCurveTo(guardThick, -guardHalfW * 1.1, guardThick * 2, 0);
+            ctx.quadraticCurveTo(guardThick, guardHalfW * 1.1, -guardThick / 2, guardHalfW);
+            ctx.lineTo(-guardThick / 2, guardHalfW * 0.5);
+            ctx.lineTo(guardThick / 2, guardHalfW * 0.4);
+            ctx.quadraticCurveTo(guardThick * 0.8, 0, guardThick / 2, -guardHalfW * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(200, 180, 255, 0.35)';
+            ctx.lineWidth = lw * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -guardHalfW * 0.6);
+            ctx.quadraticCurveTo(guardThick, 0, 0, guardHalfW * 0.6);
+            ctx.stroke();
+            ctx.lineWidth = lw;
+
+            const bladeW = 3.2 * z;
+            const curveAmp = swordLength * 0.04;
+            const tipLen = bladeW * 2.2;
+            const totalLen = swordLength + tipLen;
+            ctx.fillStyle = '#383b42';
+            ctx.strokeStyle = '#25272c';
+            ctx.beginPath();
+            const pts = [];
+            const steps = 14;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = t * totalLen;
+                const yOff = Math.sin(t * Math.PI) * curveAmp;
+                const w = (1 - t) * bladeW + t * 0;
+                pts.push({ x, yTop: -w + yOff, yBot: w + yOff });
+            }
+            ctx.moveTo(pts[0].x, pts[0].yTop);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].yTop);
+            for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].yBot);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.strokeStyle = '#5c5f6a';
+            ctx.lineWidth = lw * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(bladeW * 0.25, 0);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].yTop / 2 + pts[i].yBot / 2);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 248, 230, 0.55)';
+            ctx.lineWidth = lw * 0.4;
+            ctx.beginPath();
+            ctx.moveTo(totalLen * 0.08, -bladeW * 0.45);
+            ctx.lineTo(totalLen * 0.5, -bladeW * 0.2);
+            ctx.lineTo(totalLen, 0);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    },
+
+    /**
      * part: 'handle' = pommel + grip only (draw under helmet); 'blade' = guard + blade only (draw over); 'all' = full sword (default).
      */
     drawSword(ctx, screenX, screenY, transform, movement, combat, camera, options = {}) {
@@ -496,6 +615,10 @@ export const PlayerCombatRenderer = {
         const defaultRange = combat.weapon ? combat.weapon.baseRange : 100;
         const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange ?? defaultRange) * 0.48;
 
+        if (combat.weapon && combat.weapon.name === 'Blessed Winds') {
+            this.drawBlessedWindsAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part });
+            return;
+        }
         if (!twoHanded) {
             this.drawDaggerAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part, weaponColor: combat.weapon?.color });
             return;

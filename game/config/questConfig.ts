@@ -4,6 +4,12 @@
 import { GameConfig } from './GameConfig.ts';
 import type { DifficultyDef, Quest } from '../types/quest.ts';
 
+/** Level id for the delve (dungeon descent) mode. Single level, multiple floors. */
+export const DELVE_LEVEL = 10;
+
+/** Level id for the dragon arena (boss-only). Portal returns to hub. */
+export const DRAGON_ARENA_LEVEL = 11;
+
 export const difficulties: Record<string, DifficultyDef> = {
   normal: {
     id: 'normal',
@@ -39,7 +45,7 @@ export function getQuestsForBoard(): Quest[] {
   const levels = GameConfig?.levels ?? {};
   const levelKeys = Object.keys(levels)
     .map(Number)
-    .filter((n) => n > 0)
+    .filter((n) => n > 0 && n !== DELVE_LEVEL)
     .sort((a, b) => a - b);
   const difficultyIds = Object.keys(difficulties);
   const list: Quest[] = [];
@@ -50,9 +56,18 @@ export function getQuestsForBoard(): Quest[] {
         level,
         difficultyId,
         difficulty,
+        questType: 'standard',
       });
     }
   }
+  // Delve: dungeon descent (one option per difficulty)
+  const delveDifficulty = difficulties.normal;
+  list.push({
+    level: DELVE_LEVEL,
+    difficultyId: 'normal',
+    difficulty: delveDifficulty,
+    questType: 'delve',
+  });
   return list;
 }
 
@@ -73,13 +88,26 @@ export function getRandomQuestsForBoard(count: number = 3): Quest[] {
 
 /** Short description for a quest (objectives / enemies) for bulletin board display. */
 export function getQuestDescription(quest: Quest): string[] {
+  const lines: string[] = [];
+  if (quest.questType === 'delve') {
+    lines.push('Find the dungeon entrance and descend.');
+    lines.push('Kill all enemies on each floor to unlock the stairs.');
+    lines.push('Difficulty and rewards increase per floor.');
+    if (quest.difficulty?.goldMultiplier != null && quest.difficulty.goldMultiplier > 1) {
+      lines.push(`${(quest.difficulty.goldMultiplier * 100 - 100).toFixed(0)}% bonus gold`);
+    }
+    return lines;
+  }
   const levels = GameConfig?.levels ?? {};
   const levelConfig = levels[quest.level] as { killsToUnlockPortal?: number; enemyTypes?: string[] } | undefined;
-  const lines: string[] = [];
-  if (levelConfig?.killsToUnlockPortal != null) {
+
+  if (quest.level === DRAGON_ARENA_LEVEL) {
+    lines.push('Slay the Fire Dragon to open the portal.');
+    lines.push('Boss: Fire Dragon');
+  } else if (levelConfig?.killsToUnlockPortal != null) {
     lines.push(`Slay ${levelConfig.killsToUnlockPortal} foes to open the portal.`);
   }
-  if (levelConfig?.enemyTypes?.length) {
+  if (quest.level !== DRAGON_ARENA_LEVEL && levelConfig?.enemyTypes?.length) {
     const unique = [...new Set(levelConfig.enemyTypes)];
     const label = unique.length <= 3 ? unique.join(', ') : `${unique.slice(0, 2).join(', ')} and more`;
     lines.push('Foes: ' + label);

@@ -27,6 +27,12 @@ export class Projectile {
   height: number;
   active: boolean;
   color: string;
+  /** If true, projectile continues after hitting (hits multiple enemies). */
+  pierce: boolean;
+  /** If > 0, applied to hit enemies as airborne duration in seconds. */
+  airborneDuration: number;
+  /** Enemy ids already hit (for pierce: don't hit same enemy twice). */
+  hitEntityIds: Set<string>;
 
   constructor(
     x: number,
@@ -37,7 +43,12 @@ export class Projectile {
     range: number,
     owner: unknown,
     ownerType: 'player' | 'enemy' = 'player',
-    stunBuildup = 0
+    stunBuildup = 0,
+    pierce = false,
+    airborneDuration = 0,
+    width = 8,
+    height = 8,
+    color?: string
   ) {
     this.x = x;
     this.y = y;
@@ -49,10 +60,13 @@ export class Projectile {
     this.ownerType = ownerType;
     this.stunBuildup = stunBuildup;
     this.distanceTraveled = 0;
-    this.width = 8;
-    this.height = 8;
+    this.width = width;
+    this.height = height;
     this.active = true;
-    this.color = ownerType === 'player' ? '#ffff00' : '#ff4444';
+    this.color = color ?? (ownerType === 'player' ? '#ffff00' : '#ff4444');
+    this.pierce = pierce;
+    this.airborneDuration = airborneDuration;
+    this.hitEntityIds = new Set();
   }
 
   update(deltaTime: number): void {
@@ -69,9 +83,10 @@ export class Projectile {
     }
   }
 
-  checkCollision(entity: EntityWithComponents): boolean {
+  checkCollision(entity: EntityWithComponents, entityId?: string): boolean {
     if (!this.active || !entity) return false;
     if (entity === this.owner) return false;
+    if (entityId != null && this.hitEntityIds.has(entityId)) return false;
     const transform = entity.getComponent(Transform);
     const health = entity.getComponent(Health);
     if (!transform || !health || health.isDead) return false;

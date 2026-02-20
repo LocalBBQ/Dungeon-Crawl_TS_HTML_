@@ -55,6 +55,11 @@ export const LOOT_POOLS: Record<string, LootPoolDef> = {
     enchantChance: 0.55,
     secondEnchantChance: 0.35
   },
+  fireDragon: {
+    weaponKeys: ['sword_steel', 'sword_mithril', 'greatsword_steel', 'greatsword_mithril', 'mace_steel', 'crossbow_iron', 'defender_iron'],
+    enchantChance: 0.6,
+    secondEnchantChance: 0.4
+  },
   default: {
     weaponKeys: (() => {
       const keys: string[] = [];
@@ -96,4 +101,14 @@ export function rollWeaponDrop(enemyType: string, poolId?: string): WeaponInstan
     prefixId,
     suffixId
   };
+}
+
+/** Repair amount: 35% of max weapon durability per whetstone. */
+export const WHETSTONE_REPAIR_PERCENT = 0.35;
+
+/**
+ * Roll whether a whetstone drops. Caller should use enemy's whetstoneDropChance.
+ */
+export function rollWhetstoneDrop(chance: number): boolean {
+  return chance > 0 && Math.random() < chance;
 }

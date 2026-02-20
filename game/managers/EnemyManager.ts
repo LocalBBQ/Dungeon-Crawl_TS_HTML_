@@ -25,8 +25,9 @@ import { SleepBehavior } from '../behaviors/SleepBehavior.ts';
 import { PackFollowBehavior } from '../behaviors/PackFollowBehavior.ts';
 import { WanderBehavior } from '../behaviors/WanderBehavior.ts';
 import type { Quest } from '../types/quest.ts';
+import { DELVE_LEVEL } from '../config/questConfig.ts';
 import type { HitCategory } from '../types/combat.js';
-import { rollWeaponDrop } from '../config/lootConfig.js';
+import { rollWeaponDrop, rollWhetstoneDrop } from '../config/lootConfig.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 
@@ -35,6 +36,9 @@ const TIER2_MAP: Record<string, string> = {
     goblin: 'goblinBrute',
     skeleton: 'skeletonVeteran',
 };
+
+/** Inset from world edges so spawns stay inside border/perimeter (e.g. delve rock border). */
+const SPAWN_MARGIN = 70;
 
 interface EntityManagerLike {
     add(entity: Entity, group: string): void;
@@ -152,7 +156,7 @@ export class EnemyManager {
             }
         }
         
-        const size = type === 'trainingDummy' ? 32 : (type === 'greaterDemon' ? 38 : (type === 'goblinChieftain' ? 34 : (type === 'bandit' || type === 'banditDagger' ? 31 : 25)));
+        const size = type === 'fireDragon' ? 96 : (type === 'trainingDummy' ? 32 : (type === 'greaterDemon' ? 38 : (type === 'goblinChieftain' ? 34 : (type === 'bandit' || type === 'banditDagger' ? 31 : 25))));
         enemy
             .addComponent(new Transform(x, y, size, size))
             .addComponent(new Health(maxHealth))
@@ -265,11 +269,16 @@ export class EnemyManager {
             idleBehaviorConfig: options.idleBehaviorConfig,
         } : {};
 
+        const minX = SPAWN_MARGIN;
+        const maxX = Math.max(minX, worldWidth - SPAWN_MARGIN);
+        const minY = SPAWN_MARGIN;
+        const maxY = Math.max(minY, worldHeight - SPAWN_MARGIN);
+
         while (packsPlaced < numPacks && attempts < maxAttempts) {
             attempts++;
 
-            const packCenterX = Utils.randomInt(0, worldWidth);
-            const packCenterY = Utils.randomInt(0, worldHeight);
+            const packCenterX = Utils.randomInt(minX, maxX);
+            const packCenterY = Utils.randomInt(minY, maxY);
 
             const distFromCenter = Utils.distance(packCenterX, packCenterY, excludeArea.x, excludeArea.y);
             if (distFromCenter < excludeArea.radius) {
@@ -360,8 +369,8 @@ export class EnemyManager {
                 const x = packCenterX + Math.cos(angle) * distance;
                 const y = packCenterY + Math.sin(angle) * distance;
 
-                const clampedX = Utils.clamp(x, 0, worldWidth);
-                const clampedY = Utils.clamp(y, 0, worldHeight);
+                const clampedX = Utils.clamp(x, SPAWN_MARGIN, worldWidth - SPAWN_MARGIN);
+                const clampedY = Utils.clamp(y, SPAWN_MARGIN, worldHeight - SPAWN_MARGIN);
 
                 const roamConfig = { centerX: packCenterX, centerY: packCenterY, radius: packRadius };
                 const finalIdleConfig = (idleBehavior === 'packFollow')
@@ -386,6 +395,11 @@ export class EnemyManager {
      * @param {Object} [options] - Optional. { patrol: true } to give this pack a shared patrol path.
      */
         spawnPackAt(centerX, centerY, radius, packSize, entityManager, obstacleManager, enemyTypes, options = null) {
+        const levelConfig = this.config.levels?.[this.currentLevel] as { worldWidth?: number; worldHeight?: number } | undefined;
+        const worldW = levelConfig?.worldWidth ?? this.config.world?.width ?? 2400;
+        const worldH = levelConfig?.worldHeight ?? this.config.world?.height ?? 2400;
+        const margin = SPAWN_MARGIN;
+
         // One type per pack so bandit packs and goblin packs stay separate (no mixed packs)
         const types = enemyTypes && enemyTypes.length > 0 ? enemyTypes : ['goblin'];
         const packType = types[Utils.randomInt(0, types.length - 1)];
@@ -421,8 +435,10 @@ export class EnemyManager {
             if (this.enemies.length >= this.maxEnemies) break;
             const angle = Math.random() * Math.PI * 2;
             const dist = Math.random() * packRadius;
-            const x = centerX + Math.cos(angle) * dist;
-            const y = centerY + Math.sin(angle) * dist;
+            let x = centerX + Math.cos(angle) * dist;
+            let y = centerY + Math.sin(angle) * dist;
+            x = Utils.clamp(x, margin, worldW - margin);
+            y = Utils.clamp(y, margin, worldH - margin);
             if (!obstacleManager || obstacleManager.canMoveTo(x, y, 25, 25)) {
                 this.spawnEnemy(x, y, resolvedType, entityManager, patrolConfig, packModifier, packHasNoModifier, roamConfig, idleBehavior, idleBehaviorConfig);
                 spawned++;
@@ -459,31 +475,76 @@ export class EnemyManager {
         }
     }
 
-    // Spawn enemies for a specific level using pack spawning + optional scene-tile spawn hints
+    // Spawn enemies for a specific level using pack spawning + optional scene-tile spawn hints, or a single boss
     spawnLevelEnemies(
         level: number,
         entityManager: EntityManagerLike | null,
         obstacleManager: ObstacleManagerLike | null,
-        playerSpawn: { x: number; y: number } | null = null
+        playerSpawn: { x: number; y: number } | null = null,
+        options?: { delveFloor?: number }
     ): void {
-        const levelConfig = this.config.levels[level];
-        if (!levelConfig || !levelConfig.packSpawn) {
-            console.warn(`No packSpawn config for level ${level}`);
+        const levelConfig = this.config.levels[level] as { packSpawn?: unknown; bossSpawn?: { x: number; y: number; type: string }; worldWidth?: number; worldHeight?: number; enemyTypes?: string[]; obstacles?: unknown; [key: string]: unknown } | undefined;
+        if (!levelConfig) {
+            console.warn(`No level config for level ${level}`);
             return;
         }
 
         this.currentLevel = level;
         this.enemiesSpawned = true;
 
+        // Boss-only arena: spawn single boss and skip pack/scene-tile spawns
+        const bossSpawn = levelConfig.bossSpawn;
+        if (bossSpawn && bossSpawn.type) {
+            let bx = bossSpawn.x ?? 0;
+            let by = bossSpawn.y ?? 0;
+            const offset = obstacleManager && typeof (obstacleManager as { getLast1x1Offset?: () => { x: number; y: number } | null }).getLast1x1Offset === 'function'
+                ? (obstacleManager as { getLast1x1Offset(): { x: number; y: number } | null }).getLast1x1Offset()
+                : null;
+            if (offset) {
+                bx += offset.x;
+                by += offset.y;
+            }
+            const e = this.spawnEnemy(bx, by, bossSpawn.type, entityManager, null, null, false, { centerX: bx, centerY: by, radius: 380 }, 'guard', null);
+            if (e) {
+                const ai = e.getComponent(AI);
+                if (ai) {
+                    ai.roamCenterX = bx;
+                    ai.roamRadius = 350;
+                }
+            }
+            return;
+        }
+
+        if (!levelConfig.packSpawn) {
+            console.warn(`No packSpawn config for level ${level}`);
+            return;
+        }
+
         const worldConfig = this.config.world;
         const worldWidth = (levelConfig.worldWidth != null) ? levelConfig.worldWidth : worldConfig.width;
         const worldHeight = (levelConfig.worldHeight != null) ? levelConfig.worldHeight : worldConfig.height;
         const packConfig = levelConfig.packSpawn;
-        const enemyTypes = levelConfig.enemyTypes || null;
+        let enemyTypes = levelConfig.enemyTypes || null;
         const diff = this.activeQuest?.difficulty;
-        const density = (packConfig.density ?? 0.008) * (diff?.packDensityMultiplier ?? 1);
+        let density = (packConfig.density ?? 0.008) * (diff?.packDensityMultiplier ?? 1);
         const basePackSize = packConfig.packSize ?? { min: 2, max: 5 };
-        const packSizeBonus = Math.max(0, diff?.packSizeBonus ?? 0);
+        let packSizeBonus = Math.max(0, diff?.packSizeBonus ?? 0);
+
+        // Delve: scale difficulty and enemy mix by floor
+        const delveFloor = options?.delveFloor ?? 0;
+        if (level === DELVE_LEVEL && delveFloor > 0) {
+            const floorScale = 1 + (delveFloor - 1) * 0.14;
+            density *= floorScale;
+            packSizeBonus += Math.min(4, delveFloor - 1);
+            // Shift toward harder types at deeper floors
+            const baseTypes = ['goblin', 'goblin', 'skeleton', 'skeleton', 'zombie', 'bandit'];
+            const midTypes = ['goblin', 'skeleton', 'skeleton', 'zombie', 'zombie', 'bandit', 'lesserDemon'];
+            const deepTypes = ['skeleton', 'skeleton', 'zombie', 'bandit', 'lesserDemon', 'lesserDemon', 'greaterDemon'];
+            if (delveFloor >= 5) enemyTypes = deepTypes;
+            else if (delveFloor >= 3) enemyTypes = midTypes;
+            else if (delveFloor >= 1) enemyTypes = baseTypes;
+        }
+
         const effectivePackSize = {
             min: basePackSize.min,
             max: Math.min(10, basePackSize.max + packSizeBonus),
@@ -654,7 +715,7 @@ export class EnemyManager {
             for (let i = this.enemies.length - 1; i >= 0; i--) {
                 const enemy = this.enemies[i];
                 const ai = enemy.getComponent(AI);
-                if (ai?.enemyType === 'trainingDummy') continue;
+                if (ai?.enemyType === 'trainingDummy' || ai?.enemyType === 'fireDragon') continue;
                 const t = enemy.getComponent(Transform);
                 if (!t) continue;
                 const ex = t.x + t.width / 2;
@@ -706,7 +767,7 @@ export class EnemyManager {
                         goldPickupManager.spawn(cx, cy, goldDrop);
                     }
                 }
-                const typeConfigForLoot = ai?.enemyType ? (this.config.enemy.types[ai.enemyType] as { weaponDropChance?: number; weaponDropPoolId?: string } | undefined) : undefined;
+                const typeConfigForLoot = ai?.enemyType ? (this.config.enemy.types[ai.enemyType] as { weaponDropChance?: number; weaponDropPoolId?: string; whetstoneDropChance?: number } | undefined) : undefined;
                 const weaponDropChance = typeConfigForLoot?.weaponDropChance ?? 0;
                 if (weaponDropChance > 0 && Math.random() < weaponDropChance && transform && this.systems) {
                     const instance = rollWeaponDrop(ai!.enemyType, typeConfigForLoot?.weaponDropPoolId);
@@ -719,8 +780,19 @@ export class EnemyManager {
                         }
                     }
                 }
-                if (this.systems && this.systems.eventBus) {
-                    this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, {});
+                const whetstoneDropChance = typeConfigForLoot?.whetstoneDropChance ?? 0;
+                if (rollWhetstoneDrop(whetstoneDropChance) && transform && this.systems) {
+                    const whetstonePickupManager = this.systems.get<{ spawn(x: number, y: number): void }>('whetstonePickups');
+                    if (whetstonePickupManager) {
+                        const cx = transform.x + transform.width / 2;
+                        const cy = transform.y + transform.height / 2;
+                        whetstonePickupManager.spawn(cx, cy);
+                    }
+                }
+                if (this.systems && this.systems.eventBus && transform) {
+                    const cx = transform.x + transform.width / 2;
+                    const cy = transform.y + transform.height / 2;
+                    this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, { x: cx, y: cy });
                 }
                 if (entityManager) {
                     entityManager.remove(enemy.id);
@@ -873,6 +945,22 @@ export class EnemyManager {
                         const dy = enemyTransform.y - transform.y;
                         const knockbackForce = combat.currentAttackKnockbackForce ?? this.config.player.knockback.force;
                         enemyMovement.applyKnockback(dx, dy, knockbackForce);
+                    }
+                }
+            }
+        }
+
+        // Blessed Winds: per hit add one stack (max 2) and refresh Rising Gale duration to 6s — not on Storm Release (sweep)
+        const isStormReleaseSweep = combat.currentAttackStageName === 'Storm Release';
+        if (hitEnemies.length >= 1 && combat.isPlayer && combat.playerAttack && !isStormReleaseSweep) {
+            const weapon = combat.playerAttack.weapon as { name?: string } | null;
+            if (weapon?.name === 'Blessed Winds') {
+                const playerStatus = player.getComponent(StatusEffects);
+                if (playerStatus) {
+                    const now = performance.now() / 1000;
+                    for (let i = 0; i < hitEnemies.length; i++) {
+                        if (playerStatus.risingGaleStacks < 2) playerStatus.risingGaleStacks += 1;
+                        playerStatus.risingGaleUntil = now + 6;
                     }
                 }
             }
@@ -1121,7 +1209,8 @@ export class EnemyManager {
         level: number,
         entityManager: EntityManagerLike | null,
         obstacleManager: ObstacleManagerLike | null,
-        playerSpawn: { x: number; y: number } | null = null
+        playerSpawn: { x: number; y: number } | null = null,
+        options?: { delveFloor?: number }
     ): void {
         this.pendingSceneTileSpawns = [];
         this.pendingPackSpawns = [];
@@ -1141,7 +1230,7 @@ export class EnemyManager {
         this.enemies = [];
         
         // Spawn enemies for the new level (exclude area around player spawn)
-        this.spawnLevelEnemies(level, entityManager, obstacleManager, playerSpawn);
+        this.spawnLevelEnemies(level, entityManager, obstacleManager, playerSpawn, options);
     }
 
     getCurrentLevel(): number {

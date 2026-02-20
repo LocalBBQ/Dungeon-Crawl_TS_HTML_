@@ -10,7 +10,8 @@ import {
     EnemyGoblinBrute,
     EnemySkeletonVeteran,
     EnemyZombie,
-    EnemyTrainingDummy
+    EnemyTrainingDummy,
+    EnemyFireDragon
 } from '../config/enemyConfigs.ts';
 import { GameConfig } from '../config/GameConfig.ts';
 import { EnemyWeapons } from '../weapons/EnemyWeaponsRegistry.ts';
@@ -33,7 +34,8 @@ const weaponAndBehavior: Record<string, WeaponAndBehaviorEntry> = {
   bandit: { weaponId: 'mace', behaviorId: 'comboAndCharge' },
   banditDagger: { weaponId: 'dagger', behaviorId: 'slashAndLeap' },
   zombie: { weaponId: 'zombieClaw', behaviorId: 'slashOnly' },
-  trainingDummy: { weaponId: 'goblinDagger', behaviorId: 'slashOnly' }
+  trainingDummy: { weaponId: 'goblinDagger', behaviorId: 'slashOnly' },
+  fireDragon: { weaponId: 'dragonClaw', behaviorId: 'slashAndLeap' }
 };
 
 export const Enemies: Record<string, EnemyTypeDefinition | undefined> & {
@@ -52,6 +54,7 @@ export const Enemies: Record<string, EnemyTypeDefinition | undefined> & {
   skeletonVeteran: EnemySkeletonVeteran,
   zombie: EnemyZombie,
   trainingDummy: EnemyTrainingDummy,
+  fireDragon: EnemyFireDragon,
   weaponAndBehavior,
 
   getConfig(type: string): Record<string, unknown> | null {

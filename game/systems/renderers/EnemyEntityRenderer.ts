@@ -19,6 +19,9 @@ export const EnemyEntityRenderer = {
         const scale = camera.zoom;
         const handOffset = 0.55;
 
+        if (enemyType === 'fireDragon') {
+            return;
+        }
         if (enemyType === 'goblinChieftain') {
             const headRad = 11 * scale;
             const handleLen = 14 * scale;
@@ -366,7 +369,9 @@ export const EnemyEntityRenderer = {
         const sizeMultiplier = combat && combat.isWindingUp ? (1 + EnemyCombatRenderer.getWindUpVisualProgress(combat) * 0.12) : 1;
         const r = (transform.width / 2) * camera.zoom * sizeMultiplier;
         const h = (transform.height / 2) * camera.zoom * sizeMultiplier;
-        const enemyType = ai && ai.enemyType ? ai.enemyType : 'goblin';
+        // Use base shape for tier-2 variants (goblinBrute → goblin, skeletonVeteran → skeleton); symbol is drawn by EntityEffectsRenderer
+        const rawType = ai && ai.enemyType ? ai.enemyType : 'goblin';
+        const enemyType = rawType === 'goblinBrute' ? 'goblin' : rawType === 'skeletonVeteran' ? 'skeleton' : rawType;
         const strokeColor = (combat && (combat.isWindingUp || combat.isAttacking)) ? '#ff0000' : (ai && ai.state === 'attack') ? '#ff0000' : '#000000';
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 2 / camera.zoom;
@@ -658,6 +663,136 @@ export const EnemyEntityRenderer = {
             ctx.arc(screenX + dr * 0.3, screenY - dh * 0.12, eyeSize, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
+        } else if (enemyType === 'fireDragon') {
+            // Dragon: body, head, prominent bat-like wings (fingers + membrane), tail, horns, fangs; local space (head +x)
+            const face = movement ? movement.facingAngle : 0;
+            ctx.save();
+            ctx.translate(screenX, screenY);
+            ctx.rotate(face);
+            const lw = Math.max(2, 4 / camera.zoom);
+            const bodyLen = r * 1.5;
+            const bodyW = h * 0.82;
+            const wingSpan = bodyW * 2.2;
+            const wingDepth = bodyLen * 1.05;
+            // Draw wings first (behind body) – large bat-like wings with visible fingers
+            const wingShoulderX = bodyLen * 0.08;
+            const wingRootY = bodyW * 0.75;
+            const wingMembrane = 'rgba(160, 50, 28, 0.88)';
+            const wingBone = '#4a2818';
+            ctx.strokeStyle = wingBone;
+            ctx.lineWidth = lw * 1.1;
+            // Left wing: membrane then bones
+            ctx.fillStyle = wingMembrane;
+            ctx.beginPath();
+            ctx.moveTo(wingShoulderX, -wingRootY);
+            ctx.lineTo(wingShoulderX - wingDepth * 0.5, -wingSpan);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.55, -wingSpan * 0.5);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.35, -wingRootY * 0.6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(wingShoulderX, -wingRootY);
+            ctx.lineTo(wingShoulderX - wingDepth * 0.25, -wingSpan * 0.85);
+            ctx.moveTo(wingShoulderX, -wingRootY);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.2, -wingSpan * 0.7);
+            ctx.moveTo(wingShoulderX, -wingRootY);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.5, -wingSpan * 0.45);
+            ctx.stroke();
+            // Right wing
+            ctx.fillStyle = wingMembrane;
+            ctx.beginPath();
+            ctx.moveTo(wingShoulderX, wingRootY);
+            ctx.lineTo(wingShoulderX - wingDepth * 0.5, wingSpan);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.55, wingSpan * 0.5);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.35, wingRootY * 0.6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(wingShoulderX, wingRootY);
+            ctx.lineTo(wingShoulderX - wingDepth * 0.25, wingSpan * 0.85);
+            ctx.moveTo(wingShoulderX, wingRootY);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.2, wingSpan * 0.7);
+            ctx.moveTo(wingShoulderX, wingRootY);
+            ctx.lineTo(wingShoulderX + wingDepth * 0.5, wingSpan * 0.45);
+            ctx.stroke();
+            // Underbelly (darker band)
+            ctx.fillStyle = '#5c2218';
+            ctx.strokeStyle = '#3d1810';
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, bodyLen, bodyW, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Main body
+            ctx.fillStyle = bodyColor;
+            ctx.strokeStyle = strokeColor;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, bodyLen * 0.9, bodyW * 0.88, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Tail (thick, tapering)
+            ctx.fillStyle = bodyColor;
+            ctx.strokeStyle = strokeColor;
+            ctx.beginPath();
+            ctx.moveTo(-bodyLen * 0.72, 0);
+            ctx.quadraticCurveTo(-bodyLen * 1.4, -bodyW * 0.55, -bodyLen * 1.22, 0);
+            ctx.quadraticCurveTo(-bodyLen * 1.4, bodyW * 0.55, -bodyLen * 0.72, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            // Head
+            ctx.fillStyle = bodyColor;
+            ctx.strokeStyle = strokeColor;
+            ctx.beginPath();
+            ctx.ellipse(bodyLen * 0.7, 0, r * 0.5, h * 0.48, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Snout
+            ctx.beginPath();
+            ctx.ellipse(bodyLen * 1.02, 0, r * 0.26, h * 0.26, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Horns (swept back)
+            ctx.strokeStyle = '#9a6b4a';
+            ctx.lineWidth = lw * 1.15;
+            ctx.beginPath();
+            ctx.moveTo(bodyLen * 0.48, -h * 0.38);
+            ctx.lineTo(bodyLen * 0.92, -h * 0.62);
+            ctx.moveTo(bodyLen * 0.48, h * 0.38);
+            ctx.lineTo(bodyLen * 0.92, h * 0.62);
+            ctx.stroke();
+            // Fangs
+            ctx.strokeStyle = '#e8e0d8';
+            ctx.lineWidth = lw * 0.7;
+            ctx.beginPath();
+            ctx.moveTo(bodyLen * 0.92, -h * 0.12);
+            ctx.lineTo(bodyLen * 1.06, h * 0.08);
+            ctx.moveTo(bodyLen * 0.92, h * 0.12);
+            ctx.lineTo(bodyLen * 1.06, -h * 0.08);
+            ctx.stroke();
+            // Eyes
+            const eyeSize = 5.5 / camera.zoom;
+            ctx.fillStyle = ai && ai.state === 'chase' ? '#ff2200' : '#ff5522';
+            ctx.shadowColor = 'rgba(255, 60, 0, 0.95)';
+            ctx.shadowBlur = 5 / camera.zoom;
+            ctx.beginPath();
+            ctx.arc(bodyLen * 0.55, -h * 0.16, eyeSize, 0, Math.PI * 2);
+            ctx.arc(bodyLen * 0.55, h * 0.16, eyeSize, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            // Forelimb claws (simple strokes under body)
+            ctx.strokeStyle = '#9a6b4a';
+            ctx.lineWidth = lw * 0.9;
+            ctx.beginPath();
+            ctx.moveTo(bodyLen * 0.25, -bodyW * 0.7);
+            ctx.lineTo(bodyLen * 0.42, -bodyW * 0.88);
+            ctx.moveTo(bodyLen * 0.25, bodyW * 0.7);
+            ctx.lineTo(bodyLen * 0.42, bodyW * 0.88);
+            ctx.stroke();
+            ctx.restore();
+            this.drawWeapon(context, 'fireDragon', screenX, screenY, movement ? movement.facingAngle : 0, r, h, combat);
         } else {
             ctx.fillStyle = bodyColor;
             ctx.beginPath();

@@ -6,15 +6,19 @@ import type { PlayingStateShape } from './PlayingState.js';
 import {
   type InventorySlot,
   type WeaponInstance,
+  type WhetstoneConsumable,
   getSlotKey,
   INVENTORY_SLOT_COUNT,
   MAX_WEAPON_DURABILITY,
-  CHEST_SLOT_COUNT
+  CHEST_SLOT_COUNT,
+  isWeaponInstance,
+  isWhetstoneSlot
 } from './PlayingState.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { rollEnchantForSlot } from '../config/enchantmentConfig.js';
 import type { EnchantmentSlot } from '../config/enchantmentConfig.js';
+import { WHETSTONE_REPAIR_PERCENT } from '../config/lootConfig.js';
 
 type WeaponLike = { twoHanded?: boolean; offhandOnly?: boolean };
 type SyncCombat = (ps: PlayingStateShape) => void;
@@ -51,7 +55,7 @@ export function equipFromInventory(
 ): void {
   if (slotIndex < 0 || slotIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
   const item = ps.inventorySlots[slotIndex];
-  if (!item) return;
+  if (!item || !isWeaponInstance(item)) return;
   if (item.durability <= 0) return;
   if (!canEquipWeaponInSlot(item.key, slot)) return;
   const weapon = getWeapon(item.key);
@@ -103,7 +107,7 @@ export function unequipToInventory(
     index = ps.inventorySlots.findIndex((s) => s == null);
     if (index < 0) return;
   }
-  ps.inventorySlots[index] = { key, durability, prefixId, suffixId };
+  ps.inventorySlots[index] = { key, durability, prefixId, suffixId } as WeaponInstance;
   if (equipSlot === 'mainhand') {
     ps.equippedMainhandKey = 'none';
     ps.equippedMainhandDurability = MAX_WEAPON_DURABILITY;
@@ -167,7 +171,7 @@ export function equipFromChestToHand(
 export function putInChestFromInventory(ps: PlayingStateShape, bagIndex: number): void {
   if (bagIndex < 0 || bagIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
   const item = ps.inventorySlots[bagIndex];
-  if (!item) return;
+  if (!item || !isWeaponInstance(item)) return;
   ps.inventorySlots[bagIndex] = null;
   if (!ps.chestSlots || ps.chestSlots.length !== CHEST_SLOT_COUNT) return;
   const empty = ps.chestSlots.findIndex((s) => s == null);
@@ -208,12 +212,13 @@ export function swapEquipmentWithInventory(
   syncCombat?: SyncCombat
 ): void {
   if (bagIndex < 0 || bagIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
+  const bagItem = ps.inventorySlots[bagIndex];
+  if (!bagItem || !isWeaponInstance(bagItem)) return;
+  if (bagItem.durability <= 0 || !canEquipWeaponInSlot(bagItem.key, equipSlot)) return;
   const equipKey = equipSlot === 'mainhand' ? ps.equippedMainhandKey : ps.equippedOffhandKey;
   const equipDurability = equipSlot === 'mainhand' ? ps.equippedMainhandDurability : ps.equippedOffhandDurability;
   const equipPrefixId = equipSlot === 'mainhand' ? ps.equippedMainhandPrefixId : ps.equippedOffhandPrefixId;
   const equipSuffixId = equipSlot === 'mainhand' ? ps.equippedMainhandSuffixId : ps.equippedOffhandSuffixId;
-  const bagItem = ps.inventorySlots[bagIndex];
-  if (bagItem && (bagItem.durability <= 0 || !canEquipWeaponInSlot(bagItem.key, equipSlot))) return;
 
   if (equipSlot === 'mainhand') {
     const newMainWeapon = bagItem ? getWeapon(bagItem.key) : undefined;
@@ -304,7 +309,7 @@ export function moveToRerollSlot(
   if (source === 'inventory') {
     if (index < 0 || index >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return false;
     const item = ps.inventorySlots[index];
-    if (!item?.key) return false;
+    if (!item || !isWeaponInstance(item)) return false;
     instance = { key: item.key, durability: item.durability, prefixId: item.prefixId, suffixId: item.suffixId };
     ps.inventorySlots[index] = null;
   } else if (source === 'chest') {
@@ -414,5 +419,61 @@ export function addWeaponToInventory(ps: PlayingStateShape, instance: WeaponInst
     prefixId: instance.prefixId,
     suffixId: instance.suffixId
   };
+  return true;
+}
+
+/**
+ * Add one whetstone to inventory: stack with existing whetstone slot or use first empty slot.
+ * Returns true if added.
+ */
+export function addWhetstoneToInventory(ps: PlayingStateShape): boolean {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  const existing = ps.inventorySlots.findIndex((s): s is WhetstoneConsumable => isWhetstoneSlot(s));
+  if (existing >= 0) {
+    (ps.inventorySlots[existing] as WhetstoneConsumable).count += 1;
+    return true;
+  }
+  const empty = ps.inventorySlots.findIndex((s) => s == null);
+  if (empty < 0) return false;
+  ps.inventorySlots[empty] = { type: 'whetstone', count: 1 };
+  return true;
+}
+
+/**
+ * Use one whetstone from the given inventory slot on a weapon. Target can be equipped mainhand/offhand or an inventory weapon slot.
+ * Repairs that weapon by 35% of max durability. Returns true if used.
+ */
+export function useWhetstoneOnWeapon(
+  ps: PlayingStateShape,
+  whetstoneSlotIndex: number,
+  target: 'mainhand' | 'offhand' | { bagIndex: number }
+): boolean {
+  if (whetstoneSlotIndex < 0 || whetstoneSlotIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return false;
+  const slot = ps.inventorySlots[whetstoneSlotIndex];
+  if (!isWhetstoneSlot(slot) || slot.count < 1) return false;
+  const repairAmount = Math.floor(MAX_WEAPON_DURABILITY * WHETSTONE_REPAIR_PERCENT);
+
+  if (target === 'mainhand') {
+    if (!ps.equippedMainhandKey || ps.equippedMainhandKey === 'none') return false;
+    ps.equippedMainhandDurability = Math.min(MAX_WEAPON_DURABILITY, ps.equippedMainhandDurability + repairAmount);
+  } else if (target === 'offhand') {
+    if (!ps.equippedOffhandKey || ps.equippedOffhandKey === 'none') return false;
+    ps.equippedOffhandDurability = Math.min(MAX_WEAPON_DURABILITY, ps.equippedOffhandDurability + repairAmount);
+  } else {
+    const bagIndex = target.bagIndex;
+    if (bagIndex < 0 || bagIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots[bagIndex]) return false;
+    const weaponSlot = ps.inventorySlots[bagIndex];
+    if (!isWeaponInstance(weaponSlot)) return false;
+    ps.inventorySlots[bagIndex] = {
+      ...weaponSlot,
+      durability: Math.min(MAX_WEAPON_DURABILITY, weaponSlot.durability + repairAmount)
+    };
+  }
+
+  if (slot.count === 1) {
+    ps.inventorySlots[whetstoneSlotIndex] = null;
+  } else {
+    (ps.inventorySlots[whetstoneSlotIndex] as WhetstoneConsumable).count -= 1;
+  }
   return true;
 }

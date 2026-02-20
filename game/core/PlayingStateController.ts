@@ -2,7 +2,7 @@
  * Handles portal and hub (sanctuary) logic: cooldowns, E/B key, level transition, board/chest.
  */
 import { GameConfig } from '../config/GameConfig.js';
-import { getRandomQuestsForBoard } from '../config/questConfig.js';
+import { getRandomQuestsForBoard, DELVE_LEVEL } from '../config/questConfig.js';
 import { Utils } from '../utils/Utils.js';
 import type { Quest } from '../types/quest.js';
 import { Transform } from '../components/Transform.js';
@@ -14,12 +14,15 @@ export interface PlayingStateControllerContext {
         portal: { x: number; y: number; width: number; height: number; spawned: boolean; hasNextLevel: boolean; targetLevel: number } | null;
         portalUseCooldown: number;
         playerNearPortal: boolean;
+        portalChannelProgress: number;
+        portalChannelAction: 'e' | 'b' | null;
         board: { x: number; y: number; width: number; height: number } | null;
         boardOpen: boolean;
         boardUseCooldown: number;
         playerNearBoard: boolean;
         playerNearQuestPortal: boolean;
         questPortalUseCooldown: number;
+        questPortalChannelProgress: number;
         activeQuest: Quest | null;
         chest: { x: number; y: number; width: number; height: number } | null;
         chestOpen: boolean;
@@ -35,6 +38,9 @@ export interface PlayingStateControllerContext {
         crossbowPerfectReloadNext: boolean;
         questList: { level: number; difficultyId: string; difficulty?: { goldMultiplier?: number }; seed?: number }[];
         hubSelectedQuestIndex: number;
+        delveFloor: number;
+        questCompleteFlairRemaining: number;
+        questCompleteFlairTriggered?: boolean;
     };
     systems: {
         get(name: string): unknown;
@@ -66,25 +72,52 @@ export class PlayingStateController {
             g.playingState.portalUseCooldown = Math.max(0, g.playingState.portalUseCooldown - deltaTime);
         }
 
-        const enemyManager = g.systems.get('enemies') as { getCurrentLevel(): number; getEnemiesKilledThisLevel(): number; changeLevel(level: number, entities: unknown, obstacleManager: unknown, playerSpawn: { x: number; y: number } | null): void } | undefined;
+        const enemyManager = g.systems.get('enemies') as { getCurrentLevel(): number; getEnemiesKilledThisLevel(): number; getAliveCount(): number; changeLevel(level: number, entities: unknown, obstacleManager: unknown, playerSpawn: { x: number; y: number } | null, options?: { delveFloor?: number }): void } | undefined;
         if (!enemyManager) {
             g.playingState.playerNearPortal = false;
             return;
         }
 
         const currentLevel = enemyManager.getCurrentLevel();
+        const isDelve = currentLevel === DELVE_LEVEL;
         const levelConfig = GameConfig.levels && GameConfig.levels[currentLevel];
-        const nextLevel = currentLevel + 1;
-        const nextLevelExists = !!(GameConfig.levels && GameConfig.levels[nextLevel]);
-        const killsRequired = (levelConfig && levelConfig.killsToUnlockPortal != null) ? levelConfig.killsToUnlockPortal : 999;
+        const nextLevel = isDelve ? DELVE_LEVEL : currentLevel + 1;
+        const nextLevelExists = isDelve || !!(GameConfig.levels && GameConfig.levels[currentLevel + 1]);
+        const killsRequired = isDelve ? 999 : ((levelConfig && levelConfig.killsToUnlockPortal != null) ? levelConfig.killsToUnlockPortal : 999);
         const kills = enemyManager.getEnemiesKilledThisLevel();
+        const allDead = isDelve && enemyManager.getAliveCount && enemyManager.getAliveCount() === 0;
 
         g.playingState.portal.targetLevel = nextLevel;
-        g.playingState.portal.spawned = kills >= killsRequired;
-        g.playingState.portal.hasNextLevel = !!nextLevelExists;
+        g.playingState.portal.spawned = isDelve ? allDead : (kills >= killsRequired);
+        // Delve: always allow descending (E = next floor, B = return to sanctuary). Other quests: complete = return only.
+        const isDelveQuest = g.playingState.activeQuest?.questType === 'delve';
+        g.playingState.portal.hasNextLevel = isDelveQuest ? nextLevelExists : (g.playingState.activeQuest ? false : nextLevelExists);
+
+        // Quest complete flair: trigger once when portal spawns during a quest
+        if (g.playingState.portal.spawned && g.playingState.activeQuest && !g.playingState.questCompleteFlairTriggered) {
+            g.playingState.questCompleteFlairTriggered = true;
+            g.playingState.questCompleteFlairRemaining = 2.5;
+        }
+        if (g.playingState.questCompleteFlairRemaining > 0) {
+            g.playingState.questCompleteFlairRemaining = Math.max(0, g.playingState.questCompleteFlairRemaining - deltaTime);
+        }
+
+        // Delve: stairs spawn near last enemy kill
+        if (isDelve && allDead && g.playingState.portal) {
+            const w = (levelConfig && levelConfig.worldWidth != null) ? levelConfig.worldWidth : 1200;
+            const h = (levelConfig && levelConfig.worldHeight != null) ? levelConfig.worldHeight : 1200;
+            const cx = g.playingState.lastEnemyKillX ?? w / 2;
+            const cy = g.playingState.lastEnemyKillY ?? h / 2;
+            const halfW = g.playingState.portal.width / 2;
+            const halfH = g.playingState.portal.height / 2;
+            g.playingState.portal.x = Math.max(0, Math.min(w - g.playingState.portal.width, cx - halfW));
+            g.playingState.portal.y = Math.max(0, Math.min(h - g.playingState.portal.height, cy - halfH));
+        }
 
         if (!g.playingState.portal.spawned || !player) {
             g.playingState.playerNearPortal = false;
+            g.playingState.portalChannelProgress = 0;
+            g.playingState.portalChannelAction = null;
             return;
         }
 
@@ -100,25 +133,38 @@ export class PlayingStateController {
         );
         g.playingState.playerNearPortal = overlap;
 
-        if (!overlap || g.playingState.portalUseCooldown > 0) return;
+        if (!overlap) {
+            g.playingState.portalChannelProgress = 0;
+            g.playingState.portalChannelAction = null;
+            return;
+        }
+        if (g.playingState.portalUseCooldown > 0) return;
 
         const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
         if (!inputSystem) return;
 
-        if (inputSystem.isKeyPressed('b')) {
+        const channelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime != null)
+            ? (GameConfig.portal as { channelTime: number }).channelTime
+            : 1.2;
+
+        const doReturnToSanctuary = () => {
             g.screenManager.selectedStartLevel = 0;
             g.startGame();
             g.playingState.portalUseCooldown = 1.5;
-            return;
-        }
+        };
 
-        if (inputSystem.isKeyPressed('e') && nextLevelExists) {
+        const doNextLevel = () => {
             const obstacleManager = g.systems.get('obstacles') as { clearWorld(): void; generateWorld(w: number, h: number, obstacles: unknown, exclusion: { x: number; y: number; radius: number }): void };
             const worldConfig = GameConfig.world;
             const nextLevelConfig = GameConfig.levels && GameConfig.levels[nextLevel];
             const nextWorldWidth = (nextLevelConfig && nextLevelConfig.worldWidth != null) ? nextLevelConfig.worldWidth : worldConfig.width;
             const nextWorldHeight = (nextLevelConfig && nextLevelConfig.worldHeight != null) ? nextLevelConfig.worldHeight : worldConfig.height;
             const nextObstacles = nextLevelConfig && nextLevelConfig.obstacles;
+            if (isDelve) {
+                g.playingState.delveFloor = (g.playingState.delveFloor || 0) + 1;
+                g.playingState.lastEnemyKillX = null;
+                g.playingState.lastEnemyKillY = null;
+            }
             obstacleManager.clearWorld();
             obstacleManager.generateWorld(nextWorldWidth, nextWorldHeight, nextObstacles, {
                 x: nextWorldWidth / 2,
@@ -135,8 +181,42 @@ export class PlayingStateController {
             if (cameraSystem && cameraSystem.setWorldBounds) cameraSystem.setWorldBounds(nextWorldWidth, nextWorldHeight);
             if (pathfindingSystem && pathfindingSystem.setWorldBounds) pathfindingSystem.setWorldBounds(nextWorldWidth, nextWorldHeight);
             const playerSpawnForLevel = { x: transform.x, y: transform.y };
-            enemyManager.changeLevel(nextLevel, g.entities, obstacleManager, playerSpawnForLevel);
+            const opts = isDelve ? { delveFloor: g.playingState.delveFloor } : undefined;
+            enemyManager.changeLevel(nextLevel, g.entities, obstacleManager, playerSpawnForLevel, opts);
             g.playingState.portalUseCooldown = 1.5;
+        };
+
+        // Portal interact key is E only: E = next area when available, else E = return to sanctuary
+        if (g.playingState.portalChannelAction !== null) {
+            if (!inputSystem.isKeyPressed('e')) {
+                g.playingState.portalChannelProgress = 0;
+                g.playingState.portalChannelAction = null;
+                return;
+            }
+            g.playingState.portalChannelProgress = Math.min(1, g.playingState.portalChannelProgress + deltaTime / channelTime);
+            if (g.playingState.portalChannelProgress >= 1) {
+                const action = g.playingState.portalChannelAction;
+                g.playingState.portalChannelProgress = 0;
+                g.playingState.portalChannelAction = null;
+                if (action === 'b') {
+                    doReturnToSanctuary();
+                } else {
+                    doNextLevel();
+                }
+                return;
+            }
+            return;
+        }
+
+        if (inputSystem.isKeyPressed('e')) {
+            const action = g.playingState.portal.hasNextLevel ? 'e' : 'b';
+            g.playingState.portalChannelAction = action;
+            g.playingState.portalChannelProgress = 0;
+            if (channelTime <= 0) {
+                if (action === 'b') doReturnToSanctuary();
+                else doNextLevel();
+                g.playingState.portalChannelAction = null;
+            }
         }
     }
 
@@ -278,9 +358,10 @@ export class PlayingStateController {
         } else {
             g.playingState.playerNearRerollStation = false;
         }
-        // Quest portal in hub: when a quest is accepted, a portal spawns; E at portal starts the quest
+        // Quest portal in hub: when a quest is accepted, a portal spawns; hold E at portal to channel and start the quest
         const hubConfig = GameConfig.hub;
         const questPortalConfig = hubConfig && hubConfig.questPortal;
+        const questChannelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime) ?? 1.2;
         if (player && g.playingState.activeQuest && questPortalConfig) {
             const transform = player.getComponent(Transform);
             if (transform) {
@@ -289,16 +370,26 @@ export class PlayingStateController {
                     questPortalConfig.x, questPortalConfig.y, questPortalConfig.width, questPortalConfig.height
                 );
                 g.playingState.playerNearQuestPortal = overlap;
-                if (overlap && g.playingState.questPortalUseCooldown <= 0 && inputSystem && inputSystem.isKeyPressed('e')) {
-                    g.screenManager.selectedStartLevel = g.playingState.activeQuest.level;
-                    g.playingState.questPortalUseCooldown = 0.5;
-                    g.startGame();
+                if (!overlap) {
+                    g.playingState.questPortalChannelProgress = 0;
+                } else if (g.playingState.questPortalUseCooldown <= 0 && inputSystem && inputSystem.isKeyPressed('e')) {
+                    g.playingState.questPortalChannelProgress = Math.min(1, g.playingState.questPortalChannelProgress + deltaTime / questChannelTime);
+                    if (g.playingState.questPortalChannelProgress >= 1) {
+                        g.screenManager.selectedStartLevel = g.playingState.activeQuest.level;
+                        g.playingState.questPortalUseCooldown = 0.5;
+                        g.playingState.questPortalChannelProgress = 0;
+                        g.startGame();
+                    }
+                } else {
+                    g.playingState.questPortalChannelProgress = 0;
                 }
             } else {
                 g.playingState.playerNearQuestPortal = false;
+                g.playingState.questPortalChannelProgress = 0;
             }
         } else {
             g.playingState.playerNearQuestPortal = false;
+            g.playingState.questPortalChannelProgress = 0;
         }
     }
 }

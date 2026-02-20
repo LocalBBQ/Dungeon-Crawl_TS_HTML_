@@ -1,5 +1,6 @@
 // Renders minimap panel. data: { entityManager, worldWidth, worldHeight, portal, currentLevel }
 import { GameConfig } from '../../config/GameConfig.ts';
+import { DELVE_LEVEL } from '../../config/questConfig.ts';
 import { Transform } from '../../components/Transform.ts';
 import { Renderable } from '../../components/Renderable.ts';
 import type { RenderContext } from './RenderContext.ts';
@@ -187,10 +188,13 @@ export class MinimapRenderer {
         drawZoomButton(layout.minusRect, '−');
         drawZoomButton(layout.plusRect, '+');
 
+        const isDelve = currentLevel === DELVE_LEVEL;
         const objectiveText = isHub ? 'Approach the board and press E to select a level' : (() => {
             if (portal && portal.spawned) {
-                return portal.hasNextLevel ? 'E Next area · B Return to Sanctuary' : 'B Return to Sanctuary';
+                if (isDelve) return portal.hasNextLevel ? 'E Descend' : 'E Return to Sanctuary';
+                return portal.hasNextLevel ? 'E Next area' : 'E Return to Sanctuary';
             }
+            if (isDelve) return 'Slay all foes to open the stairs';
             const enemyManager = systems && systems.get ? systems.get('enemies') : null;
             const kills = enemyManager ? enemyManager.getEnemiesKilledThisLevel() : 0;
             const levelCfg = GameConfig.levels && GameConfig.levels[currentLevel];

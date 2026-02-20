@@ -58,7 +58,9 @@ export class ScreenManager {
             rows: [
                 { level: 1, y: startY, name: 'Village Outskirts' },
                 { level: 2, y: startY + rowH, name: 'Cursed Wilds' },
-                { level: 3, y: startY + rowH * 2, name: 'Demon Approach' }
+                { level: 3, y: startY + rowH * 2, name: 'Demon Approach' },
+                { level: 4, y: startY + rowH * 3, name: 'The Fort' },
+                { level: 5, y: startY + rowH * 4, name: 'Elder Woods' },
             ]
         };
     }
@@ -198,12 +200,117 @@ export class ScreenManager {
         return null;
     }
 
+    /** Draw a stone brazier with flame at center (x, y), total size w×h. */
+    private drawTitleBrazier(centerX: number, centerY: number, w: number, h: number) {
+        const ctx = this.ctx;
+        const baseH = h * 0.22;
+        const stemW = w * 0.35;
+        const stemH = h * 0.4;
+        const bowlDepth = h * 0.38;
+        const bowlTopW = w * 0.9;
+        const bowlBottomW = w * 0.7;
+        const left = centerX - w / 2;
+        const right = centerX + w / 2;
+
+        // Base (dark stone)
+        ctx.fillStyle = '#3d3630';
+        ctx.beginPath();
+        ctx.roundRect(left, centerY + h / 2 - baseH, w, baseH, 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2a2520';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Stem
+        ctx.fillStyle = '#4a443c';
+        ctx.fillRect(centerX - stemW / 2, centerY + h / 2 - baseH - stemH, stemW, stemH);
+        ctx.strokeStyle = '#35302a';
+        ctx.strokeRect(centerX - stemW / 2, centerY + h / 2 - baseH - stemH, stemW, stemH);
+
+        // Bowl (trapezoid / basin)
+        const bowlTop = centerY + h / 2 - baseH - stemH - bowlDepth;
+        ctx.fillStyle = '#5a5348';
+        ctx.beginPath();
+        ctx.moveTo(centerX - bowlTopW / 2, bowlTop);
+        ctx.lineTo(centerX + bowlTopW / 2, bowlTop);
+        ctx.lineTo(centerX + bowlBottomW / 2, bowlTop + bowlDepth);
+        ctx.lineTo(centerX - bowlBottomW / 2, bowlTop + bowlDepth);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#3d3630';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Inner bowl edge (rim)
+        ctx.strokeStyle = '#6b6458';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerX - bowlTopW / 2 + 2, bowlTop + 3);
+        ctx.lineTo(centerX + bowlTopW / 2 - 2, bowlTop + 3);
+        ctx.stroke();
+
+        // Flame (multi-layer for glow)
+        const flameCenterY = bowlTop + 8;
+        const flameH = 28;
+        const t = (Date.now() / 120) % (Math.PI * 2);
+        const sway = Math.sin(t) * 2;
+
+        // Outer glow
+        const glowGrad = ctx.createRadialGradient(
+            centerX + sway, flameCenterY, 0,
+            centerX + sway, flameCenterY, flameH * 1.2
+        );
+        glowGrad.addColorStop(0, 'rgba(255, 180, 60, 0.7)');
+        glowGrad.addColorStop(0.4, 'rgba(220, 100, 30, 0.25)');
+        glowGrad.addColorStop(1, 'rgba(180, 50, 10, 0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.ellipse(centerX + sway, flameCenterY, 10, flameH, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core flame (teardrop shape)
+        const coreGrad = ctx.createLinearGradient(centerX, flameCenterY - flameH, centerX, flameCenterY + flameH);
+        coreGrad.addColorStop(0, '#fff8b0');
+        coreGrad.addColorStop(0.3, '#ffcc40');
+        coreGrad.addColorStop(0.7, '#e07020');
+        coreGrad.addColorStop(1, '#802010');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.moveTo(centerX + sway, flameCenterY - flameH * 0.85);
+        ctx.bezierCurveTo(
+            centerX + 8 + sway, flameCenterY - 4,
+            centerX + 6 + sway, flameCenterY + flameH,
+            centerX + sway, flameCenterY + flameH * 0.3
+        );
+        ctx.bezierCurveTo(
+            centerX - 6 + sway, flameCenterY + flameH,
+            centerX - 8 + sway, flameCenterY - 4,
+            centerX + sway, flameCenterY - flameH * 0.85
+        );
+        ctx.fill();
+
+        // Inner bright tip
+        ctx.fillStyle = 'rgba(255, 255, 220, 0.9)';
+        ctx.beginPath();
+        ctx.ellipse(centerX + sway, flameCenterY - flameH * 0.5, 3, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     renderTitleScreen() {
         const width = this.canvas.width;
         const height = this.canvas.height;
+        const cx = width / 2;
+        const cy = height / 2;
 
         this.ctx.fillStyle = 'rgba(10, 8, 6, 0.88)';
         this.ctx.fillRect(0, 0, width, height);
+
+        // Stone braziers with flames (left and right of title)
+        const brazierY = cy - 90;
+        const brazierW = 56;
+        const brazierH = 100;
+        this.drawTitleBrazier(cx - 220, brazierY, brazierW, brazierH);
+        this.drawTitleBrazier(cx + 220, brazierY, brazierW, brazierH);
 
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
@@ -513,14 +620,18 @@ export class ScreenManager {
         this.ctx.textBaseline = 'middle';
         this.ctx.fillStyle = '#c9a227';
         this.ctx.font = '700 38px Cinzel, Georgia, serif';
-        this.ctx.fillText('Thou art fallen', width / 2, height / 2 - 70);
+        this.ctx.fillText('Thou art fallen', width / 2, height / 2 - 88);
 
         this.ctx.fillStyle = '#a08060';
+        this.ctx.font = '500 15px Cinzel, Georgia, serif';
+        this.ctx.fillText('You dropped your equipment and passed out.', width / 2, height / 2 - 48);
+        this.ctx.fillText('A strange presence has brought you back to the Sanctuary.', width / 2, height / 2 - 28);
+
         this.ctx.font = '500 14px Cinzel, Georgia, serif';
-        this.ctx.fillText('Press SPACE or click to return to Sanctuary', width / 2, height / 2 - 18);
+        this.ctx.fillText('Press SPACE or click to return to Sanctuary', width / 2, height / 2 + 4);
 
         const buttonX = width / 2;
-        const buttonY = height / 2 + 48;
+        const buttonY = height / 2 + 70;
         const buttonWidth = 160;
         const buttonHeight = 48;
 
@@ -542,7 +653,7 @@ export class ScreenManager {
         const width = this.canvas.width;
         const height = this.canvas.height;
         const buttonX = width / 2;
-        const buttonY = screen === 'title' ? height / 2 + 60 : height / 2 + 48;
+        const buttonY = screen === 'title' ? height / 2 + 60 : screen === 'death' ? height / 2 + 70 : height / 2 + 48;
         const buttonWidth = 160;
         const buttonHeight = 48;
 
@@ -1018,8 +1129,7 @@ export class ScreenManager {
             'Right click — Block',
             'Q — Heal (tap to drink, then regen)',
             'Shift + Left click — Dash attack',
-            'E — Portal to next area',
-            'B — Return to Sanctuary',
+            'E — Portal (next area or return to Sanctuary)',
             'In Sanctuary: E at board — Level select · E at chest — Equipment · E at shop — Buy weapons'
         ];
         this.ctx.fillStyle = '#e8dcc8';

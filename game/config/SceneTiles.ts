@@ -7,6 +7,9 @@ import { SceneTilesForest } from './sceneTiles/ForestTiles.ts';
 import { SceneTilesCursedWilds } from './sceneTiles/CursedWildsTiles.ts';
 import { SceneTilesDemonApproach } from './sceneTiles/DemonApproachTiles.ts';
 import { SceneTilesFort } from './sceneTiles/FortTiles.ts';
+import { SceneTilesDungeon } from './sceneTiles/DungeonTiles.ts';
+import { SceneTilesDelve } from './sceneTiles/DelveTiles.ts';
+import { SceneTilesElderWoods } from './sceneTiles/ElderWoodsTiles.ts';
 
 export interface SceneTileDef {
   width?: number;
@@ -23,6 +26,9 @@ export interface SceneTilesRegistry {
   cursedWilds: Record<string, SceneTileDef>;
   demonApproach: Record<string, SceneTileDef>;
   fort: Record<string, SceneTileDef>;
+  dungeon: Record<string, SceneTileDef>;
+  delve: Record<string, SceneTileDef>;
+  elderWoods: Record<string, SceneTileDef>;
   getTile(tileId: string): SceneTileDef | null;
 }
 
@@ -32,6 +38,9 @@ const forest = SceneTilesForest as Record<string, SceneTileDef>;
 const cursedWilds = SceneTilesCursedWilds as Record<string, SceneTileDef>;
 const demonApproach = SceneTilesDemonApproach as Record<string, SceneTileDef>;
 const fort = SceneTilesFort as Record<string, SceneTileDef>;
+const dungeon = SceneTilesDungeon as Record<string, SceneTileDef>;
+const delve = SceneTilesDelve as Record<string, SceneTileDef>;
+const elderWoods = SceneTilesElderWoods as Record<string, SceneTileDef>;
 
 const SceneTiles: SceneTilesRegistry = {
   defaultTileSize,
@@ -39,6 +48,9 @@ const SceneTiles: SceneTilesRegistry = {
   cursedWilds,
   demonApproach,
   fort,
+  dungeon,
+  delve,
+  elderWoods,
   getTile(tileId: string): SceneTileDef | null {
     if (!tileId) return null;
     if (tileId.indexOf('.') !== -1) {

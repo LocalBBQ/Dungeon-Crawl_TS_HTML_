@@ -26,9 +26,14 @@ export class ProjectileManager {
         range: number,
         owner: unknown,
         ownerType: 'player' | 'enemy' = 'player',
-        stunBuildup = 0
+        stunBuildup = 0,
+        pierce = false,
+        airborneDuration = 0,
+        width = 8,
+        height = 8,
+        color?: string
     ): Projectile {
-        const projectile = new Projectile(x, y, angle, speed, damage, range, owner, ownerType, stunBuildup);
+        const projectile = new Projectile(x, y, angle, speed, damage, range, owner, ownerType, stunBuildup, pierce, airborneDuration, width, height, color);
         this.projectiles.push(projectile);
         return projectile;
     }
@@ -69,13 +74,26 @@ export class ProjectileManager {
             if (projectile.ownerType === 'player') {
                 if (enemyManager) {
                     for (const enemy of enemyManager.enemies) {
-                        if (projectile.checkCollision(enemy)) {
+                        const enemyId = (enemy as { id?: string }).id;
+                        if (projectile.checkCollision(enemy, enemyId)) {
                             const enemyHealth = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(Health);
                             const enemyTransform = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(Transform);
                             if (enemyHealth) {
+                                projectile.hitEntityIds.add(enemyId ?? '');
                                 (enemyHealth as Health).takeDamage(projectile.damage);
                                 const enemyStatus = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(StatusEffects);
-                                if (enemyStatus) (enemyStatus as StatusEffects).addStunBuildup(projectile.stunBuildup || 0);
+                                if (enemyStatus) {
+                                    (enemyStatus as StatusEffects).addStunBuildup(projectile.stunBuildup || 0);
+                                    if (projectile.airborneDuration > 0) {
+                                        const dirX = Math.cos(projectile.angle);
+                                        const dirY = Math.sin(projectile.angle);
+                                        (enemyStatus as StatusEffects).applyAirborne(projectile.airborneDuration, {
+                                            directionX: dirX,
+                                            directionY: dirY,
+                                            speed: 140
+                                        });
+                                    }
+                                }
                                 const enemyMovement = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(Movement);
                                 if (enemyMovement && enemyTransform) {
                                     const dx = (enemyTransform as Transform).x - projectile.x;
@@ -86,9 +104,11 @@ export class ProjectileManager {
                                     (systems.eventBus as { emit(name: string, payload?: unknown): void }).emit(EventTypes.PLAYER_HIT_ENEMY, {});
                                 }
                             }
-                            projectile.active = false;
-                            this.projectiles.splice(i, 1);
-                            break;
+                            if (!projectile.pierce) {
+                                projectile.active = false;
+                                this.projectiles.splice(i, 1);
+                                break;
+                            }
                         }
                     }
                 }
@@ -165,54 +185,124 @@ export class ProjectileManager {
             ctx.save();
             ctx.translate(screenX, screenY);
             ctx.rotate(projectile.angle);
-            // Arrow: diamond tip (front), shaft line, fletching (back). Drawn along +x.
-            const len = 14 * z;
-            const headLen = 4 * z;   // diamond tip depth
-            const headW = 2.5 * z;   // diamond half-width
-            const fletchLen = 3 * z; // fletching length (backward from tail)
-            const fletchW = 2 * z;   // fletching half-width
-            const tipX = len / 2;
-            const tailX = -len / 2;
 
-            ctx.strokeStyle = '#c0c0c0';
-            ctx.lineWidth = Math.max(0.5, 1 / z);
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
+            if (projectile.pierce && projectile.airborneDuration > 0) {
+                // Tornado (Storm Release): top-down view — spinning circles and spiral arms
+                const r = (Math.max(projectile.width, projectile.height) / 2) * z;
+                const spin = (Date.now() / 100) % (Math.PI * 2);
+                const lw = Math.max(1.5, 3 / z);
 
-            // 1) Diamond tip (front) — white
-            const headBackX = tipX - headLen;
-            const headRearX = headBackX - headLen;
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.moveTo(tipX, 0);           // point
-            ctx.lineTo(headBackX, headW);  // top
-            ctx.lineTo(headRearX, 0);      // back of diamond
-            ctx.lineTo(headBackX, -headW); // bottom
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+                const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+                grad.addColorStop(0, 'rgba(80, 100, 120, 0.5)');
+                grad.addColorStop(0.35, 'rgba(140, 165, 190, 0.35)');
+                grad.addColorStop(0.7, 'rgba(200, 215, 230, 0.2)');
+                grad.addColorStop(1, 'rgba(220, 230, 245, 0.08)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
 
-            // 2) Shaft (line from back of diamond to fletching) — brown
-            ctx.strokeStyle = '#6b5344';
-            ctx.lineWidth = Math.max(1, 1.5 / z);
-            const shaftLeft = tailX + fletchLen * 0.5;
-            ctx.beginPath();
-            ctx.moveTo(headRearX, 0);
-            ctx.lineTo(shaftLeft, 0);
-            ctx.stroke();
+                ctx.strokeStyle = 'rgba(180, 200, 220, 0.5)';
+                ctx.lineWidth = lw;
+                const rings = 4;
+                for (let i = 1; i <= rings; i++) {
+                    const ringR = (i / rings) * r * 0.9;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
 
-            // 3) Fletching (feathers at tail) — white
-            ctx.strokeStyle = '#d0d0d0';
-            ctx.fillStyle = '#f0f0f0';
-            ctx.lineWidth = Math.max(0.5, 1 / z);
-            ctx.beginPath();
-            ctx.moveTo(tailX, 0);
-            ctx.lineTo(tailX - fletchLen, fletchW);
-            ctx.lineTo(tailX - fletchLen * 0.3, 0);
-            ctx.lineTo(tailX - fletchLen, -fletchW);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+                const arms = 3;
+                for (let a = 0; a < arms; a++) {
+                    const armPhase = (a / arms) * Math.PI * 2 + spin;
+                    ctx.strokeStyle = `rgba(220, 235, 250, ${0.45 + (a % 2) * 0.15})`;
+                    ctx.lineWidth = Math.max(1, lw * 1.1);
+                    ctx.beginPath();
+                    for (let i = 0; i <= 24; i++) {
+                        const t = i / 24;
+                        const radius = t * r;
+                        const angle = armPhase + t * Math.PI * 2.5;
+                        const x = Math.cos(angle) * radius;
+                        const y = Math.sin(angle) * radius;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = 'rgba(60, 80, 100, 0.6)';
+                ctx.strokeStyle = 'rgba(100, 130, 160, 0.7)';
+                ctx.lineWidth = lw * 0.8;
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else if (projectile.ownerType === 'enemy' && (projectile.width > 12 || projectile.height > 12)) {
+                // Large enemy projectile (e.g. boss fireball): drawn as fireball
+                const r = (Math.max(projectile.width, projectile.height) / 2) * z;
+                const hex = projectile.color.replace('#', '');
+                const rv = parseInt(hex.slice(0, 2), 16);
+                const gv = parseInt(hex.slice(2, 4), 16);
+                const bv = parseInt(hex.slice(4, 6), 16);
+                const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 0, 0, 0, r);
+                grad.addColorStop(0, `rgba(255, 255, 200, 0.95)`);
+                grad.addColorStop(0.4, `rgba(${rv}, ${gv}, ${bv}, 0.85)`);
+                grad.addColorStop(0.85, `rgba(${Math.max(0, rv - 60)}, ${Math.max(0, gv - 40)}, ${Math.max(0, bv - 60)}, 0.6)`);
+                grad.addColorStop(1, `rgba(${Math.max(0, rv - 100)}, 40, 20, 0.2)`);
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = `rgba(${rv}, ${gv}, ${bv}, 0.9)`;
+                ctx.lineWidth = Math.max(1, 2 / z);
+                ctx.stroke();
+            } else {
+                // Arrow: diamond tip (front), shaft line, fletching (back). Drawn along +x.
+                const len = 14 * z;
+                const headLen = 4 * z;   // diamond tip depth
+                const headW = 2.5 * z;   // diamond half-width
+                const fletchLen = 3 * z; // fletching length (backward from tail)
+                const fletchW = 2 * z;   // fletching half-width
+                const tipX = len / 2;
+                const tailX = -len / 2;
+
+                ctx.strokeStyle = '#c0c0c0';
+                ctx.lineWidth = Math.max(0.5, 1 / z);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                const headBackX = tipX - headLen;
+                const headRearX = headBackX - headLen;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(tipX, 0);
+                ctx.lineTo(headBackX, headW);
+                ctx.lineTo(headRearX, 0);
+                ctx.lineTo(headBackX, -headW);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = '#6b5344';
+                ctx.lineWidth = Math.max(1, 1.5 / z);
+                const shaftLeft = tailX + fletchLen * 0.5;
+                ctx.beginPath();
+                ctx.moveTo(headRearX, 0);
+                ctx.lineTo(shaftLeft, 0);
+                ctx.stroke();
+
+                ctx.strokeStyle = '#d0d0d0';
+                ctx.fillStyle = '#f0f0f0';
+                ctx.lineWidth = Math.max(0.5, 1 / z);
+                ctx.beginPath();
+                ctx.moveTo(tailX, 0);
+                ctx.lineTo(tailX - fletchLen, fletchW);
+                ctx.lineTo(tailX - fletchLen * 0.3, 0);
+                ctx.lineTo(tailX - fletchLen, -fletchW);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
 
             ctx.restore();
         }

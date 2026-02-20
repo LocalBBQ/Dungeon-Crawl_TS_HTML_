@@ -138,7 +138,8 @@ export class AI implements Component {
 
         const statusEffects = this.entity.getComponent(StatusEffects);
         if (statusEffects && statusEffects.isStunned) return;
-        
+        if (statusEffects && statusEffects.isAirborne) return;
+
         // Reset attack initiation flag at start of each frame
         this.attackInitiatedThisFrame = false;
 
@@ -317,6 +318,9 @@ export class AI implements Component {
             const projectileManager = systems ? systems.get('projectiles') : null;
             if (projectileManager) {
                 const angle = Utils.angleTo(transform.x, transform.y, playerTransform.x, playerTransform.y);
+                const projWidth = (projectileConfig as { width?: number }).width ?? 8;
+                const projHeight = (projectileConfig as { height?: number }).height ?? 8;
+                const projColor = (projectileConfig as { color?: string }).color;
                 projectileManager.createProjectile(
                     transform.x,
                     transform.y,
@@ -326,7 +330,12 @@ export class AI implements Component {
                     projectileConfig.range,
                     this.entity,
                     'enemy',
-                    projectileConfig.stunBuildup ?? 0
+                    projectileConfig.stunBuildup ?? 0,
+                    false,
+                    0,
+                    projWidth,
+                    projHeight,
+                    projColor
                 );
                 this.projectileCooldown = projectileConfig.cooldown;
                 this.state = 'attack';

@@ -67,16 +67,33 @@ const zombieClaw: EnemyWeaponLike = {
     id: 'zombieClaw',
     name: 'Zombie Claw',
     visual: 'claw',
-    baseRange: 42,
+    baseRange: 58,
     baseDamage: 6,
     baseArcDegrees: 80,
-    cooldown: 1.4,
+    cooldown: 1.0,
     getComboStageProperties(stage: number) {
         if (stage !== 1) return null;
-        return { range: 42, damage: 6, arc: Utils.degToRad(80), knockbackForce: 140 };
+        return { range: 58, damage: 6, arc: Utils.degToRad(80), knockbackForce: 140 };
     },
     getDashAttackProperties() {
         return null;
+    }
+};
+
+const dragonClaw: EnemyWeaponLike = {
+    id: 'dragonClaw',
+    name: 'Dragon Claw',
+    visual: 'claw',
+    baseRange: 68,
+    baseDamage: 20,
+    baseArcDegrees: 100,
+    cooldown: 0.9,
+    getComboStageProperties(stage: number) {
+        if (stage !== 1) return null;
+        return { range: 68, damage: 20, arc: Utils.degToRad(100), knockbackForce: 280 };
+    },
+    getDashAttackProperties() {
+        return { damage: 26, knockbackForce: 380, range: 70 };
     }
 };
 
@@ -91,6 +108,7 @@ export const EnemyWeapons: Record<string, EnemyWeaponLike> & {
     lesserDemonClaw,
     skeletonNoMelee,
     zombieClaw,
+    dragonClaw,
 
     resolveWeapon(weaponId: string): EnemyWeaponLike | null {
         if (!weaponId) return null;

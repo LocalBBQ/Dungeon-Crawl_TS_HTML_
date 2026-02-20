@@ -27,6 +27,253 @@ export class ObstacleLayerRenderer {
         const screenY = camera.toScreenY(obstacle.y);
         const w = obstacle.width * zoom;
         const h = obstacle.height * zoom;
+        const cx = screenX + w / 2;
+        const cy = screenY + h / 2;
+
+        // Firepit: stone ring + campfire (always custom-drawn)
+        if (obstacle.type === 'firepit') {
+            const t = performance.now() * 0.004;
+            const stoneCount = 10;
+            const ringRadiusX = w * 0.38;
+            const ringRadiusY = h * 0.32;
+            const stoneBaseY = cy + h * 0.08;
+            for (let i = 0; i < stoneCount; i++) {
+                const a = (i / stoneCount) * Math.PI * 2 - Math.PI * 0.5;
+                const sx = cx + Math.cos(a) * ringRadiusX;
+                const sy = stoneBaseY + Math.sin(a) * ringRadiusY;
+                const sw = w * 0.14;
+                const sh = h * 0.12;
+                ctx.fillStyle = '#5a5550';
+                ctx.beginPath();
+                ctx.ellipse(sx, sy, sw * 0.6, sh * 0.8, a * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#3d3a36';
+                ctx.lineWidth = Math.max(1, 1.5 / zoom);
+                ctx.stroke();
+            }
+            const flicker = 0.85 + 0.15 * Math.sin(t * 2.1) * Math.sin(t * 1.7);
+            const flicker2 = 0.9 + 0.1 * Math.sin(t * 2.5);
+            ctx.fillStyle = `rgba(255, 100, 30, ${0.35 * flicker})`;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - h * 0.02, w * 0.28, h * 0.22, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = `rgba(255, 160, 50, ${0.6 * flicker2})`;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - h * 0.05, w * 0.18, h * 0.15, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = `rgba(255, 220, 120, ${0.85 * flicker})`;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - h * 0.06, w * 0.1, h * 0.08, 0, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
+        // Barrel: always procedural (wooden hoops + body)
+        if (obstacle.type === 'barrel') {
+            const barrelCx = screenX + w / 2;
+            ctx.fillStyle = '#3d3020';
+            ctx.strokeStyle = '#2a2018';
+            ctx.lineWidth = Math.max(1, 2 / zoom);
+            ctx.beginPath();
+            ctx.ellipse(barrelCx, screenY + h * 0.08, w * 0.42, h * 0.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(barrelCx, screenY + h * 0.92, w * 0.42, h * 0.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = obstacle.color || '#5c4a32';
+            ctx.strokeStyle = '#4a3c28';
+            ctx.beginPath();
+            ctx.ellipse(barrelCx, screenY + h / 2, w * 0.46, h * 0.42, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#4a3820';
+            ctx.beginPath();
+            ctx.ellipse(barrelCx, screenY + h * 0.5, w * 0.38, h * 0.36, 0, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
+        // Rock: always procedural (irregular blob + highlight)
+        if (obstacle.type === 'rock') {
+            const rockCx = screenX + w / 2;
+            const rockCy = screenY + h / 2;
+            const rw = w * 0.48;
+            const rh = h * 0.44;
+            ctx.fillStyle = obstacle.color || '#4a4a4a';
+            ctx.beginPath();
+            for (let i = 0; i <= 8; i++) {
+                const a = (i / 8) * Math.PI * 2 + 0.1;
+                const r = (i & 1 ? 1.0 : 0.88);
+                const ex = rockCx + Math.cos(a) * rw * r;
+                const ey = rockCy + Math.sin(a) * rh * r;
+                if (i === 0) ctx.moveTo(ex, ey);
+                else ctx.lineTo(ex, ey);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#3a3a3a';
+            ctx.lineWidth = Math.max(1, 1.5 / zoom);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(120, 120, 130, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(rockCx - w * 0.12, rockCy - h * 0.15, w * 0.2, h * 0.18, 0, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
+        // Well: stone ring + dark shaft + small roof/crank
+        if (obstacle.type === 'well') {
+            const wellCx = screenX + w / 2;
+            const wellCy = screenY + h / 2;
+            ctx.fillStyle = '#5a5550';
+            ctx.strokeStyle = '#3d3a36';
+            ctx.lineWidth = Math.max(1, 2 / zoom);
+            ctx.beginPath();
+            ctx.ellipse(wellCx, screenY + h * 0.22, w * 0.42, h * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#2a2830';
+            ctx.beginPath();
+            ctx.ellipse(wellCx, wellCy, w * 0.32, h * 0.35, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#4a4540';
+            ctx.fillRect(screenX + w * 0.35, screenY, w * 0.3, h * 0.18);
+            ctx.strokeStyle = '#3a3530';
+            ctx.strokeRect(screenX + w * 0.35, screenY, w * 0.3, h * 0.18);
+            ctx.fillStyle = '#6b5b4f';
+            ctx.beginPath();
+            ctx.ellipse(wellCx, screenY + h * 0.08, w * 0.08, h * 0.06, 0, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
+        // Fence: x-axis = post left + horizontal rails; y-axis = post top + vertical rails
+        if (obstacle.type === 'fence') {
+            const fenceColor = obstacle.color || '#8b7355';
+            const dark = '#6b5b45';
+            const isVertical = (obstacle as { fenceAxis?: string }).fenceAxis === 'y';
+            const lw = Math.max(1, 1 / zoom);
+            ctx.strokeStyle = '#5a4a38';
+            ctx.lineWidth = lw;
+
+            if (isVertical) {
+                // Y-axis: post at top, vertical rails running down
+                const postH = Math.max(2, h * 0.2);
+                ctx.fillStyle = dark;
+                ctx.fillRect(screenX, screenY, w, postH);
+                ctx.fillStyle = fenceColor;
+                ctx.fillRect(screenX, screenY + postH * 0.2, w, postH * 0.6);
+                ctx.strokeRect(screenX, screenY, w, postH);
+                const railX1 = screenX + w * 0.25;
+                const railX2 = screenX + w * 0.55;
+                const railX3 = screenX + w * 0.85;
+                const railW = Math.max(2, w * 0.08);
+                ctx.fillStyle = dark;
+                ctx.fillRect(railX1, screenY, railW, h);
+                ctx.fillRect(railX2, screenY, railW, h);
+                ctx.fillRect(railX3, screenY, railW, h);
+                ctx.fillStyle = fenceColor;
+                ctx.fillRect(railX1 + 1, screenY, Math.max(1, railW - 2), h);
+                ctx.fillRect(railX2 + 1, screenY, Math.max(1, railW - 2), h);
+                ctx.fillRect(railX3 + 1, screenY, Math.max(1, railW - 2), h);
+            } else {
+                // X-axis: post left, horizontal rails
+                const postW = Math.max(2, w * 0.25);
+                const postH = h;
+                ctx.fillStyle = dark;
+                ctx.fillRect(screenX, screenY, postW, postH);
+                ctx.fillStyle = fenceColor;
+                ctx.fillRect(screenX + postW * 0.2, screenY, postW * 0.6, postH);
+                ctx.strokeRect(screenX, screenY, postW, postH);
+                const railY1 = screenY + h * 0.25;
+                const railY2 = screenY + h * 0.55;
+                const railY3 = screenY + h * 0.85;
+                ctx.fillStyle = dark;
+                ctx.fillRect(screenX, railY1, w, Math.max(2, h * 0.08));
+                ctx.fillRect(screenX, railY2, w, Math.max(2, h * 0.08));
+                ctx.fillRect(screenX, railY3, w, Math.max(2, h * 0.08));
+                ctx.fillStyle = fenceColor;
+                ctx.fillRect(screenX, railY1 + 1, w, Math.max(1, h * 0.06));
+                ctx.fillRect(screenX, railY2 + 1, w, Math.max(1, h * 0.06));
+                ctx.fillRect(screenX, railY3 + 1, w, Math.max(1, h * 0.06));
+            }
+            return;
+        }
+
+        // Pillar: rounded column with base and cap
+        if (obstacle.type === 'pillar') {
+            const pilCx = screenX + w / 2;
+            const base = obstacle.color || '#6b6b6b';
+            const shade = '#5a5a5a';
+            const cap = '#7a7a7a';
+            ctx.fillStyle = shade;
+            ctx.fillRect(screenX + w * 0.1, screenY + h * 0.12, w * 0.8, h * 0.76);
+            ctx.fillStyle = base;
+            ctx.fillRect(screenX + w * 0.15, screenY + h * 0.15, w * 0.7, h * 0.7);
+            ctx.fillStyle = 'rgba(140, 140, 150, 0.5)';
+            ctx.fillRect(screenX + w * 0.2, screenY + h * 0.2, w * 0.35, h * 0.3);
+            ctx.fillStyle = shade;
+            ctx.fillRect(screenX + w * 0.15, screenY + h * 0.82, w * 0.7, h * 0.1);
+            ctx.fillStyle = cap;
+            ctx.fillRect(screenX + w * 0.1, screenY + h * 0.82, w * 0.8, h * 0.08);
+            ctx.fillStyle = shade;
+            ctx.fillRect(screenX + w * 0.2, screenY, w * 0.6, h * 0.12);
+            ctx.fillStyle = cap;
+            ctx.fillRect(screenX + w * 0.15, screenY, w * 0.7, h * 0.1);
+            return;
+        }
+
+        // Bush: leafy blob (overlapping ellipses)
+        if (obstacle.type === 'bush') {
+            const bushColor = obstacle.color || '#3a5a2a';
+            const darkLeaf = '#2d4a22';
+            ctx.fillStyle = darkLeaf;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + h * 0.05, w * 0.4, h * 0.42, 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = bushColor;
+            ctx.beginPath();
+            ctx.ellipse(cx - w * 0.15, cy, w * 0.38, h * 0.4, -0.05, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(cx + w * 0.12, cy - h * 0.05, w * 0.35, h * 0.38, 0.08, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - h * 0.08, w * 0.32, h * 0.35, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#254018';
+            ctx.lineWidth = Math.max(1, 1 / zoom);
+            ctx.stroke();
+            return;
+        }
+
+        // Rubble: irregular pile of small stones
+        if (obstacle.type === 'rubble') {
+            const rubColor = obstacle.color || '#4a4a4a';
+            const stones = 5 + Math.floor((obstacle.x + obstacle.y) % 4);
+            for (let i = 0; i < stones; i++) {
+                const ax = (i * 0.37 + 0.1) * Math.PI * 2;
+                const ox = cx + Math.cos(ax) * w * (0.15 + (i % 3) * 0.08);
+                const oy = cy + Math.sin(ax) * h * (0.12 + (i % 2) * 0.06);
+                const sw = w * (0.18 + (i % 5) * 0.04);
+                const sh = h * (0.16 + (i % 4) * 0.04);
+                ctx.fillStyle = rubColor;
+                ctx.beginPath();
+                ctx.ellipse(ox, oy, sw, sh, ax * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#3a3a3a';
+                ctx.lineWidth = Math.max(1, 1 / zoom);
+                ctx.stroke();
+            }
+            ctx.fillStyle = 'rgba(90, 90, 95, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(cx - w * 0.08, cy - h * 0.06, w * 0.15, h * 0.12, 0, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+
         if (useEnvironmentSprites && obstacle.spritePath && obstacleManager.loadedSprites.has(obstacle.spritePath)) {
             const sprite = obstacleManager.loadedSprites.get(obstacle.spritePath);
             if (sprite.complete && sprite.naturalWidth > 0) {
@@ -43,8 +290,6 @@ export class ObstacleLayerRenderer {
                 return;
             }
         }
-        const cx = screenX + w / 2;
-        const cy = screenY + h / 2;
         const color = obstacle.color || '#555';
         if (obstacle.type === 'tree') {
             ctx.fillStyle = '#4a2c1a';
@@ -201,7 +446,7 @@ export class ObstacleLayerRenderer {
         if (!obstacleManager) return;
         const zoom = camera.zoom;
         const useEnvironmentSprites = !settings || settings.useEnvironmentSprites !== false;
-        const depthSortTypes = ['tree', 'deadTree', 'rock', 'pillar', 'brokenPillar', 'column', 'statueBase', 'arch'];
+        const depthSortTypes = ['tree', 'deadTree', 'bush', 'rock', 'pillar', 'brokenPillar', 'column', 'statueBase', 'arch'];
 
         // View bounds in world space (with margin so we don't clip at edges)
         const margin = 80;

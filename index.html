@@ -10,6 +10,7 @@
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
         <div id="ui-overlay">
+            <div id="delve-floor-indicator" class="delve-floor-indicator hidden" aria-live="polite">Floor 1</div>
             <div id="orb-row">
                 <div class="orb-wrapper">
                     <div id="health-orb" class="orb health-orb" title="Health">
@@ -52,6 +53,21 @@
                         <div id="potion-fill" class="potion-fill" style="height: 100%;"></div>
                     </div>
                     <span id="heal-charges" class="heal-charges-text">3/3</span>
+                </div>
+                <div id="rising-gale-box" class="stat-bar rising-gale hidden" title="Rising Gale (Blessed Winds): 2 stacks = Storm Release">
+                    <label>Rising Gale</label>
+                    <div class="rising-gale-stacks">
+                        <span id="rising-gale-count" class="rising-gale-count">0</span>
+                        <span class="rising-gale-sep">/</span>
+                        <span class="rising-gale-max">2</span>
+                    </div>
+                    <div class="rising-gale-duration-container" title="Duration remaining">
+                        <div id="rising-gale-duration-bar" class="rising-gale-duration-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <div id="whetstone-box" class="stat-bar whetstone" title="Whetstone: drag onto a weapon in inventory to repair it by 35%.">
+                    <label>Whetstone</label>
+                    <span id="whetstone-count" class="whetstone-count">0</span>
                 </div>
             </div>
         </div>

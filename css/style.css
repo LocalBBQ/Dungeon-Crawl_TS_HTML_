@@ -38,6 +38,21 @@ body {
     align-items: center;
 }
 
+/* Delve floor counter (shown only in delve quest) */
+.delve-floor-indicator {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font: 600 15px Cinzel, Georgia, serif;
+    color: #c9a227;
+    letter-spacing: 0.06em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+.delve-floor-indicator.hidden {
+    display: none;
+}
+
 /* Bottom orb row - Diablo / Path of Exile style */
 #orb-row {
     display: flex;
@@ -233,6 +248,74 @@ body {
     font-weight: 600;
     color: #b89870;
     font-variant-numeric: tabular-nums;
+}
+
+/* Rising Gale (Blessed Winds) – stack count + duration */
+.stat-bar.rising-gale {
+    gap: 8px;
+}
+.stat-bar.rising-gale.hidden {
+    display: none !important;
+}
+.stat-bar.rising-gale label {
+    width: auto;
+    min-width: 72px;
+}
+.rising-gale-stacks {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #a8c8e8;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 6px rgba(160, 200, 240, 0.4);
+}
+.rising-gale-count.ready {
+    color: #70d0ff;
+    text-shadow: 0 0 8px rgba(100, 200, 255, 0.6);
+}
+.rising-gale-sep,
+.rising-gale-max {
+    color: #6088a8;
+    font-weight: 600;
+}
+.rising-gale-duration-container {
+    width: 56px;
+    height: 10px;
+    background: rgba(12, 18, 28, 0.8);
+    border: 1px solid rgba(80, 120, 160, 0.4);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.rising-gale-duration-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4080c0 0%, #70b0e8 100%);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+}
+
+/* Whetstone (stackable consumable: R to repair weapons 35%) */
+.stat-bar.whetstone {
+    gap: 6px;
+}
+.stat-bar.whetstone.hidden {
+    display: none !important;
+}
+.stat-bar.whetstone label {
+    width: auto;
+    min-width: 68px;
+}
+.whetstone-count {
+    font-size: 18px;
+    font-weight: 700;
+    color: #c4b8a8;
+    font-variant-numeric: tabular-nums;
+}
+.whetstone-hint {
+    font-size: 12px;
+    color: #706858;
+    margin-left: 2px;
 }
 
 /* Inventory & Equipment screen (Tab to open) – responsive auto layout */

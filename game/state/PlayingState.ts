@@ -43,8 +43,11 @@ export type WeaponInstance = {
   suffixId?: string;
 };
 
-/** One inventory bag slot: weapon instance or empty. */
-export type InventorySlot = WeaponInstance | null;
+/** Stackable consumable in inventory (e.g. whetstone). */
+export type WhetstoneConsumable = { type: 'whetstone'; count: number };
+
+/** One inventory bag slot: weapon instance, consumable, or empty. */
+export type InventorySlot = WeaponInstance | WhetstoneConsumable | null;
 
 /** Armor equipment slot id (head, chest, hands, feet). */
 export type ArmorSlotId = 'head' | 'chest' | 'hands' | 'feet';
@@ -55,7 +58,15 @@ export type ArmorInstance = { key: string; durability: number };
 export const MAX_ARMOR_DURABILITY = 100;
 
 export function getSlotKey(slot: InventorySlot): string | null {
-  return slot?.key ?? null;
+  return slot != null && 'key' in slot ? slot.key : null;
+}
+
+export function isWeaponInstance(slot: InventorySlot): slot is WeaponInstance {
+  return slot != null && 'key' in slot;
+}
+
+export function isWhetstoneSlot(slot: InventorySlot): slot is WhetstoneConsumable {
+  return slot != null && 'type' in slot && (slot as WhetstoneConsumable).type === 'whetstone';
 }
 
 /** Player inventory: 12 slots holding weapons and/or armor. */
@@ -68,6 +79,10 @@ export interface PlayingStateShape {
   portal: PortalState | null;
   portalUseCooldown: number;
   playerNearPortal: boolean;
+  /** 0..1 progress while channeling portal/stairs (E or B); 0 when not channeling. */
+  portalChannelProgress: number;
+  /** Which action is being channeled: 'e' = next area, 'b' = return to sanctuary; null when not channeling. */
+  portalChannelAction: 'e' | 'b' | null;
   board: BoardState | null;
   boardOpen: boolean;
   boardUseCooldown: number;
@@ -75,6 +90,8 @@ export interface PlayingStateShape {
   /** In hub: player is within quest portal bounds (when activeQuest is set). */
   playerNearQuestPortal: boolean;
   questPortalUseCooldown: number;
+  /** 0..1 channel progress for entering quest via hub quest portal; 0 when not channeling. */
+  questPortalChannelProgress: number;
   chest: ChestState | null;
   chestOpen: boolean;
   chestUseCooldown: number;
@@ -140,6 +157,15 @@ export interface PlayingStateShape {
   activeQuest: Quest | null;
   /** Gold multiplier from active quest difficulty; 1 when no quest. */
   questGoldMultiplier: number;
+  /** Current delve floor (1-based). 0 when not in a delve run. */
+  delveFloor: number;
+  /** Last enemy kill position (center) in delve; used to spawn stairs. */
+  lastEnemyKillX: number | null;
+  lastEnemyKillY: number | null;
+  /** Seconds left to show the "Quest Complete!" flair; 0 = hidden. */
+  questCompleteFlairRemaining: number;
+  /** True after we've triggered the flair this run (so we don't re-trigger every frame). */
+  questCompleteFlairTriggered?: boolean;
   screenBeforePause: 'playing' | 'hub' | null;
   /** When transitioning from level to sanctuary: health/stamina to restore on the new player entity. */
   savedSanctuaryHealth?: number;
@@ -171,12 +197,15 @@ const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, ch
   portal: null,
   portalUseCooldown: 0,
   playerNearPortal: false,
+  portalChannelProgress: 0,
+  portalChannelAction: null,
   board: null,
   boardOpen: false,
   boardUseCooldown: 0,
   playerNearBoard: false,
   playerNearQuestPortal: false,
   questPortalUseCooldown: 0,
+  questPortalChannelProgress: 0,
   chest: null,
   chestOpen: false,
   chestUseCooldown: 0,
@@ -219,6 +248,11 @@ const defaultPlayingState = (defaultMainhand: string, defaultOffhand: string, ch
   questList: [],
   activeQuest: null,
   questGoldMultiplier: 1,
+  delveFloor: 0,
+  lastEnemyKillX: null,
+  lastEnemyKillY: null,
+  questCompleteFlairRemaining: 0,
+  questCompleteFlairTriggered: false,
   screenBeforePause: null
 });
 
@@ -226,12 +260,15 @@ export class PlayingState implements PlayingStateShape {
   portal: PortalState | null = null;
   portalUseCooldown = 0;
   playerNearPortal = false;
+  portalChannelProgress = 0;
+  portalChannelAction: 'e' | 'b' | null = null;
   board: BoardState | null = null;
   boardOpen = false;
   boardUseCooldown = 0;
   playerNearBoard = false;
   playerNearQuestPortal = false;
   questPortalUseCooldown = 0;
+  questPortalChannelProgress = 0;
   chest: ChestState | null = null;
   chestOpen = false;
   chestUseCooldown = 0;
@@ -274,6 +311,11 @@ export class PlayingState implements PlayingStateShape {
   questList: Quest[] = [];
   activeQuest: Quest | null = null;
   questGoldMultiplier = 1;
+  delveFloor = 0;
+  lastEnemyKillX: number | null = null;
+  lastEnemyKillY: number | null = null;
+  questCompleteFlairRemaining = 0;
+  questCompleteFlairTriggered = false;
   screenBeforePause: 'playing' | 'hub' | null = null;
 
   constructor(defaultMainhand: string, defaultOffhand: string = 'none') {

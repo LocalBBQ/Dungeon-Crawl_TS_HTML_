@@ -43,6 +43,7 @@ export interface ScreenControllerContext {
     settings: SettingsLike;
     setInventoryPanelVisible(visible: boolean): void;
     refreshInventoryPanel(): void;
+    useWhetstone?(): void;
     startGame(): void;
     returnToSanctuaryOnDeath(): void;
     quitToMainMenu(): void;
@@ -173,6 +174,7 @@ export class ScreenController {
                 }
                 return;
             }
+            // Whetstone: use by dragging onto weapon in inventory (no keybind)
 
             if (isStartKey) {
                 if (sm.isScreen('title')) {

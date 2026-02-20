@@ -3,7 +3,7 @@
  * Used when inventoryOpen or chestOpen; pointer events handled by Game.
  */
 import type { ArmorSlotId, InventorySlot, PlayingStateShape, WeaponInstance } from '../state/PlayingState.js';
-import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT } from '../state/PlayingState.js';
+import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT, isWeaponInstance as isWeaponSlotItem, isWhetstoneSlot } from '../state/PlayingState.js';
 import { getArmor, getPlayerArmorReduction, getShopArmorBySlot, SHOP_ARMOR_SLOT_ORDER, SHOP_ARMOR_SLOT_LABELS } from '../armor/armorConfigs.js';
 import { canEquipArmorInSlot } from '../state/ArmorActions.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
@@ -288,6 +288,8 @@ export interface DragState {
     /** When dragging armor: key and source (inventory index or equipment slot). */
     armorKey?: string;
     sourceArmorSlot?: ArmorSlotId;
+    /** True when dragging a whetstone from inventory (use-on-weapon drop). */
+    isWhetstone?: boolean;
 }
 
 export function createDragState(): DragState {
@@ -297,7 +299,8 @@ export function createDragState(): DragState {
         sourceSlotIndex: -1,
         sourceContext: 'inventory',
         pointerX: 0,
-        pointerY: 0
+        pointerY: 0,
+        isWhetstone: false
     };
 }
 
@@ -424,7 +427,7 @@ export function getInventoryLayout(canvas: HTMLCanvasElement, options?: { includ
 }
 
 export type InventoryHit =
-    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; prefixId?: string; suffixId?: string }
+    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; prefixId?: string; suffixId?: string; itemType?: 'weapon' | 'armor' | 'whetstone' }
     | { type: 'equipment'; slot: 'mainhand' | 'offhand' }
     | { type: 'chest-slot'; index: number; key: string }
     | { type: 'armor-equipment'; slot: ArmorSlotId }
@@ -456,7 +459,8 @@ export function hitTestInventory(
         if (inRect(x, y, s)) {
             const slot = ps.inventorySlots?.[s.index] ?? null;
             const key = getSlotKey(slot);
-            return { type: 'inventory-slot', index: s.index, weaponKey: key, durability: slot?.durability, prefixId: slot?.prefixId, suffixId: slot?.suffixId };
+            const itemType = isWhetstoneSlot(slot) ? 'whetstone' : key ? (getArmor(key) ? 'armor' : 'weapon') : undefined;
+            return { type: 'inventory-slot', index: s.index, weaponKey: key, durability: slot && 'durability' in slot ? slot.durability : undefined, prefixId: slot && 'prefixId' in slot ? slot.prefixId : undefined, suffixId: slot && 'suffixId' in slot ? slot.suffixId : undefined, itemType };
         }
     }
     if (layout.chestSlots && chestSlots) {
@@ -692,7 +696,7 @@ export function getShopLayout(
         const slots = playingState.inventorySlots ?? [];
         for (let i = 0; i < slots.length; i++) {
             const slot = slots[i];
-            if (!slot || slot.durability >= MAX_WEAPON_DURABILITY) continue;
+            if (!slot || !isWeaponSlotItem(slot) || slot.durability >= MAX_WEAPON_DURABILITY) continue;
             toRepair.push({ source: { bagIndex: i }, weaponKey: slot.key, currentDurability: slot.durability, cost: (MAX_WEAPON_DURABILITY - slot.durability) * REPAIR_GOLD_PER_DURABILITY });
         }
         const armorSlots: Array<{ key: string; dur: number; slot: ArmorSlotId }> = [
@@ -709,7 +713,7 @@ export function getShopLayout(
         const inv = playingState.inventorySlots ?? [];
         for (let i = 0; i < inv.length; i++) {
             const item = inv[i];
-            if (!item || !getArmor(item.key) || item.durability >= MAX_ARMOR_DURABILITY) continue;
+            if (!item || !('key' in item) || !getArmor(item.key) || item.durability >= MAX_ARMOR_DURABILITY) continue;
             toRepair.push({ source: { armorBagIndex: i }, armorKey: item.key, currentDurability: item.durability, cost: (MAX_ARMOR_DURABILITY - item.durability) * REPAIR_GOLD_PER_DURABILITY });
         }
         if (toRepair.length > 0) {
@@ -1434,21 +1438,23 @@ export function renderInventory(
     ctx.fillText('INVENTORY', panel.x + panel.w / 2, firstSlotY - 24);
     ctx.textAlign = 'left';
 
-    // Inventory grid (weapons and armor)
+    // Inventory grid (weapons, armor, consumables)
     const list = ps.inventorySlots ?? [];
     for (const s of slots) {
         const slot = list[s.index] ?? null;
         const key = getSlotKey(slot);
         const isWeapon = key ? !!Weapons[key] : false;
         const isArmor = key ? !!getArmor(key) : false;
+        const isWhetstone = isWhetstoneSlot(slot);
         drawSlot(ctx, s, {
-            filled: !!key,
+            filled: !!key || isWhetstone,
             weaponKey: isWeapon ? key ?? undefined : undefined,
-            symbol: isArmor ? '◆' : undefined,
-            emptyLabel: !key ? '—' : undefined,
-            broken: !!(key && slot && slot.durability === 0)
+            symbol: isArmor ? '◆' : isWhetstone ? '◉' : undefined,
+            emptyLabel: !key && !isWhetstone ? '—' : undefined,
+            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : undefined,
+            broken: !!(key && isWeaponSlotItem(slot) && slot.durability === 0)
         });
-        if (isArmor && key && slot) {
+        if (isArmor && key && slot && 'durability' in slot) {
             ctx.fillStyle = '#8a7048';
             ctx.font = '500 10px Cinzel, Georgia, serif';
             ctx.textAlign = 'center';
@@ -1541,11 +1547,43 @@ export function renderChest(
  * Draw the drag ghost (weapon icon following cursor) on top of all UI.
  * Call this last so the icon is visible over inventory, chest, reroll, and shop screens.
  */
+/** Draw a small whetstone icon at (cx, cy) with given size. */
+function drawWhetstoneIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    ctx.save();
+    ctx.fillStyle = 'rgba(160, 150, 140, 0.9)';
+    ctx.strokeStyle = 'rgba(100, 95, 90, 0.9)';
+    ctx.lineWidth = Math.max(1, size / 12);
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+}
+
 export function renderDragGhost(
     ctx: CanvasRenderingContext2D,
     dragState: DragState
 ): void {
-    if (!dragState.isDragging || !dragState.weaponKey) return;
+    if (!dragState.isDragging) return;
+    if (dragState.isWhetstone) {
+        const ghostSize = 44;
+        const gx = dragState.pointerX - ghostSize / 2;
+        const gy = dragState.pointerY - ghostSize / 2;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = 'rgba(22, 16, 10, 0.97)';
+        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201, 162, 39, 0.95)';
+        ctx.lineWidth = 2;
+        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
+        ctx.stroke();
+        drawWhetstoneIcon(ctx, dragState.pointerX, dragState.pointerY, ghostSize / 2 - 4);
+        ctx.restore();
+        return;
+    }
+    if (!dragState.weaponKey) return;
     const ghostSize = 44;
     const gx = dragState.pointerX - ghostSize / 2;
     const gy = dragState.pointerY - ghostSize / 2;

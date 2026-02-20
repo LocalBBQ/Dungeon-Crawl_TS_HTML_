@@ -51,7 +51,7 @@ export interface AttackHandlerLike {
   startLunge?(): void;
   endLunge?(...args: unknown[]): void;
   setWeapon?(weapon: unknown): void;
-  getNextAttackStaminaCost?(chargeDuration: number, options?: unknown): number;
+  getNextAttackStaminaCost?(chargeDuration: number, options?: unknown, entity?: unknown): number;
 }
 
 /** Entity with getComponent and optional systems. */
@@ -90,6 +90,7 @@ export class Combat implements Component {
   currentAttackReverseSweep: boolean;
   currentAttackIsThrust: boolean;
   currentAttackThrustWidth: number;
+  currentAttackStageName: string | null;
   isBlocking: boolean;
   blockStartTime: number;
   parryFlashUntil: number;
@@ -123,6 +124,7 @@ export class Combat implements Component {
     this.currentAttackReverseSweep = false;
     this.currentAttackIsThrust = false;
     this.currentAttackThrustWidth = 40;
+    this.currentAttackStageName = null;
     this.attackHandler = null;
     this.enemyAttackHandler = null;
     this.playerAttack = null;
@@ -464,6 +466,7 @@ export class Combat implements Component {
     this.currentAttackIsCircular = result.isCircular === true;
     this.currentAttackIsThrust = result.isThrust === true;
     this.currentAttackThrustWidth = (result.thrustWidth as number) ?? 40;
+    this.currentAttackStageName = (result.stageName as string) || null;
     this.currentAttackAnimationKey = (result.animationKey as string) || null;
     this.currentAttackIsDashAttack = result.isDashAttack === true;
     if (result.isDashAttack) this.dashAttackFlashUntil = Date.now() + 400;
@@ -484,6 +487,7 @@ export class Combat implements Component {
     this.currentAttackIsCircular = false;
     this.currentAttackIsThrust = false;
     this.currentAttackThrustWidth = 0;
+    this.currentAttackStageName = null;
     this.currentAttackAoeInFront = false;
     this.currentAttackAoeOffset = 0;
     this.currentAttackAoeRadius = 0;
@@ -509,8 +513,8 @@ export class Combat implements Component {
         return false;
       }
       const staminaCost =
-        (this.attackHandler as AttackHandlerLike & { getNextAttackStaminaCost?(c: number, o?: unknown): number })
-          .getNextAttackStaminaCost?.(chargeDuration, options) ?? 0;
+        (this.attackHandler as AttackHandlerLike & { getNextAttackStaminaCost?(c: number, o?: unknown, e?: unknown): number })
+          .getNextAttackStaminaCost?.(chargeDuration, options, this.entity) ?? 0;
       const stamina = this.entity?.getComponent(Stamina) ?? null;
       if (stamina && stamina.currentStamina < staminaCost) return false;
       const result = this.attackHandler.startAttack?.(
@@ -523,6 +527,30 @@ export class Combat implements Component {
       if (!result || typeof result !== 'object') return false;
       if (stamina && result.staminaCost != null) stamina.currentStamina -= result.staminaCost as number;
       this._applyAttackResult(result);
+      if (result.isStormRelease === true && this.entity) {
+        const systems = this.entity.systems as { get?(k: string): unknown } | undefined;
+        const projectileManager = systems?.get?.('projectiles') as {
+          createProjectile(x: number, y: number, angle: number, speed: number, damage: number, range: number, owner: unknown, ownerType: string, stunBuildup: number, pierce?: boolean, airborneDuration?: number): unknown;
+        } | undefined;
+        const transform = this.entity.getComponent(Transform);
+        if (projectileManager && transform && typeof projectileManager.createProjectile === 'function') {
+          projectileManager.createProjectile(
+            transform.x,
+            transform.y,
+            result.stormReleaseAngle as number,
+            result.stormReleaseSpeed as number,
+            result.stormReleaseDamage as number,
+            result.stormReleaseRange as number,
+            this.entity,
+            'player',
+            0,
+            true,
+            (result.stormReleaseAirborneDuration as number) ?? 1,
+            90,
+            90
+          );
+        }
+      }
       if (this.entity?.systems) {
         const eventBus =
           (this.entity.systems as { eventBus?: { emit(n: string, p: unknown): void }; get?(k: string): unknown }).eventBus ??
