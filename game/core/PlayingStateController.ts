@@ -7,7 +7,8 @@ import { Utils } from '../utils/Utils.js';
 import type { Quest } from '../types/quest.js';
 import { Transform } from '../components/Transform.js';
 import { Combat } from '../components/Combat.js';
-import type { Entity } from '../entities/Entity.js';
+import type { EntityShape } from '../types/entity.js';
+import { updateCrossbowReload } from '../utils/crossbowReload.js';
 
 export interface PlayingStateControllerContext {
     playingState: {
@@ -45,7 +46,7 @@ export interface PlayingStateControllerContext {
     systems: {
         get(name: string): unknown;
     };
-    entities: { get(id: string): Entity | undefined };
+    entities: { get(id: string): EntityShape | undefined };
     canvas: HTMLCanvasElement;
     screenManager: {
         selectedStartLevel: number;
@@ -64,7 +65,7 @@ export class PlayingStateController {
         this.game = game;
     }
 
-    updatePortal(deltaTime: number, player: Entity | undefined) {
+    updatePortal(deltaTime: number, player: EntityShape | undefined) {
         const g = this.game;
         if (!g.playingState.portal) return;
 
@@ -245,21 +246,8 @@ export class PlayingStateController {
         if (player) {
             const combat = player.getComponent(Combat);
             const weapon = combat && (combat as Combat & { playerAttack?: { weapon?: { isRanged?: boolean; isBow?: boolean } } }).playerAttack ? (combat as Combat & { playerAttack: { weapon: { isRanged?: boolean; isBow?: boolean } } }).playerAttack.weapon : null;
-            const isCrossbow = weapon && weapon.isRanged === true && !weapon.isBow;
-            const crossbowConfig = GameConfig.player && (GameConfig.player as { crossbow?: { reloadTime: number } }).crossbow;
-            if (isCrossbow && crossbowConfig && g.playingState.crossbowReloadInProgress && g.playingState.crossbowReloadProgress < 1) {
-                g.playingState.crossbowReloadProgress = Math.min(1, g.playingState.crossbowReloadProgress + deltaTime / crossbowConfig.reloadTime);
-                if (g.playingState.crossbowReloadProgress >= 1) g.playingState.crossbowReloadInProgress = false;
-            }
-            if (combat && !isCrossbow) {
-                g.playingState.crossbowReloadProgress = 1;
-                g.playingState.crossbowReloadInProgress = false;
-                g.playingState.crossbowPerfectReloadNext = false;
-            }
-            if (isCrossbow) {
-                (player as Entity & { crossbowReloadProgress: number; crossbowReloadInProgress: boolean }).crossbowReloadProgress = g.playingState.crossbowReloadProgress;
-                (player as Entity & { crossbowReloadProgress: number; crossbowReloadInProgress: boolean }).crossbowReloadInProgress = g.playingState.crossbowReloadInProgress;
-            }
+            const isCrossbow = !!(weapon && weapon.isRanged === true && !weapon.isBow);
+            updateCrossbowReload(deltaTime, g.playingState, player, GameConfig as { player: { crossbow?: { reloadTime: number } } }, isCrossbow);
         }
 
         const systems = g.systems as { update(dt: number): void };

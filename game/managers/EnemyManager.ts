@@ -760,11 +760,11 @@ export class EnemyManager {
                     goldDrop = typeConfig?.goldDrop ?? 0;
                 }
                 if (goldDrop > 0 && transform && this.systems) {
-                    const goldPickupManager = this.systems.get<{ spawn(x: number, y: number, amount: number): void }>('goldPickups');
-                    if (goldPickupManager) {
+                    const pickupManager = this.systems.get<{ spawnGold(x: number, y: number, amount: number): void }>('pickups');
+                    if (pickupManager) {
                         const cx = transform.x + transform.width / 2;
                         const cy = transform.y + transform.height / 2;
-                        goldPickupManager.spawn(cx, cy, goldDrop);
+                        pickupManager.spawnGold(cx, cy, goldDrop);
                     }
                 }
                 const typeConfigForLoot = ai?.enemyType ? (this.config.enemy.types[ai.enemyType] as { weaponDropChance?: number; weaponDropPoolId?: string; whetstoneDropChance?: number } | undefined) : undefined;
@@ -772,27 +772,27 @@ export class EnemyManager {
                 if (weaponDropChance > 0 && Math.random() < weaponDropChance && transform && this.systems) {
                     const instance = rollWeaponDrop(ai!.enemyType, typeConfigForLoot?.weaponDropPoolId);
                     if (instance) {
-                        const weaponPickupManager = this.systems.get<{ spawn(x: number, y: number, instance: import('../state/PlayingState.js').WeaponInstance): void }>('weaponPickups');
-                        if (weaponPickupManager) {
+                        const pickupManager = this.systems.get<{ spawnWeapon(x: number, y: number, instance: import('../state/PlayingState.js').WeaponInstance): void }>('pickups');
+                        if (pickupManager) {
                             const cx = transform.x + transform.width / 2;
                             const cy = transform.y + transform.height / 2;
-                            weaponPickupManager.spawn(cx, cy, instance);
+                            pickupManager.spawnWeapon(cx, cy, instance);
                         }
                     }
                 }
                 const whetstoneDropChance = typeConfigForLoot?.whetstoneDropChance ?? 0;
                 if (rollWhetstoneDrop(whetstoneDropChance) && transform && this.systems) {
-                    const whetstonePickupManager = this.systems.get<{ spawn(x: number, y: number): void }>('whetstonePickups');
-                    if (whetstonePickupManager) {
+                    const pickupManager = this.systems.get<{ spawnWhetstone(x: number, y: number): void }>('pickups');
+                    if (pickupManager) {
                         const cx = transform.x + transform.width / 2;
                         const cy = transform.y + transform.height / 2;
-                        whetstonePickupManager.spawn(cx, cy);
+                        pickupManager.spawnWhetstone(cx, cy);
                     }
                 }
                 if (this.systems && this.systems.eventBus && transform) {
                     const cx = transform.x + transform.width / 2;
                     const cy = transform.y + transform.height / 2;
-                    this.systems.eventBus.emit(EventTypes.PLAYER_KILLED_ENEMY, { x: cx, y: cy });
+                    this.systems.eventBus.emitTyped(EventTypes.PLAYER_KILLED_ENEMY, { x: cx, y: cy });
                 }
                 if (entityManager) {
                     entityManager.remove(enemy.id);
@@ -934,7 +934,7 @@ export class EnemyManager {
                         if (playerHealth && healAmount > 0) playerHealth.heal(healAmount);
                     }
                     if (this.systems && this.systems.eventBus) {
-                        this.systems.eventBus.emit(EventTypes.PLAYER_HIT_ENEMY, { killed: died });
+                        this.systems.eventBus.emitTyped(EventTypes.PLAYER_HIT_ENEMY, { killed: died });
                     }
                     hitEnemies.push(enemy);
                     

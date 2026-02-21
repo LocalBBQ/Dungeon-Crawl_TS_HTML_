@@ -18,7 +18,8 @@ export interface PlayerConfig {
   staminaRegen: number;
   defaultWeapon?: string;
   defaultOffhand?: string;
-  crossbow?: Record<string, number>;
+  color?: string;
+  crossbow?: { reloadTime: number; [key: string]: number };
   [key: string]: unknown;
 }
 
@@ -50,6 +51,9 @@ export interface LevelConfig {
   /** When set, level spawns only this boss (no pack spawn). */
   bossSpawn?: { x: number; y: number; type: string };
   walls?: Array<{ x: number; y: number; width: number; height: number }>;
+  fence?: unknown;
+  wallColor?: string;
+  decorations?: unknown;
 }
 
 export interface GameConfigShape {
@@ -80,6 +84,9 @@ export interface GameConfigShape {
     trainingDummy?: { x: number; y: number };
     theme?: { ground?: unknown; sky?: string };
     walls?: Array<{ x: number; y: number; width: number; height: number }>;
+    fence?: unknown;
+    wallColor?: string;
+    decorations?: unknown;
   };
   levels?: Record<number, LevelConfig>;
   obstacles?: unknown;

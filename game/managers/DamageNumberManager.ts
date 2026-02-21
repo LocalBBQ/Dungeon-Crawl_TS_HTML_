@@ -1,5 +1,6 @@
 // Manages floating damage numbers displayed on screen
 import type { CameraShape } from '../types/camera.ts';
+import type { SystemManager } from '../core/SystemManager.ts';
 
 interface DamageNumberEntry {
     x: number;
@@ -34,7 +35,7 @@ export class DamageNumberManager {
         });
     }
 
-    update(deltaTime: number): void {
+    update(deltaTime: number, _systems?: SystemManager | null): void {
         for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
             const number = this.damageNumbers[i];
             number.lifetime += deltaTime;

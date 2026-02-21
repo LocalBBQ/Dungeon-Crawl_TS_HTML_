@@ -5,6 +5,7 @@ import { EventTypes } from './EventTypes.js';
 import { getRandomQuestsForBoard } from '../config/questConfig.js';
 import type { ScreenName } from './ScreenManager.js';
 import type { SettingsLike } from './ScreenManager.js';
+import type { Quest } from '../types/quest.js';
 
 export interface ScreenControllerContext {
     screenManager: {
@@ -13,7 +14,7 @@ export interface ScreenControllerContext {
         selectedStartLevel: number;
         setScreen(screen: ScreenName): void;
         getLevelSelectAt(x: number, y: number): number | null;
-        getQuestSelectAt(x: number, y: number, questList: { level: number; difficultyId: string; difficulty?: { label?: string } }, levelNames: Record<number, string>): number | null;
+        getQuestSelectAt(x: number, y: number, questList: Quest[], levelNames: Record<number, string>): number | null;
         getHubBoardButtonAt(x: number, y: number, questCount?: number): 'start' | 'reroll' | 'back' | null;
         getPauseButtonAt(x: number, y: number): string | null;
         getHelpBackButtonAt(x: number, y: number): boolean;

@@ -15,6 +15,12 @@ export class SpriteManager {
     groundTextures: Map<string, HTMLImageElement>;
     /** Multi-direction frame sets (e.g. Player/Idle with E_Idle, N_Idle, ... folders). */
     multiDirFrameSheets: Map<string, MultiDirFrameSet>;
+    /** Player knight sheet keys (idle, block, melee, etc.); set by Game.loadPlayerSprites. */
+    knightSheets?: Record<string, string | boolean>;
+    /** Goblin 8-direction sheet key; set by Game.loadEnemySprites. */
+    goblin8DSheetKey?: string | null;
+    /** Goblin 8-direction lunge sheet key; set by Game.loadEnemySprites. */
+    goblin8DLungeSheetKey?: string | null;
 
     /** Direction folder names in 8-dir order (E, NE, N, NW, W, SW, S, SE) matching angleTo8Direction. */
     static readonly MULTI_DIR_NAMES = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'] as const;

@@ -6,9 +6,12 @@ interface ObstacleManagerLike {
   loadedSprites: Map<string, HTMLImageElement>;
 }
 
+/** Shape of a single obstacle for rendering (x, y, size, type, optional color/sprite). */
+type ObstacleShape = { x: number; y: number; width: number; height: number; type: string; color?: string; spritePath?: string; spriteFrameIndex?: number; leafless?: boolean; leaflessVariant?: number; [k: string]: unknown };
+
 export class ObstacleLayerRenderer {
     /** Draw a single obstacle. Used when interleaving depth obstacles with entities by Y. */
-    drawOne(context: RenderContext, data: { obstacle?: unknown; obstacleManager?: ObstacleManagerLike }): void {
+    drawOne(context: RenderContext, data: { obstacle?: ObstacleShape; obstacleManager?: ObstacleManagerLike }): void {
         const { ctx, canvas, camera, settings } = context;
         const { obstacle, obstacleManager } = data;
         if (!obstacle || !obstacleManager) return;
@@ -22,7 +25,7 @@ export class ObstacleLayerRenderer {
         this._drawObstacleBody(ctx, canvas, camera, zoom, obstacle, obstacleManager, useEnvironmentSprites);
     }
 
-    _drawObstacleBody(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, camera: RenderContext['camera'], zoom: number, obstacle: { x: number; y: number; width: number; height: number; type: string; color?: string; spritePath?: string; spriteFrameIndex?: number; leafless?: boolean; leaflessVariant?: number; [k: string]: unknown }, obstacleManager: ObstacleManagerLike, useEnvironmentSprites: boolean): void {
+    _drawObstacleBody(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, camera: RenderContext['camera'], zoom: number, obstacle: ObstacleShape, obstacleManager: ObstacleManagerLike, useEnvironmentSprites: boolean): void {
         const screenX = camera.toScreenX(obstacle.x);
         const screenY = camera.toScreenY(obstacle.y);
         const w = obstacle.width * zoom;
@@ -123,29 +126,75 @@ export class ObstacleLayerRenderer {
             return;
         }
 
-        // Well: stone ring + dark shaft + small roof/crank
+        // Well: stone ring, dark shaft, peaked roof, crank
         if (obstacle.type === 'well') {
-            const wellCx = screenX + w / 2;
-            const wellCy = screenY + h / 2;
-            ctx.fillStyle = '#5a5550';
-            ctx.strokeStyle = '#3d3a36';
-            ctx.lineWidth = Math.max(1, 2 / zoom);
+            const lw = Math.max(1, 2 / zoom);
+            const cx = screenX + w / 2;
+            const ringY = screenY + h * 0.28;
+            const ringRx = w * 0.4;
+            const ringRy = h * 0.18;
+
+            // Stone ring (outer) – front rim
+            ctx.fillStyle = '#6b6358';
+            ctx.strokeStyle = '#4a453e';
+            ctx.lineWidth = lw;
             ctx.beginPath();
-            ctx.ellipse(wellCx, screenY + h * 0.22, w * 0.42, h * 0.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx, ringY, ringRx, ringRy, 0, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = '#2a2830';
+
+            // Stone ring inner edge (darker)
+            ctx.strokeStyle = '#3d3832';
+            ctx.lineWidth = Math.max(1, 1.5 / zoom);
             ctx.beginPath();
-            ctx.ellipse(wellCx, wellCy, w * 0.32, h * 0.35, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx, ringY, ringRx * 0.72, ringRy * 0.75, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Dark shaft (water hole)
+            ctx.fillStyle = '#1a1820';
+            ctx.beginPath();
+            ctx.ellipse(cx, ringY + h * 0.02, ringRx * 0.58, ringRy * 0.9, 0, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#4a4540';
-            ctx.fillRect(screenX + w * 0.35, screenY, w * 0.3, h * 0.18);
-            ctx.strokeStyle = '#3a3530';
-            ctx.strokeRect(screenX + w * 0.35, screenY, w * 0.3, h * 0.18);
+            // Slight highlight at top of water
+            ctx.fillStyle = 'rgba(60, 70, 90, 0.5)';
+            ctx.beginPath();
+            ctx.ellipse(cx, ringY - h * 0.02, ringRx * 0.35, ringRy * 0.25, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Roof: two posts + peaked roof
+            const roofLeft = screenX + w * 0.2;
+            const roofRight = screenX + w * 0.8;
+            const roofBottom = screenY + h * 0.22;
+            const roofTop = screenY + h * 0.1;
+            const postW = Math.max(2, w * 0.08);
+            ctx.fillStyle = '#5a5048';
+            ctx.fillRect(roofLeft, ringY - ringRy - h * 0.02, postW, ringRy + h * 0.12);
+            ctx.fillRect(roofRight - postW, ringY - ringRy - h * 0.02, postW, ringRy + h * 0.12);
+            ctx.fillStyle = '#4a4238';
+            ctx.strokeStyle = '#3a332c';
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            ctx.moveTo(roofLeft + postW / 2, roofBottom);
+            ctx.lineTo(cx, roofTop);
+            ctx.lineTo(roofRight - postW / 2, roofBottom);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Crank (small circle + bar)
+            const crankCx = cx + ringRx * 0.55;
+            const crankCy = ringY - ringRy * 0.4;
             ctx.fillStyle = '#6b5b4f';
+            ctx.strokeStyle = '#4a4038';
+            ctx.lineWidth = lw;
             ctx.beginPath();
-            ctx.ellipse(wellCx, screenY + h * 0.08, w * 0.08, h * 0.06, 0, 0, Math.PI * 2);
+            ctx.ellipse(crankCx, crankCy, w * 0.08, h * 0.06, 0, 0, Math.PI * 2);
             ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(crankCx - w * 0.1, crankCy);
+            ctx.lineTo(crankCx + w * 0.06, crankCy);
+            ctx.stroke();
             return;
         }
 

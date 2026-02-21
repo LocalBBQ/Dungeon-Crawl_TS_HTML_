@@ -117,4 +117,13 @@ export class RenderSystem {
             currentLevel
         });
     }
+
+    /** Draw overlay layer: projectiles, pickups, damage numbers (fixed order). */
+    renderOverlay(ctx: CanvasRenderingContext2D, camera: { x: number; y: number; zoom: number }): void {
+        if (!this.systems) return;
+        const typed = this.systems.getTyped();
+        if (typed.projectiles) typed.projectiles.render(ctx, camera);
+        if (typed.pickups) typed.pickups.render(ctx, camera);
+        if (typed.damageNumbers) typed.damageNumbers.render(ctx, camera);
+    }
   }

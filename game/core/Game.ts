@@ -1,46 +1,45 @@
 // Main game class - orchestrates all systems
-import '../bootstrap.ts';
+import '../bootstrap.js';
 
-import { EntityManager } from '../managers/EntityManager.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { DELVE_LEVEL, DRAGON_ARENA_LEVEL } from '../config/questConfig.ts';
-import { ScreenManager } from './ScreenManager.ts';
-import { SystemManager, type SystemLike } from './SystemManager.ts';
-import { SpriteManager } from '../managers/SpriteManager.ts';
-import { InputSystem } from '../systems/InputSystem.ts';
-import { CameraSystem } from '../systems/CameraSystem.ts';
-import { CollisionSystem } from '../systems/CollisionSystem.ts';
-import { ObstacleManager } from '../managers/ObstacleManager.ts';
-import { GatherableManager } from '../managers/GatherableManager.ts';
-import { PathfindingSystem } from '../systems/PathfindingSystem.ts';
-import { EnemyManager } from '../managers/EnemyManager.ts';
-import { HazardManager } from '../managers/HazardManager.ts';
-import { DamageNumberManager } from '../managers/DamageNumberManager.ts';
-import { ProjectileManager } from '../managers/ProjectileManager.ts';
-import { HealthOrbManager } from '../managers/HealthOrbManager.ts';
-import { GoldPickupManager } from '../managers/GoldPickupManager.ts';
-import { WeaponPickupManager } from '../managers/WeaponPickupManager.ts';
-import { WhetstonePickupManager } from '../managers/WhetstonePickupManager.ts';
-import { RenderSystem } from '../systems/RenderSystem.ts';
-import { Entity } from '../entities/Entity.ts';
-import { Transform } from '../components/Transform.ts';
-import { Health } from '../components/Health.ts';
-import { Rally } from '../components/Rally.ts';
-import { StatusEffects } from '../components/StatusEffects.ts';
-import { Stamina } from '../components/Stamina.ts';
-import { PlayerHealing } from '../components/PlayerHealing.ts';
-import { PlayerMovement } from '../components/PlayerMovement.ts';
-import { Combat } from '../components/Combat.ts';
-import { Renderable } from '../components/Renderable.ts';
-import { Sprite } from '../components/Sprite.ts';
-import { Animation } from '../components/Animation.ts';
-import { PlayerInputController } from '../controllers/PlayerInputController.ts';
-import { EventTypes } from './EventTypes.ts';
-import { Movement } from '../components/Movement.ts';
-import { Weapons } from '../weapons/WeaponsRegistry.ts';
+import { EntityManager } from '../managers/EntityManager.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { DELVE_LEVEL, DRAGON_ARENA_LEVEL } from '../config/questConfig.js';
+import { ScreenManager } from './ScreenManager.js';
+import { SystemManager, type SystemLike } from './SystemManager.js';
+import { SpriteManager } from '../managers/SpriteManager.js';
+import { InputSystem } from '../systems/InputSystem.js';
+import { CameraSystem } from '../systems/CameraSystem.js';
+import { CollisionSystem } from '../systems/CollisionSystem.js';
+import { ObstacleManager } from '../managers/ObstacleManager.js';
+import { GatherableManager } from '../managers/GatherableManager.js';
+import { PathfindingSystem } from '../systems/PathfindingSystem.js';
+import { EnemyManager } from '../managers/EnemyManager.js';
+import { HazardManager } from '../managers/HazardManager.js';
+import { DamageNumberManager } from '../managers/DamageNumberManager.js';
+import { ProjectileManager } from '../managers/ProjectileManager.js';
+import { PickupManager } from '../managers/PickupManager.js';
+import { RenderSystem } from '../systems/RenderSystem.js';
+import { Entity } from '../entities/Entity.js';
+import { Transform } from '../components/Transform.js';
+import { Health } from '../components/Health.js';
+import { Rally } from '../components/Rally.js';
+import { StatusEffects } from '../components/StatusEffects.js';
+import { Stamina } from '../components/Stamina.js';
+import { PlayerHealing } from '../components/PlayerHealing.js';
+import { PlayerMovement } from '../components/PlayerMovement.js';
+import { Combat } from '../components/Combat.js';
+import { Renderable } from '../components/Renderable.js';
+import { Sprite } from '../components/Sprite.js';
+import { Animation } from '../components/Animation.js';
+import { PlayerInputController, type GameLike } from '../controllers/PlayerInputController.js';
+import { InventoryChestUIController } from '../controllers/InventoryChestUIController.js';
+import { EventTypes } from './EventTypes.js';
+import { Movement } from '../components/Movement.js';
+import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import type { GameRef, GameConfigShape } from '../types/index.js';
+import type { GameSystems } from '../types/systems.js';
 import { PlayingState, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import {
     equipFromChest,
@@ -56,10 +55,11 @@ import {
 } from '../state/InventoryActions.js';
 import { equipArmorFromInventory, unequipArmorToInventory, swapArmorWithInventory, swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
 import { getArmor, SHOP_ARMOR_ENTRIES } from '../armor/armorConfigs.js';
-import { createPlayer as createPlayerEntity } from './PlayerFactory.js';
+import { createPlayer as createPlayerEntity, type PlayerConfigLike, type SpriteManagerLike } from './PlayerFactory.js';
 import { ScreenController } from './ScreenController.js';
 import { PlayingStateController } from './PlayingStateController.js';
 import { HUDController } from '../ui/HUDController.js';
+import { updateCrossbowReload } from '../utils/crossbowReload.js';
 import { AI } from '../components/AI.js';
 import { renderQuestCompleteFlair } from '../ui/QuestCompleteFlair.js';
 import {
@@ -75,37 +75,50 @@ import {
     hitTestShop,
     createDragState,
     ensureInventoryInitialized,
-    type DragState,
-    type ArmorTooltipHover
+    type DragState
 } from '../ui/InventoryChestCanvas.js';
 import {
     renderRerollOverlay,
     getRerollOverlayLayout,
     hitTestRerollOverlay
 } from '../ui/RerollOverlay.js';
-import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_ZOOM_STEP } from '../systems/renderers/MinimapRenderer.ts';
+import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_ZOOM_STEP } from '../systems/renderers/MinimapRenderer.js';
 import { rerollEnchantSlot, moveToRerollSlot, moveFromRerollSlotTo, addWeaponToInventory, addWhetstoneToInventory, useWhetstoneOnWeapon } from '../state/InventoryActions.js';
+import type { TooltipHover } from '../types/tooltip.js';
 
-/** When the pointer hovers a weapon slot in chest or inventory (canvas UI), used to draw tooltip. */
-export interface WeaponTooltipHover {
-    weaponKey: string;
-    x: number;
-    y: number;
-    durability?: number;
-    prefixId?: string;
-    suffixId?: string;
-}
+export type { TooltipHover };
 
 class Game {
+    canvas!: HTMLCanvasElement;
+    ctx!: CanvasRenderingContext2D;
+    entities!: EntityManager;
+    systems: SystemManager | null = null;
+    config!: GameConfigShape;
+    playingState!: PlayingState;
+    settings!: Record<string, unknown>;
+    screenManager!: ScreenManager | null;
+    hudController!: HUDController;
+    playingStateController!: PlayingStateController;
+    screenController!: ScreenController;
+    playerInputController!: PlayerInputController;
+    running = false;
+    lastTime = 0;
+    _currentWorldWidth = 0;
+    _currentWorldHeight = 0;
+
     inventoryDragState!: DragState;
-    /** Set when pointer is over a weapon slot (chest or inventory); cleared when moving away or closing. */
-    weaponTooltipHover: WeaponTooltipHover | null = null;
-    /** Set when pointer is over an armor slot (equipment or inventory); cleared when moving away or closing. */
-    armorTooltipHover: ArmorTooltipHover | null = null;
+    /** Set when pointer is over a weapon or armor slot (chest/inventory); cleared when moving away or closing. */
+    tooltipHover: TooltipHover = null;
+    inventoryChestUIController!: InventoryChestUIController;
+
+    /** Type-safe systems access; only use after systems are initialized. */
+    private get systemsTyped(): GameSystems {
+        return this.systems!.getTyped();
+    }
 
     constructor() {
         try {
-            this.canvas = document.getElementById('gameCanvas');
+            this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
             if (!this.canvas) {
                 throw new Error('Canvas element not found');
             }
@@ -154,6 +167,18 @@ class Game {
                 });
                 this.playingStateController = new PlayingStateController(this);
                 this.screenController = new ScreenController(this);
+                this.inventoryChestUIController = new InventoryChestUIController({
+                    playingState: this.playingState,
+                    canvas: this.canvas,
+                    settings: this.settings,
+                    screenManager: this.screenManager,
+                    inventoryDragState: this.inventoryDragState,
+                    refreshInventoryPanel: () => this.refreshInventoryPanel(),
+                    syncCombat: () => this.syncPlayerWeaponsFromState(),
+
+                    setTooltipHover: (v) => { this.tooltipHover = v; },
+                    setInventoryPanelVisible: (v) => this.hudController.setInventoryPanelVisible(v),
+                });
                 this.setupEventListeners();
                 this.bindGlobalInputHandlers();
                 this.bindCombatFeedbackListeners();
@@ -184,9 +209,14 @@ class Game {
 
     /** Clear key/mouse state and cancel charge/movement so opening a menu doesn't cause accidental attack/move on close. */
     clearPlayerInputsForMenu(): void {
-        const inputSystem = this.systems?.get('input') as { clearAllKeys?: () => void } | undefined;
+        const inputSystem = this.systems ? this.systemsTyped.input : undefined;
         if (inputSystem?.clearAllKeys) inputSystem.clearAllKeys();
         this.playerInputController?.cancelMenuInputs();
+    }
+
+    /** Sync player Combat component from playingState (mainhand/offhand). Used after equip/unequip from inventory or chest. */
+    syncPlayerWeaponsFromState(): void {
+        this.hudController?.syncPlayerWeaponsFromState?.();
     }
 
     get inventoryOpen() { return this.playingState.inventoryOpen; }
@@ -250,7 +280,7 @@ class Game {
 
         // Register sprite manager first
         const spriteManager = new SpriteManager();
-        this.systems.register('sprites', spriteManager);
+        this.systems.register('sprites', spriteManager as unknown as SystemLike);
 
         // Register core systems in order (do not register Game as a system — SystemManager.update would call Game.update recursively)
         this.systems
@@ -260,12 +290,12 @@ class Game {
             .register('obstacles', new ObstacleManager())
             .register('gatherables', new GatherableManager(this.playingState));
 
-        const obstacleManager = this.systems.get('obstacles');
-        if (obstacleManager && obstacleManager.init) obstacleManager.init(this.systems);
+        const obstacleManager = this.systemsTyped.obstacles;
+        if (obstacleManager && obstacleManager.init) obstacleManager.init(this.systems!);
 
         // Generate world before pathfinding (use level 1 config and dimensions)
         const level1Obstacles = level1Config && level1Config.obstacles ? level1Config.obstacles : this.config.obstacles;
-        obstacleManager.generateWorld(initialWorldWidth, initialWorldHeight, level1Obstacles, {
+        obstacleManager.generateWorld(initialWorldWidth, initialWorldHeight, level1Obstacles as Record<string, unknown>, {
             x: initialWorldWidth / 2,
             y: initialWorldHeight / 2,
             radius: 120
@@ -283,14 +313,11 @@ class Game {
             .register('hazards', new HazardManager())
             .register('damageNumbers', new DamageNumberManager())
             .register('projectiles', new ProjectileManager())
-            .register('healthOrbs', new HealthOrbManager())
-            .register('goldPickups', new GoldPickupManager())
-            .register('weaponPickups', new WeaponPickupManager())
-            .register('whetstonePickups', new WhetstonePickupManager())
+            .register('pickups', new PickupManager())
             .register('render', new RenderSystem(this.canvas, this.ctx));
 
         // Initialize render system with systems reference and game settings (needed for attack/hitbox rendering)
-        const renderSystem = this.systems.get('render');
+        const renderSystem = this.systemsTyped.render;
         if (renderSystem) {
             if (renderSystem.init) renderSystem.init(this.systems);
             renderSystem.settings = this.settings;
@@ -299,16 +326,16 @@ class Game {
         // Explicit update order: input first, then logic/managers, then entities, then render last
         this.systems.setUpdateOrder([
             'input', 'camera', 'collision', 'obstacles', 'gatherables', 'pathfinding',
-            'enemies', 'hazards', 'damageNumbers', 'projectiles', 'healthOrbs', 'goldPickups', 'weaponPickups', 'whetstonePickups',
+            'enemies', 'hazards', 'damageNumbers', 'projectiles', 'pickups',
             'entities', 'render'
         ]);
     }
 
     async loadPlayerSprites() {
-        const spriteManager = this.systems.get('sprites');
+        const spriteManager = this.systemsTyped.sprites;
         if (!spriteManager) return;
 
-        const loadedKnightSheets = {};
+        const loadedKnightSheets: Record<string, string | boolean> = {};
         let knightRows = 1, knightCols = 8, knightFrameWidth = 0, knightFrameHeight = 0;
 
         // Directory-based Idle (Player/Idle/E_Idle, N_Idle, ... with sprite0.png, sprite1.png, ...)
@@ -452,7 +479,7 @@ class Game {
     }
 
     async loadEnemySprites() {
-        const spriteManager = this.systems.get('sprites');
+        const spriteManager = this.systemsTyped.sprites;
         if (!spriteManager) return;
 
         // Load goblin 8-direction sprite sheet (Goblin_8D.png: 1 row × 8 cols, one frame per direction)
@@ -523,7 +550,7 @@ class Game {
     }
 
     async loadGroundTextures() {
-        const spriteManager = this.systems.get('sprites');
+        const spriteManager = this.systemsTyped.sprites;
         if (!spriteManager || !spriteManager.loadGroundTexture) return;
         const registry = this.config.groundTextures || {};
         const pathsToLoad = new Set();
@@ -551,15 +578,15 @@ class Game {
     }
 
     initializeEntities() {
-        const enemyManager = this.systems.get('enemies');
+        const enemyManager = this.systemsTyped.enemies;
         const initialLevel = enemyManager ? enemyManager.getCurrentLevel() : 1;
         const levels = this.config.levels || {};
         const hubLevel = levels[0];
         const isHub = initialLevel === 0 && hubLevel;
 
         let playerStart = isHub ? hubLevel.playerStart : null;
-        if (!isHub && levels[initialLevel] && levels[initialLevel].obstacles && levels[initialLevel].obstacles.useSceneTiles) {
-            const obstacleManager = this.systems.get('obstacles');
+        if (!isHub && levels[initialLevel] && levels[initialLevel].obstacles && (levels[initialLevel].obstacles as { useSceneTiles?: boolean }).useSceneTiles) {
+            const obstacleManager = this.systemsTyped.obstacles;
             const suggested = obstacleManager && obstacleManager.getSuggestedPlayerStart ? obstacleManager.getSuggestedPlayerStart() : null;
             if (suggested) playerStart = suggested;
         }
@@ -580,7 +607,7 @@ class Game {
         }
 
         const transform = player.getComponent(Transform);
-        const cameraSystem = this.systems.get('camera');
+        const cameraSystem = this.systemsTyped.camera;
         if (transform && cameraSystem) {
             const effectiveWidth = this.canvas.width / cameraSystem.zoom;
             const effectiveHeight = this.canvas.height / cameraSystem.zoom;
@@ -588,7 +615,7 @@ class Game {
             cameraSystem.y = transform.y - effectiveHeight / 2;
         }
 
-        const obstacleManager = this.systems.get('obstacles');
+        const obstacleManager = this.systemsTyped.obstacles;
         const playerSpawn = transform ? { x: transform.x, y: transform.y } : null;
         if (enemyManager && obstacleManager) {
             enemyManager.spawnLevelEnemies(initialLevel, this.entities, obstacleManager, playerSpawn);
@@ -622,15 +649,15 @@ class Game {
     }
 
     createPlayer(overrideStart: { x: number; y: number } | null = null) {
-        const spriteManager = this.systems.get('sprites');
+        const spriteManager = this.systemsTyped.sprites;
         const player = createPlayerEntity(overrideStart, {
-            spriteManager,
+            spriteManager: spriteManager as SpriteManagerLike,
             equippedMainhandKey: this.playingState.equippedMainhandKey,
             equippedOffhandKey: this.playingState.equippedOffhandKey,
-            playerConfig: this.config.player
+            playerConfig: { ...this.config.player, color: this.config.player.color ?? '#8b8b9a' } as PlayerConfigLike
         });
         if (!this.playerInputController) {
-            this.playerInputController = new PlayerInputController(this);
+            this.playerInputController = new PlayerInputController(this as unknown as GameLike);
             this.playerInputController.setPlayer(player);
             this.playerInputController.bindAll();
         } else {
@@ -683,17 +710,17 @@ class Game {
 
     bindGlobalInputHandlers() {
         if (!this.systems?.eventBus) return;
-        this.screenController.bindGlobalKeys(this.systems.eventBus);
+        this.screenController.bindGlobalKeys(this.systems.eventBus as { on(event: string, fn: (key: string) => void): void });
     }
 
     bindCombatFeedbackListeners() {
         if (!this.systems || !this.systems.eventBus) return;
-        const cameraSystem = this.systems.get('camera');
-        const damageNumberManager = this.systems.get('damageNumbers');
+        const cameraSystem = this.systemsTyped.camera;
+        const damageNumberManager = this.systemsTyped.damageNumbers;
 
         // Register once so we don't get duplicate damage numbers when re-entering levels or restarting
         if (damageNumberManager) {
-            this.systems.eventBus.on(EventTypes.DAMAGE_TAKEN, (data) => {
+            this.systems.eventBus.onTyped(EventTypes.DAMAGE_TAKEN, (data) => {
                 damageNumberManager.createDamageNumber(
                     data.x,
                     data.y,
@@ -707,7 +734,7 @@ class Game {
             });
         }
 
-        this.systems.eventBus.on(EventTypes.PLAYER_KILLED_ENEMY, (payload: { x?: number; y?: number } = {}) => {
+        this.systems.eventBus.onTyped(EventTypes.PLAYER_KILLED_ENEMY, (payload) => {
             this.playingState.killsThisLife++;
             if (this.playingState.delveFloor > 0 && typeof payload.x === 'number' && typeof payload.y === 'number') {
                 this.playingState.lastEnemyKillX = payload.x;
@@ -715,33 +742,27 @@ class Game {
             }
         });
 
-        const goldPickupManager = this.systems.get<GoldPickupManager>('goldPickups');
-        if (goldPickupManager) {
-            goldPickupManager.onCollected = (amount: number) => {
+        const pickupManager = this.systemsTyped.pickups;
+        if (pickupManager) {
+            pickupManager.onGoldCollected = (amount: number) => {
                 let mult = this.playingState.questGoldMultiplier ?? 1;
                 if (this.playingState.delveFloor > 0) {
                     mult *= 1 + (this.playingState.delveFloor - 1) * 0.2;
                 }
                 this.playingState.gold += amount * mult;
             };
-        }
-        const weaponPickupManager = this.systems.get<WeaponPickupManager>('weaponPickups');
-        if (weaponPickupManager) {
-            weaponPickupManager.onCollected = (instance) => {
+            pickupManager.onWeaponCollected = (instance) => {
                 addWeaponToInventory(this.playingState, instance);
                 this.refreshInventoryPanel();
             };
-        }
-        const whetstonePickupManager = this.systems.get<WhetstonePickupManager>('whetstonePickups');
-        if (whetstonePickupManager) {
-            whetstonePickupManager.onCollected = () => {
+            pickupManager.onWhetstoneCollected = () => {
                 const added = addWhetstoneToInventory(this.playingState);
                 if (added) this.refreshInventoryPanel();
                 return added;
             };
         }
 
-        this.systems.eventBus.on(EventTypes.PLAYER_HIT_ENEMY, () => {
+        this.systems.eventBus.onTyped(EventTypes.PLAYER_HIT_ENEMY, () => {
             const ps = this.playingState;
             if (ps.equippedMainhandDurability > 0) {
                 ps.equippedMainhandDurability = Math.max(0, ps.equippedMainhandDurability - 1);
@@ -751,7 +772,7 @@ class Game {
             }
         });
 
-        this.systems.eventBus.on(EventTypes.DAMAGE_TAKEN, (data: { isPlayerDamage?: boolean; isBlocked?: boolean; isParry?: boolean; damage?: number; entityId?: string }) => {
+        this.systems.eventBus.onTyped(EventTypes.DAMAGE_TAKEN, (data) => {
             if (data.isPlayerDamage || !data.isBlocked) return;
             const ps = this.playingState;
             // Parry: rally already added in EnemyManager/ProjectileManager; don't consume offhand durability (greatsword has no offhand)
@@ -771,7 +792,7 @@ class Game {
         });
 
         // Armor durability: when player takes damage, decrement each equipped piece; unequip at 0 and put in bag
-        this.systems.eventBus.on(EventTypes.DAMAGE_TAKEN, (data: { entityId?: string; damage?: number }) => {
+        this.systems.eventBus.onTyped(EventTypes.DAMAGE_TAKEN, (data) => {
             if (data.entityId !== 'player' || (data.damage ?? 0) <= 0) return;
             const ps = this.playingState;
             const decrement = Math.max(1, Math.floor((data.damage ?? 0) / 10));
@@ -829,48 +850,32 @@ class Game {
         }
 
         // Clear projectiles
-        const projectileManager = this.systems.get('projectiles');
+        const projectileManager = this.systemsTyped.projectiles;
         if (projectileManager) {
             projectileManager.projectiles = [];
         }
 
         // Clear enemy-specific hazards (e.g. flame pillars)
-        const hazardManager = this.systems.get('hazards');
+        const hazardManager = this.systemsTyped.hazards;
         if (hazardManager && hazardManager.clearFlamePillars) {
             hazardManager.clearFlamePillars();
         }
 
         // Clear damage numbers
-        const damageNumberManager = this.systems.get('damageNumbers');
+        const damageNumberManager = this.systemsTyped.damageNumbers;
         if (damageNumberManager) {
-            damageNumberManager.numbers = [];
+            damageNumberManager.damageNumbers = [];
         }
 
-        // Clear health orbs
-        const healthOrbManager = this.systems.get('healthOrbs');
-        if (healthOrbManager) {
-            healthOrbManager.clear();
-        }
-
-        // Clear gold pickups
-        const goldPickupManager = this.systems.get('goldPickups');
-        if (goldPickupManager && goldPickupManager.clear) {
-            goldPickupManager.clear();
-        }
-        // Clear weapon pickups
-        const weaponPickupManager = this.systems.get('weaponPickups');
-        if (weaponPickupManager && weaponPickupManager.clear) {
-            weaponPickupManager.clear();
-        }
-        // Clear whetstone pickups
-        const whetstonePickupManager = this.systems.get('whetstonePickups');
-        if (whetstonePickupManager && whetstonePickupManager.clear) {
-            whetstonePickupManager.clear();
+        // Clear all pickups (gold, weapon, whetstone, health orb)
+        const pickupManager = this.systemsTyped.pickups;
+        if (pickupManager) {
+            pickupManager.clear();
         }
     }
 
     resetEnemyManager(level: number) {
-        const enemyManager = this.systems.get('enemies');
+        const enemyManager = this.systemsTyped.enemies;
         if (!enemyManager) return;
 
         enemyManager.enemies = [];
@@ -880,13 +885,14 @@ class Game {
         if ('pendingSceneTileSpawns' in enemyManager && Array.isArray(enemyManager.pendingSceneTileSpawns)) enemyManager.pendingSceneTileSpawns.length = 0;
         if ('pendingPackSpawns' in enemyManager && Array.isArray(enemyManager.pendingPackSpawns)) enemyManager.pendingPackSpawns.length = 0;
 
-        if (enemyManager.clearFlamePillars) {
-            enemyManager.clearFlamePillars();
+        const hazardManager = this.systemsTyped.hazards;
+        if (hazardManager?.clearFlamePillars) {
+            hazardManager.clearFlamePillars();
         }
     }
 
     regenerateWorldForLevel(level) {
-        const obstacleManager = this.systems.get('obstacles');
+        const obstacleManager = this.systemsTyped.obstacles;
         if (!obstacleManager) return;
 
         obstacleManager.clearWorld();
@@ -894,7 +900,10 @@ class Game {
         if (level === 0) {
             const hubLevel = this.config.levels && this.config.levels[0];
             const hubConfig = this.config.hub;
-            const fenceConfig = hubConfig?.fence ?? hubLevel?.fence;
+            type FenceConfig = { originX: number; originY: number; width: number; height: number; spacing?: number; size?: number; gapSide?: string; gapWidth?: number; fenceColor?: string };
+            type DecorationItem = { type: string; x: number; y: number; width?: number; height?: number };
+            const rawFence = hubConfig?.fence ?? hubLevel?.fence;
+            const fenceConfig: FenceConfig | undefined = rawFence as FenceConfig | undefined;
             if (fenceConfig && typeof obstacleManager.addRectPerimeterFence === 'function') {
                 obstacleManager.addRectPerimeterFence(
                     fenceConfig.originX,
@@ -904,7 +913,7 @@ class Game {
                     {
                         spacing: fenceConfig.spacing,
                         size: fenceConfig.size,
-                        gapSide: fenceConfig.gapSide ?? 'bottom',
+                        gapSide: (fenceConfig.gapSide === 'top' || fenceConfig.gapSide === 'left' || fenceConfig.gapSide === 'right' ? fenceConfig.gapSide : 'bottom'),
                         gapWidth: fenceConfig.gapWidth,
                         fenceColor: fenceConfig.fenceColor,
                     }
@@ -915,7 +924,8 @@ class Game {
                     obstacleManager.addObstacle(w.x, w.y, w.width, w.height, 'wall', null, { color: wallColor });
                 }
             }
-            const decorations = hubConfig?.decorations ?? hubLevel?.decorations;
+            const rawDecorations = hubConfig?.decorations ?? hubLevel?.decorations;
+            const decorations: DecorationItem[] | undefined = Array.isArray(rawDecorations) ? (rawDecorations as DecorationItem[]) : undefined;
             if (decorations?.length && obstacleManager.factory) {
                 const factory = obstacleManager.factory;
                 for (const d of decorations) {
@@ -937,15 +947,16 @@ class Game {
             : this.config.obstacles;
         let worldWidth = (levelConfig && levelConfig.worldWidth != null) ? levelConfig.worldWidth : worldConfig.width;
         let worldHeight = (levelConfig && levelConfig.worldHeight != null) ? levelConfig.worldHeight : worldConfig.height;
-        const sceneLayout = levelConfig?.obstacles?.sceneTileLayout;
-        if (levelConfig?.obstacles?.useSceneTiles && sceneLayout && sceneLayout.cols === 1 && sceneLayout.rows === 1) {
+        const levelObstaclesShape = levelConfig?.obstacles as { sceneTileLayout?: { cols?: number; rows?: number; tileSize?: number }; useSceneTiles?: boolean } | undefined;
+        const sceneLayout = levelObstaclesShape?.sceneTileLayout;
+        if (levelObstaclesShape?.useSceneTiles && sceneLayout && sceneLayout.cols === 1 && sceneLayout.rows === 1) {
             const tileSize = sceneLayout.tileSize ?? 1200;
             const padding = 200;
             worldWidth = tileSize + 2 * padding;
             worldHeight = tileSize + 2 * padding;
         }
 
-        obstacleManager.generateWorld(worldWidth, worldHeight, levelObstacles, {
+        obstacleManager.generateWorld(worldWidth, worldHeight, levelObstacles as Record<string, unknown>, {
             x: worldWidth / 2,
             y: worldHeight / 2,
             radius: 120
@@ -957,8 +968,8 @@ class Game {
         }
         this._currentWorldWidth = worldWidth;
         this._currentWorldHeight = worldHeight;
-        const cameraSystem = this.systems.get('camera');
-        const pathfindingSystem = this.systems.get('pathfinding');
+        const cameraSystem = this.systemsTyped.camera;
+        const pathfindingSystem = this.systemsTyped.pathfinding;
         if (cameraSystem && cameraSystem.setWorldBounds) cameraSystem.setWorldBounds(worldWidth, worldHeight);
         if (pathfindingSystem && pathfindingSystem.setWorldBounds) pathfindingSystem.setWorldBounds(worldWidth, worldHeight);
     }
@@ -973,8 +984,8 @@ class Game {
         // Prevent Space/Enter used to leave title or death from triggering dodge on the same keydown
         this.suppressDodgeUntil = Date.now() + 150;
         const selectedLevel = this.screenManager.selectedStartLevel;
-        const enemyManager = this.systems.get('enemies') as { setActiveQuest?(quest: unknown): void; enemies: unknown[]; enemiesSpawned: boolean; currentLevel: number; enemiesKilledThisLevel: number; clearFlamePillars?(): void } | undefined;
-        const cameraSystem = this.systems.get('camera');
+        const enemyManager = this.systemsTyped.enemies as { setActiveQuest?(quest: unknown): void; enemies: unknown[]; enemiesSpawned: boolean; currentLevel: number; enemiesKilledThisLevel: number; clearFlamePillars?(): void } | undefined;
+        const cameraSystem = this.systemsTyped.camera;
         const worldConfig = this.config.world;
         const levels = this.config.levels || {};
         const hubLevel = levels[0];
@@ -1031,8 +1042,7 @@ class Game {
             this.playingState.chest = hubLevel.weaponChest ? { ...hubLevel.weaponChest } : null;
             this.playingState.chestOpen = false;
             this.playingState.chestUseCooldown = 0.6;
-            this.weaponTooltipHover = null;
-            this.armorTooltipHover = null;
+            this.tooltipHover = null;
             this.playingState.playerNearChest = false;
             this.playingState.shop = hubLevel.shopkeeper ? { ...hubLevel.shopkeeper } : null;
             this.playingState.shopOpen = false;
@@ -1061,7 +1071,7 @@ class Game {
         this.clearAllEntitiesAndProjectiles();
 
         // Reset camera
-        const cameraSystem = this.systems.get('camera');
+        const cameraSystem = this.systemsTyped.camera;
         if (cameraSystem) {
             cameraSystem.setZoom(1.0, this.canvas.width / 2, this.canvas.height / 2, this.canvas.width, this.canvas.height);
         }
@@ -1085,8 +1095,7 @@ class Game {
         }
         if (!visible) {
             this.playingState.inventoryOpen = false;
-            this.weaponTooltipHover = null;
-            this.armorTooltipHover = null;
+            this.tooltipHover = null;
             this.hudController.setInventoryPanelVisible(false);
         }
     }
@@ -1097,8 +1106,8 @@ class Game {
     }
 
     handleCameraZoom() {
-        const inputSystem = this.systems.get('input');
-        const cameraSystem = this.systems.get('camera');
+        const inputSystem = this.systemsTyped.input;
+        const cameraSystem = this.systemsTyped.camera;
         if (!inputSystem || !cameraSystem) return;
 
         const wheelDelta = inputSystem.getWheelDelta();
@@ -1112,7 +1121,7 @@ class Game {
     update(deltaTime: number) {
         if (this.screenManager.currentScreen === 'hub') {
             if (this.playingState.shopOpen) {
-                const inputSystem = this.systems.get('input') as { getWheelDelta?(): number } | undefined;
+                const inputSystem = this.systemsTyped.input as { getWheelDelta?(): number } | undefined;
                 const wheelDelta = inputSystem?.getWheelDelta?.() ?? 0;
                 if (wheelDelta !== 0) {
                     const layout = getShopLayout(
@@ -1135,7 +1144,7 @@ class Game {
                 if (combat && combat.isPlayer && !combat.isAttacking && combat.attackInputBuffered) {
                     combat.tryFlushBufferedAttack();
                 }
-                const enemyManager = this.systems.get('enemies');
+                const enemyManager = this.systemsTyped.enemies;
                 if (enemyManager) {
                     enemyManager.checkPlayerAttack(player);
                     enemyManager.checkEnemyAttacks(player);
@@ -1145,10 +1154,10 @@ class Game {
             }
             if (player) {
                 const transform = player.getComponent(Transform);
-                const cameraSystem = this.systems.get('camera');
+                const cameraSystem = this.systemsTyped.camera;
                 const movement = player.getComponent(Movement);
                 if (transform && cameraSystem) {
-                    const fastFollow = movement && movement.isAttackDashing === true;
+                    const fastFollow = movement && (movement as { isAttackDashing?: boolean }).isAttackDashing === true;
                     cameraSystem.follow(transform, this.canvas.width, this.canvas.height, { fastFollow });
                 }
             }
@@ -1159,80 +1168,47 @@ class Game {
             return;
         }
 
-        // Handle camera zoom with mouse wheel
         this.handleCameraZoom();
-
-        // Update player projectile cooldown
         if (this.playingState.playerProjectileCooldown > 0) {
             this.playingState.playerProjectileCooldown = Math.max(0, this.playingState.playerProjectileCooldown - deltaTime);
         }
-
-        // Update crossbow reload (only when R has been pressed to begin reload)
         const player = this.entities.get('player');
         const combat = player ? player.getComponent(Combat) : null;
         const weapon = combat && combat.playerAttack ? combat.playerAttack.weapon : null;
-        const isCrossbow = weapon && weapon.isRanged === true && !(weapon as { isBow?: boolean }).isBow;
-        const crossbowConfig = this.config.player.crossbow;
-        if (isCrossbow && crossbowConfig && this.playingState.crossbowReloadInProgress && this.playingState.crossbowReloadProgress < 1) {
-            this.playingState.crossbowReloadProgress = Math.min(1, this.playingState.crossbowReloadProgress + deltaTime / crossbowConfig.reloadTime);
-            if (this.playingState.crossbowReloadProgress >= 1) this.playingState.crossbowReloadInProgress = false;
-        }
-        if (player && combat && !isCrossbow) {
-            this.playingState.crossbowReloadProgress = 1;
-            this.playingState.crossbowReloadInProgress = false;
-            this.playingState.crossbowPerfectReloadNext = false;
-        }
-        // Expose crossbow state on player for rendering (reload bar under floating health bar)
-        if (player && isCrossbow) {
-            player.crossbowReloadProgress = this.playingState.crossbowReloadProgress;
-            player.crossbowReloadInProgress = this.playingState.crossbowReloadInProgress;
-        }
-
-        // Update all systems (single tick; includes entities, damageNumbers, projectiles, hazards, healthOrbs, gatherables)
-        this.systems.update(deltaTime);
-        
-        // Handle player attacks
+        const w = weapon as { isRanged?: boolean; isBow?: boolean } | null;
+        const isCrossbow = w && w.isRanged === true && !w.isBow;
+        updateCrossbowReload(deltaTime, this.playingState, player, this.config, !!isCrossbow);
+        this.systems!.update(deltaTime);
         if (player) {
-            const combat = player.getComponent(Combat);
-            // Flush buffered attack same frame attack ends (no setTimeout delay)
-            if (combat && combat.isPlayer && !combat.isAttacking && combat.attackInputBuffered) {
-                combat.tryFlushBufferedAttack();
+            const combatComp = player.getComponent(Combat);
+            if (combatComp && combatComp.isPlayer && !combatComp.isAttacking && combatComp.attackInputBuffered) {
+                combatComp.tryFlushBufferedAttack();
             }
-            const enemyManager = this.systems.get('enemies');
-            
-            // Check if player attacks hit any enemies
-            enemyManager.checkPlayerAttack(player);
-            
-            // Handle enemy attacks on player
-            enemyManager.checkEnemyAttacks(player);
-            
-            // Update player healing (drinking/regen timers, charge regen)
+            const enemyManager = this.systemsTyped.enemies;
+            if (enemyManager) {
+                enemyManager.checkPlayerAttack(player);
+                enemyManager.checkEnemyAttacks(player);
+            }
             const healing = player.getComponent(PlayerHealing);
             if (healing) healing.update(deltaTime);
-
-            // Check for player death
             const health = player.getComponent(Health);
             if (health && health.isDead && this.screenManager.isScreen('playing')) {
-                this.playingState.killsThisLife = 0; // reset for next life
+                this.playingState.killsThisLife = 0;
                 this.screenManager.setScreen('death');
                 this.updateUIVisibility(false);
             }
         }
-        
-        // Update camera to follow player (faster follow during attack dash so spin doesn't make player leave frame)
         if (player) {
             const transform = player.getComponent(Transform);
-            const cameraSystem = this.systems.get('camera');
+            const cameraSystem = this.systemsTyped.camera;
             const movement = player.getComponent(Movement);
             if (transform && cameraSystem) {
-                const fastFollow = movement && movement.isAttackDashing === true;
+                const fastFollow = movement && (movement as { isAttackDashing?: boolean }).isAttackDashing === true;
                 cameraSystem.follow(transform, this.canvas.width, this.canvas.height, { fastFollow });
             }
         }
-
         this.playingStateController.updatePortal(deltaTime, player);
-        const enemyManager = this.systems.get('enemies') as { getCurrentLevel(): number } | undefined;
-        const currentLevel = enemyManager?.getCurrentLevel();
+        const currentLevel = this.systemsTyped.enemies?.getCurrentLevel();
         this.hudController.update(player, currentLevel);
     }
 
@@ -1251,293 +1227,16 @@ class Game {
 
     /** True if (x,y) in canvas coords is over the inventory, chest, or shop UI (so attack/block should not fire). */
     private isPointerOverInventoryOrChestOrShopUI(x: number, y: number): boolean {
-        if (this.playingState.chestOpen) return true; // chest uses full-screen overlay
-        if (this.playingState.inventoryOpen) {
-            const layout = getInventoryLayout(this.canvas);
-            const p = layout.panel;
-            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return true;
-        }
-        if (this.playingState.shopOpen) {
-            const layout = getShopLayout(
-                this.canvas,
-                this.playingState.shopScrollOffset ?? 0,
-                this.playingState.shopExpandedWeapons,
-                this.playingState.shopExpandedArmor,
-                this.playingState.shopExpandedCategories,
-                this.playingState
-            );
-            const p = layout.panel;
-            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return true;
-        }
-        return false;
+        return this.inventoryChestUIController.isPointerOverUI(x, y);
     }
 
     /** Handle Back/Close on inventory or chest canvas UI. Returns true if click was consumed. */
     handleInventoryChestClick(x: number, y: number, e?: MouseEvent): boolean {
-        if (this.playingState.rerollStationOpen) {
-            const layout = getRerollOverlayLayout(this.canvas, this.playingState);
-            const hit = hitTestRerollOverlay(x, y, this.playingState, layout);
-            if (hit?.type === 'back') {
-                this.playingState.rerollStationOpen = false;
-                return true;
-            }
-            if (hit?.type === 'reroll' && this.playingState.rerollSlotItem?.key) {
-                rerollEnchantSlot(this.playingState, hit.action);
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (hit) return true;
-            ensureInventoryInitialized(this.playingState);
-            const invLayoutR = getInventoryLayout(this.canvas, { includeChestGrid: true });
-            const invHitR = hitTestInventory(x, y, this.playingState, invLayoutR, this.playingState.chestSlots ?? []);
-            if (invHitR?.type === 'close') {
-                this.playingState.rerollStationOpen = false;
-                this.weaponTooltipHover = null;
-                return true;
-            }
-        }
-        // Ctrl+click: equip weapon from inventory/chest, or unequip/put in chest
-        if (e?.ctrlKey && (this.playingState.inventoryOpen || this.playingState.chestOpen || this.playingState.rerollStationOpen)) {
-            ensureInventoryInitialized(this.playingState);
-            const ps = this.playingState;
-            const sync = () => this.syncPlayerWeaponsFromState();
-            const invLayout = this.playingState.rerollStationOpen
-                ? getInventoryLayout(this.canvas, { includeChestGrid: true })
-                : getInventoryLayout(this.canvas);
-            const invHit = hitTestInventory(
-                x,
-                y,
-                ps,
-                invLayout,
-                this.playingState.rerollStationOpen ? (ps.chestSlots ?? []) : undefined
-            );
-            if (invHit?.type === 'chest-slot' && invHit.key) {
-                const slot = getEquipSlotForWeapon(invHit.key);
-                const slotHasItem = slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
-                if (slotHasItem) {
-                    unequipToInventory(ps, slot, undefined, undefined, sync);
-                }
-                equipFromChestToHand(ps, invHit.index, slot, sync);
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (invHit?.type === 'inventory-slot' && invHit.weaponKey && invHit.index >= 0) {
-                const armorConfig = getArmor(invHit.weaponKey);
-                if (armorConfig) {
-                    const slotHasItem = (armorConfig.slot === 'head' ? ps.equippedArmorHeadKey : armorConfig.slot === 'chest' ? ps.equippedArmorChestKey : armorConfig.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey) !== 'none';
-                    if (slotHasItem) swapArmorWithInventory(ps, armorConfig.slot, invHit.index);
-                    else equipArmorFromInventory(ps, invHit.index, armorConfig.slot);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-                const slot = getEquipSlotForWeapon(invHit.weaponKey);
-                const slotHasItem = slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
-                if (slotHasItem) {
-                    swapEquipmentWithInventory(ps, slot, invHit.index, sync);
-                } else {
-                    equipFromInventory(ps, invHit.index, slot, sync);
-                }
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (invHit?.type === 'equipment') {
-                const key = invHit.slot === 'mainhand' ? ps.equippedMainhandKey : ps.equippedOffhandKey;
-                if (key && key !== 'none') {
-                    if (this.playingState.chestOpen || this.playingState.rerollStationOpen) {
-                        putInChestFromEquipment(ps, invHit.slot, sync);
-                    } else {
-                        unequipToInventory(ps, invHit.slot, undefined, undefined, sync);
-                    }
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-            }
-            if (invHit?.type === 'armor-equipment') {
-                const key = invHit.slot === 'head' ? ps.equippedArmorHeadKey : invHit.slot === 'chest' ? ps.equippedArmorChestKey : invHit.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey;
-                if (key && key !== 'none') {
-                    unequipArmorToInventory(ps, invHit.slot);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-            }
-            if (this.playingState.chestOpen && !this.playingState.rerollStationOpen) {
-                const layout = getChestLayout(this.canvas);
-                const chestHit = hitTestChest(x, y, layout, ps.chestSlots ?? []);
-                if (chestHit?.type === 'weapon-slot' && chestHit.key) {
-                    const slot = getEquipSlotForWeapon(chestHit.key);
-                    const slotHasItem = slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
-                    if (slotHasItem) {
-                        unequipToInventory(ps, slot, undefined, undefined, sync);
-                    }
-                    equipFromChestToHand(ps, chestHit.index, slot, sync);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-            }
-        }
-        if (this.playingState.shopOpen) {
-            const layout = getShopLayout(
-                this.canvas,
-                this.playingState.shopScrollOffset,
-                this.playingState.shopExpandedWeapons,
-                this.playingState.shopExpandedArmor,
-                this.playingState.shopExpandedCategories,
-                this.playingState
-            );
-            const hit = hitTestShop(x, y, layout);
-            if (hit?.type === 'back') {
-                this.playingState.shopOpen = false;
-                this.playingState.shopUseCooldown = 0.4;
-                return true;
-            }
-            if (hit?.type === 'repair') {
-                const gold = this.playingState.gold ?? 0;
-                if (gold >= hit.cost) {
-                    this.playingState.gold = gold - hit.cost;
-                    if (hit.source === 'mainhand') {
-                        this.playingState.equippedMainhandDurability = MAX_WEAPON_DURABILITY;
-                    } else if (hit.source === 'offhand') {
-                        this.playingState.equippedOffhandDurability = MAX_WEAPON_DURABILITY;
-                    } else if (hit.source === 'inventory' && 'bagIndex' in hit) {
-                        const slot = this.playingState.inventorySlots?.[hit.bagIndex];
-                        if (slot) {
-                            this.playingState.inventorySlots[hit.bagIndex] = { key: slot.key, durability: MAX_WEAPON_DURABILITY };
-                        }
-                    } else if (hit.source === 'armor' && 'armorSlot' in hit) {
-                        const s = hit.armorSlot;
-                        if (s === 'head') this.playingState.equippedArmorHeadDurability = MAX_ARMOR_DURABILITY;
-                        else if (s === 'chest') this.playingState.equippedArmorChestDurability = MAX_ARMOR_DURABILITY;
-                        else if (s === 'hands') this.playingState.equippedArmorHandsDurability = MAX_ARMOR_DURABILITY;
-                        else if (s === 'feet') this.playingState.equippedArmorFeetDurability = MAX_ARMOR_DURABILITY;
-                    } else if (hit.source === 'armor-bag' && 'armorBagIndex' in hit) {
-                        const item = this.playingState.inventorySlots?.[hit.armorBagIndex];
-                        if (item) {
-                            this.playingState.inventorySlots![hit.armorBagIndex] = { key: item.key, durability: MAX_ARMOR_DURABILITY };
-                        }
-                    }
-                    this.refreshInventoryPanel();
-                }
-                return true;
-            }
-            if (hit?.type === 'armor-item') {
-                const gold = this.playingState.gold ?? 0;
-                if (gold >= hit.price) {
-                    ensureInventoryInitialized(this.playingState);
-                    const empty = this.playingState.inventorySlots?.findIndex((s) => s == null) ?? -1;
-                    if (empty >= 0) {
-                        this.playingState.gold = gold - hit.price;
-                        this.playingState.inventorySlots![empty] = { key: hit.armorKey, durability: MAX_ARMOR_DURABILITY };
-                        this.refreshInventoryPanel();
-                    }
-                }
-                return true;
-            }
-            if (hit?.type === 'dropdown') {
-                const exp = this.playingState.shopExpandedWeapons ?? {};
-                const wasExpanded = exp[hit.weaponKey] === true;
-                this.playingState.shopExpandedWeapons = { ...exp, [hit.weaponKey]: !wasExpanded };
-                return true;
-            }
-            if (hit?.type === 'armor-dropdown') {
-                const exp = this.playingState.shopExpandedArmor ?? {};
-                const wasExpanded = exp[hit.slot] === true;
-                this.playingState.shopExpandedArmor = { ...exp, [hit.slot]: !wasExpanded };
-                return true;
-            }
-            if (hit?.type === 'parent-category') {
-                const exp = this.playingState.shopExpandedCategories ?? {};
-                const wasExpanded = exp[hit.category] === true;
-                this.playingState.shopExpandedCategories = { ...exp, [hit.category]: !wasExpanded };
-                return true;
-            }
-            if (hit?.type === 'item') {
-                const gold = this.playingState.gold ?? 0;
-                if (gold >= hit.price) {
-                    ensureInventoryInitialized(this.playingState);
-                    const slots = this.playingState.inventorySlots;
-                    const idx = slots.findIndex((s) => s == null);
-                    if (idx >= 0) {
-                        this.playingState.gold = gold - hit.price;
-                        setInventorySlot(this.playingState, idx, { key: hit.weaponKey, durability: MAX_WEAPON_DURABILITY });
-                        this.refreshInventoryPanel();
-                    }
-                }
-            }
-            return true;
-        }
-        if (this.playingState.inventoryOpen) {
-            const layout = getInventoryLayout(this.canvas);
-            const hit = hitTestInventory(x, y, this.playingState, layout);
-            if (hit?.type === 'close') {
-                this.playingState.inventoryOpen = false;
-                this.weaponTooltipHover = null;
-                this.armorTooltipHover = null;
-                this.hudController.setInventoryPanelVisible(false);
-                return true;
-            }
-        }
-        if (this.playingState.chestOpen) {
-            const invLayout = getInventoryLayout(this.canvas);
-            const invHit = hitTestInventory(x, y, this.playingState, invLayout);
-            if (invHit?.type === 'close') {
-                this.playingState.chestOpen = false;
-                this.playingState.chestUseCooldown = 0;
-                this.weaponTooltipHover = null;
-                this.armorTooltipHover = null;
-                return true;
-            }
-            const layout = getChestLayout(this.canvas);
-            const hit = hitTestChest(x, y, layout, this.playingState.chestSlots ?? []);
-            if (hit?.type === 'back') {
-                this.playingState.chestOpen = false;
-                this.playingState.chestUseCooldown = 0;
-                this.weaponTooltipHover = null;
-                this.armorTooltipHover = null;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private syncPlayerWeaponsFromState(): void {
-        const ps = this.playingState;
-        const player = this.entities.get('player');
-        if (!player) return;
-        const combat = player.getComponent(Combat) as Combat | null;
-        if (!combat || !combat.isPlayer) return;
-        (combat as Combat & { stopBlocking?(): void }).stopBlocking?.();
-        const mainhand = getEffectiveWeapon(
-            ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none' ? ps.equippedMainhandKey : undefined,
-            ps.equippedMainhandPrefixId,
-            ps.equippedMainhandSuffixId
-        );
-        const offhand = getEffectiveWeapon(
-            ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none' ? ps.equippedOffhandKey : undefined,
-            ps.equippedOffhandPrefixId,
-            ps.equippedOffhandSuffixId
-        );
-        (combat as Combat & { setWeapons(m: unknown, o?: unknown): void }).setWeapons(mainhand, offhand);
+        return this.inventoryChestUIController.handleClick(x, y, e);
     }
 
     private handleInventoryChestDoubleClick(x: number, y: number): boolean {
-        if (!this.playingState.inventoryOpen && !this.playingState.chestOpen) return false;
-        ensureInventoryInitialized(this.playingState);
-        const ps = this.playingState;
-        const sync = () => this.syncPlayerWeaponsFromState();
-        const layout = getInventoryLayout(this.canvas);
-        const hit = hitTestInventory(x, y, ps, layout);
-        if (hit?.type === 'inventory-slot' && hit.weaponKey && hit.index >= 0) {
-            const slot = getEquipSlotForWeapon(hit.weaponKey);
-            const slotHasItem = slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
-            if (slotHasItem) {
-                swapEquipmentWithInventory(ps, slot, hit.index, sync);
-            } else {
-                equipFromInventory(ps, hit.index, slot, sync);
-            }
-            this.refreshInventoryPanel();
-            return true;
-        }
-        return false;
+        return this.inventoryChestUIController.handleDoubleClick(x, y);
     }
 
     private getCanvasCoords(e: { clientX: number; clientY: number }): { x: number; y: number } {
@@ -1554,415 +1253,24 @@ class Game {
 
     /** Returns true if click was on minimap zoom +/- and was handled. */
     private handleMinimapZoomClick(x: number, y: number): boolean {
-        if (!this.settings.showMinimap || !this.screenManager) return false;
-        if (!this.screenManager.isScreen('playing') && !this.screenManager.isScreen('hub')) return false;
-        const hit = hitTestMinimapZoomButtons(this.canvas.width, this.canvas.height, x, y);
-        if (hit === 'minus') {
-            const current = (this.settings.minimapZoom as number) ?? 1;
-            this.settings.minimapZoom = Math.max(MINIMAP_ZOOM_MIN, current - MINIMAP_ZOOM_STEP);
-            return true;
-        }
-        if (hit === 'plus') {
-            const current = (this.settings.minimapZoom as number) ?? 1;
-            this.settings.minimapZoom = Math.min(MINIMAP_ZOOM_MAX, current + MINIMAP_ZOOM_STEP);
-            return true;
-        }
-        return false;
+        return this.inventoryChestUIController.handleMinimapZoomClick(x, y);
     }
 
     handleInventoryChestPointerDown(x: number, y: number, ctrlKey = false): boolean {
-        if (!this.playingState.inventoryOpen && !this.playingState.chestOpen && !this.playingState.shopOpen && !this.playingState.rerollStationOpen) return false;
-        if (ctrlKey) return false; // Let click handler do ctrl+click equip/unequip; avoid drag + click double-action
-        ensureInventoryInitialized(this.playingState);
-        const ds = this.inventoryDragState;
-        if (this.playingState.rerollStationOpen && this.playingState.rerollSlotItem?.key) {
-            const rerollLayout = getRerollOverlayLayout(this.canvas, this.playingState);
-            const rerollHit = hitTestRerollOverlay(x, y, this.playingState, rerollLayout);
-            if (rerollHit?.type === 'slot') {
-                ds.isDragging = true;
-                ds.weaponKey = this.playingState.rerollSlotItem.key;
-                ds.durability = this.playingState.rerollSlotItem.durability;
-                ds.sourceSlotIndex = 0;
-                ds.sourceContext = 'rerollSlot';
-                ds.pointerX = x;
-                ds.pointerY = y;
-                return true;
-            }
-        }
-        // Character sheet: when reroll open use combined layout (inventory + chest in panel)
-        const invLayout = this.playingState.rerollStationOpen
-            ? getInventoryLayout(this.canvas, { includeChestGrid: true })
-            : getInventoryLayout(this.canvas);
-        const invHit = hitTestInventory(
-            x,
-            y,
-            this.playingState,
-            invLayout,
-            this.playingState.rerollStationOpen ? (this.playingState.chestSlots ?? []) : undefined
-        );
-        if (invHit?.type === 'chest-slot' && invHit.key) {
-            ds.isDragging = true;
-            ds.weaponKey = invHit.key;
-            ds.sourceSlotIndex = invHit.index;
-            ds.sourceContext = 'chest';
-            ds.pointerX = x;
-            ds.pointerY = y;
-            return true;
-        }
-        if (invHit?.type === 'inventory-slot' && (invHit.weaponKey || invHit.itemType === 'whetstone')) {
-            if (invHit.itemType === 'whetstone') {
-                ds.isDragging = true;
-                ds.sourceSlotIndex = invHit.index;
-                ds.sourceContext = 'inventory';
-                ds.weaponKey = '';
-                ds.isWhetstone = true;
-                ds.pointerX = x;
-                ds.pointerY = y;
-                return true;
-            }
-            const isArmor = !!getArmor(invHit.weaponKey!);
-            ds.isDragging = true;
-            ds.sourceSlotIndex = invHit.index;
-            ds.sourceContext = 'inventory';
-            ds.pointerX = x;
-            ds.pointerY = y;
-            if (isArmor) {
-                ds.weaponKey = '';
-                ds.armorKey = invHit.weaponKey!;
-            } else {
-                ds.weaponKey = invHit.weaponKey!;
-                ds.armorKey = undefined;
-                ds.durability = undefined;
-            }
-            return true;
-        }
-        if (invHit?.type === 'equipment') {
-            const key = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandKey : this.playingState.equippedOffhandKey;
-            if (key && key !== 'none') {
-                ds.isDragging = true;
-                ds.weaponKey = key;
-                ds.durability = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandDurability : this.playingState.equippedOffhandDurability;
-                ds.sourceSlotIndex = invHit.slot === 'mainhand' ? 0 : 1;
-                ds.sourceContext = 'equipment';
-                ds.pointerX = x;
-                ds.pointerY = y;
-                return true;
-            }
-        }
-        if (invHit?.type === 'armor-equipment') {
-            const key = invHit.slot === 'head' ? this.playingState.equippedArmorHeadKey : invHit.slot === 'chest' ? this.playingState.equippedArmorChestKey : invHit.slot === 'hands' ? this.playingState.equippedArmorHandsKey : this.playingState.equippedArmorFeetKey;
-            if (key && key !== 'none') {
-                ds.isDragging = true;
-                ds.weaponKey = '';
-                ds.armorKey = key;
-                ds.sourceArmorSlot = invHit.slot;
-                ds.sourceContext = 'armor';
-                ds.pointerX = x;
-                ds.pointerY = y;
-                return true;
-            }
-        }
-        if (this.playingState.chestOpen) {
-            const layout = getChestLayout(this.canvas);
-            const hit = hitTestChest(x, y, layout, this.playingState.chestSlots ?? []);
-            if (hit?.type === 'weapon-slot' && hit.key) {
-                ds.isDragging = true;
-                ds.weaponKey = hit.key;
-                ds.sourceSlotIndex = hit.index;
-                ds.sourceContext = 'chest';
-                ds.pointerX = x;
-                ds.pointerY = y;
-                return true;
-            }
-        }
-        return false;
+        return this.inventoryChestUIController.handlePointerDown(x, y, ctrlKey);
     }
 
     handleInventoryChestPointerMove(x: number, y: number): void {
-        const ds = this.inventoryDragState;
-        if (ds.isDragging) {
-            ds.pointerX = x;
-            ds.pointerY = y;
-            return;
-        }
-        this.updateWeaponTooltipHover(x, y);
-    }
-
-    private updateWeaponTooltipHover(x: number, y: number): void {
-        if (this.playingState.inventoryOpen || this.playingState.chestOpen || this.playingState.rerollStationOpen) {
-            ensureInventoryInitialized(this.playingState);
-            const invLayout = this.playingState.rerollStationOpen
-                ? getInventoryLayout(this.canvas, { includeChestGrid: true })
-                : getInventoryLayout(this.canvas);
-            const invHit = hitTestInventory(
-                x,
-                y,
-                this.playingState,
-                invLayout,
-                this.playingState.rerollStationOpen ? (this.playingState.chestSlots ?? []) : undefined
-            );
-            if (invHit?.type === 'armor-equipment') {
-                const key = invHit.slot === 'head' ? this.playingState.equippedArmorHeadKey : invHit.slot === 'chest' ? this.playingState.equippedArmorChestKey : invHit.slot === 'hands' ? this.playingState.equippedArmorHandsKey : this.playingState.equippedArmorFeetKey;
-                const durability = invHit.slot === 'head' ? this.playingState.equippedArmorHeadDurability : invHit.slot === 'chest' ? this.playingState.equippedArmorChestDurability : invHit.slot === 'hands' ? this.playingState.equippedArmorHandsDurability : this.playingState.equippedArmorFeetDurability;
-                if (key && key !== 'none') {
-                    this.armorTooltipHover = { armorKey: key, x, y, durability };
-                    this.weaponTooltipHover = null;
-                    return;
-                }
-            }
-            if (invHit?.type === 'chest-slot' && invHit.key) {
-                const chestSlots = this.playingState.chestSlots ?? [];
-                const instance = chestSlots[invHit.index];
-                this.weaponTooltipHover = instance
-                    ? {
-                        weaponKey: invHit.key,
-                        x,
-                        y,
-                        durability: instance.durability,
-                        prefixId: instance.prefixId,
-                        suffixId: instance.suffixId
-                    }
-                    : { weaponKey: invHit.key, x, y };
-                return;
-            }
-            if (invHit?.type === 'inventory-slot' && invHit.weaponKey) {
-                if (getArmor(invHit.weaponKey)) {
-                    this.armorTooltipHover = { armorKey: invHit.weaponKey, x, y, durability: invHit.durability };
-                    this.weaponTooltipHover = null;
-                    return;
-                }
-                this.armorTooltipHover = null;
-                this.weaponTooltipHover = {
-                    weaponKey: invHit.weaponKey,
-                    x,
-                    y,
-                    durability: invHit.durability,
-                    prefixId: invHit.prefixId,
-                    suffixId: invHit.suffixId
-                };
-                return;
-            }
-            if (invHit?.type === 'equipment') {
-                const key = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandKey : this.playingState.equippedOffhandKey;
-                if (key && key !== 'none') {
-                    const prefixId = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandPrefixId : this.playingState.equippedOffhandPrefixId;
-                    const suffixId = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandSuffixId : this.playingState.equippedOffhandSuffixId;
-                    const durability = invHit.slot === 'mainhand' ? this.playingState.equippedMainhandDurability : this.playingState.equippedOffhandDurability;
-                    this.armorTooltipHover = null;
-                    this.weaponTooltipHover = { weaponKey: key, x, y, durability, prefixId, suffixId };
-                    return;
-                }
-            }
-        }
-        if (this.playingState.chestOpen) {
-            const layout = getChestLayout(this.canvas);
-            const chestSlots = this.playingState.chestSlots ?? [];
-            const hit = hitTestChest(x, y, layout, chestSlots);
-            if (hit?.type === 'weapon-slot' && hit.key) {
-                const instance = chestSlots[hit.index];
-                this.armorTooltipHover = null;
-                this.weaponTooltipHover = {
-                    weaponKey: hit.key,
-                    x,
-                    y,
-                    durability: instance?.durability,
-                    prefixId: instance?.prefixId,
-                    suffixId: instance?.suffixId
-                };
-                return;
-            }
-        }
-        this.weaponTooltipHover = null;
-        this.armorTooltipHover = null;
+        this.inventoryChestUIController.handlePointerMove(x, y);
     }
 
     handleInventoryChestPointerUp(x: number, y: number): boolean {
-        const ds = this.inventoryDragState;
-        if (!ds.isDragging) return false;
-        const weaponKey = ds.weaponKey;
-        const armorKey = ds.armorKey;
-        const sourceIndex = ds.sourceSlotIndex;
-        const sourceContext = ds.sourceContext;
-        const sourceArmorSlot = ds.sourceArmorSlot;
-        const sourceArmorInvIndex = (ds.sourceContext === 'inventory' && ds.armorKey) ? ds.sourceSlotIndex : undefined;
-        const dragDurability = ds.durability;
-        const wasWhetstone = ds.isWhetstone === true;
-        ds.isDragging = false;
-        ds.weaponKey = '';
-        ds.armorKey = undefined;
-        ds.sourceArmorSlot = undefined;
-        ds.durability = undefined;
-        ds.sourceSlotIndex = -1;
-        ds.isWhetstone = false;
-
-        const ps = this.playingState;
-        const sync = () => this.syncPlayerWeaponsFromState();
-        if (!ps.inventorySlots || ps.inventorySlots.length < INVENTORY_SLOT_COUNT) {
-            if (armorKey && (this.playingState.inventoryOpen || this.playingState.chestOpen)) {
-                const invLayout = getInventoryLayout(this.canvas);
-                const invHit = hitTestInventory(x, y, ps, invLayout);
-                if (invHit?.type === 'armor-equipment' && sourceArmorSlot !== undefined && canEquipArmorInSlot(armorKey, invHit.slot)) {
-                    swapArmorWithArmor(ps, sourceArmorSlot, invHit.slot);
-                    this.refreshInventoryPanel();
-                } else if (invHit?.type === 'armor-equipment' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex >= 0 && canEquipArmorInSlot(armorKey, invHit.slot)) {
-                    const slotHasItem = (invHit.slot === 'head' ? ps.equippedArmorHeadKey : invHit.slot === 'chest' ? ps.equippedArmorChestKey : invHit.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey) !== 'none';
-                    if (slotHasItem) swapArmorWithInventory(ps, invHit.slot, sourceArmorInvIndex);
-                    else equipArmorFromInventory(ps, sourceArmorInvIndex, invHit.slot);
-                    this.refreshInventoryPanel();
-                } else if (invHit?.type === 'inventory-slot' && sourceArmorSlot !== undefined) {
-                    unequipArmorToInventory(ps, sourceArmorSlot, invHit.index);
-                    this.refreshInventoryPanel();
-                } else if (invHit?.type === 'inventory-slot' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex !== invHit.index) {
-                    swapInventorySlots(ps, sourceArmorInvIndex, invHit.index);
-                    this.refreshInventoryPanel();
-                }
-            }
-            return true;
-        }
-
-        if (this.playingState.rerollStationOpen) {
-            const rerollLayout = getRerollOverlayLayout(this.canvas, ps);
-            const s = rerollLayout.slot;
-            const inRerollSlot = x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h;
-            if (inRerollSlot && sourceContext !== 'rerollSlot') {
-                moveToRerollSlot(ps, sourceContext, sourceIndex, sync);
-                this.refreshInventoryPanel();
-                return true;
-            }
-        }
-
-        // Character sheet: when reroll open use combined layout (inventory + chest in panel)
-        if (this.playingState.inventoryOpen || this.playingState.chestOpen || this.playingState.rerollStationOpen) {
-            const invLayout = this.playingState.rerollStationOpen
-                ? getInventoryLayout(this.canvas, { includeChestGrid: true })
-                : getInventoryLayout(this.canvas);
-            const invHit = hitTestInventory(
-                x,
-                y,
-                ps,
-                invLayout,
-                this.playingState.rerollStationOpen ? (ps.chestSlots ?? []) : undefined
-            );
-            // Whetstone: drag onto weapon (equipped or in bag) to repair
-            if (wasWhetstone && sourceContext === 'inventory' && sourceIndex >= 0 && invHit) {
-                if (invHit.type === 'equipment') {
-                    const key = invHit.slot === 'mainhand' ? ps.equippedMainhandKey : ps.equippedOffhandKey;
-                    if (key && key !== 'none') {
-                        if (useWhetstoneOnWeapon(ps, sourceIndex, invHit.slot)) {
-                            this.refreshInventoryPanel();
-                            return true;
-                        }
-                    }
-                }
-                if (invHit.type === 'inventory-slot' && invHit.weaponKey && invHit.itemType === 'weapon') {
-                    if (useWhetstoneOnWeapon(ps, sourceIndex, { bagIndex: invHit.index })) {
-                        this.refreshInventoryPanel();
-                        return true;
-                    }
-                }
-            }
-            if (armorKey && invHit?.type === 'armor-equipment' && sourceArmorSlot !== undefined && canEquipArmorInSlot(armorKey, invHit.slot)) {
-                swapArmorWithArmor(ps, sourceArmorSlot, invHit.slot);
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (armorKey && invHit?.type === 'armor-equipment' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex >= 0 && canEquipArmorInSlot(armorKey, invHit.slot)) {
-                const slotHasItem = (invHit.slot === 'head' ? ps.equippedArmorHeadKey : invHit.slot === 'chest' ? ps.equippedArmorChestKey : invHit.slot === 'hands' ? ps.equippedArmorHandsKey : ps.equippedArmorFeetKey) !== 'none';
-                if (slotHasItem) swapArmorWithInventory(ps, invHit.slot, sourceArmorInvIndex);
-                else equipArmorFromInventory(ps, sourceArmorInvIndex, invHit.slot);
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (armorKey && invHit?.type === 'inventory-slot' && sourceArmorSlot !== undefined) {
-                unequipArmorToInventory(ps, sourceArmorSlot, invHit.index);
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (armorKey && invHit?.type === 'inventory-slot' && sourceArmorInvIndex !== undefined && sourceArmorInvIndex !== invHit.index) {
-                swapInventorySlots(ps, sourceArmorInvIndex, invHit.index);
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (invHit?.type === 'chest-slot') {
-                if (sourceContext === 'rerollSlot') {
-                    moveFromRerollSlotTo(ps, 'chest', 0);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-                if (sourceContext === 'inventory' && sourceIndex >= 0 && sourceIndex < INVENTORY_SLOT_COUNT) {
-                    putInChestFromInventory(ps, sourceIndex);
-                } else if (sourceContext === 'equipment') {
-                    putInChestFromEquipment(ps, sourceIndex === 0 ? 'mainhand' : 'offhand', sync);
-                }
-                this.refreshInventoryPanel();
-                return true;
-            }
-            if (invHit?.type === 'equipment') {
-                if (sourceContext === 'rerollSlot') {
-                    moveFromRerollSlotTo(ps, 'equipment', invHit.slot === 'mainhand' ? 0 : 1, sync);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-                if (sourceContext === 'equipment') {
-                    swapEquipmentWithEquipment(ps, sync);
-                } else if (sourceContext === 'inventory' && sourceIndex >= 0 && sourceIndex < INVENTORY_SLOT_COUNT) {
-                    const slotHasItem = invHit.slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
-                    if (slotHasItem) {
-                        swapEquipmentWithInventory(ps, invHit.slot, sourceIndex, sync);
-                    } else {
-                        equipFromInventory(ps, sourceIndex, invHit.slot, sync);
-                    }
-                } else if (sourceContext === 'chest' && sourceIndex >= 0 && sourceIndex < (ps.chestSlots?.length ?? 0)) {
-                    const slotHasItem = invHit.slot === 'mainhand' ? (ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') : (ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none');
-                    if (slotHasItem) {
-                        unequipToInventory(ps, invHit.slot, undefined, undefined, sync);
-                    }
-                    equipFromChestToHand(ps, sourceIndex, invHit.slot, sync);
-                }
-                return true;
-            }
-            if (invHit?.type === 'inventory-slot') {
-                const targetIndex = invHit.index;
-                if (sourceContext === 'rerollSlot') {
-                    moveFromRerollSlotTo(ps, 'inventory', targetIndex);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-                if (sourceContext === 'inventory' && sourceIndex >= 0 && sourceIndex < INVENTORY_SLOT_COUNT) {
-                    swapInventorySlots(ps, sourceIndex, targetIndex);
-                } else if (sourceContext === 'chest' && sourceIndex >= 0 && sourceIndex < (ps.chestSlots?.length ?? 0)) {
-                    equipFromChest(ps, sourceIndex, targetIndex);
-                } else if (sourceContext === 'equipment') {
-                    const equipSlot = sourceIndex === 0 ? 'mainhand' : 'offhand';
-                    unequipToInventory(ps, equipSlot, targetIndex, dragDurability, sync);
-                }
-                return true;
-            }
-        }
-
-        // Chest overlay (center): drop on back or weapon grid when chest is open (not reroll; reroll uses panel chest)
-        if (this.playingState.chestOpen) {
-            const layout = getChestLayout(this.canvas);
-            const hit = hitTestChest(x, y, layout, ps.chestSlots ?? []);
-            if (hit?.type === 'weapon-slot' || hit?.type === 'back') {
-                if (sourceContext === 'rerollSlot') {
-                    moveFromRerollSlotTo(ps, 'chest', 0);
-                    this.refreshInventoryPanel();
-                    return true;
-                }
-                if (sourceContext === 'inventory' && sourceIndex >= 0 && sourceIndex < INVENTORY_SLOT_COUNT) {
-                    putInChestFromInventory(ps, sourceIndex);
-                } else if (sourceContext === 'equipment') {
-                    putInChestFromEquipment(ps, sourceIndex === 0 ? 'mainhand' : 'offhand', sync);
-                }
-            }
-        }
-        return true;
+        return this.inventoryChestUIController.handlePointerUp(x, y);
     }
 
     /** Get enemy entity at screen position (for hover tooltip). Returns null if none. */
     getEnemyAtScreenPoint(screenX, screenY) {
-        const cameraSystem = this.systems && this.systems.get('camera');
+        const cameraSystem = this.systems && this.systemsTyped.camera;
         if (!cameraSystem) return null;
         const { x: wx, y: wy } = cameraSystem.screenToWorld(screenX, screenY);
         for (const entity of this.entities.getAll()) {
@@ -2010,9 +1318,9 @@ class Game {
                 return;
             }
 
-            const renderSystem = this.systems.get('render');
-            const cameraSystem = this.systems.get('camera');
-            const obstacleManager = this.systems.get('obstacles');
+            const renderSystem = this.systemsTyped.render;
+            const cameraSystem = this.systemsTyped.camera;
+            const obstacleManager = this.systemsTyped.obstacles;
             const worldConfig = this.config.world;
 
             if (!renderSystem || !cameraSystem) {
@@ -2028,13 +1336,13 @@ class Game {
                     renderSystem.clear();
                     renderSystem.renderWorld(cameraSystem, obstacleManager, 0, hubConfig.width, hubConfig.height);
                     if (this.playingState.board) {
-                        renderSystem.renderBoard(this.playingState.board, cameraSystem);
+                        renderSystem.renderBoard(this.playingState.board, cameraSystem, this.playingState.playerNearBoard);
                         if (this.playingState.playerNearBoard) {
                             renderSystem.renderBoardInteractionPrompt(this.playingState.board, cameraSystem, true);
                         }
                     }
                     if (this.playingState.chest) {
-                        renderSystem.renderChest(this.playingState.chest, cameraSystem);
+                        renderSystem.renderChest(this.playingState.chest, cameraSystem, this.playingState.playerNearChest);
                         if (this.playingState.playerNearChest) {
                             renderSystem.renderChestInteractionPrompt(this.playingState.chest, cameraSystem, true);
                         }
@@ -2056,14 +1364,7 @@ class Game {
                     }
                     const hubEntities = this.entities.getAll();
                     renderSystem.renderEntities(hubEntities, cameraSystem);
-                    const hubProjectileManager = this.systems.get('projectiles');
-                    if (hubProjectileManager) {
-                        hubProjectileManager.render(this.ctx, cameraSystem);
-                    }
-                    const damageNumberManager = this.systems.get('damageNumbers');
-                    if (damageNumberManager) {
-                        damageNumberManager.render(this.ctx, cameraSystem);
-                    }
+                    renderSystem.renderOverlay(this.ctx, cameraSystem);
                 } finally {
                     // Always reset context and draw UI so minimap/level select work even if entity render threw
                     this.ctx.globalAlpha = 1;
@@ -2087,18 +1388,18 @@ class Game {
                         );
                     }
                     if (this.playingState.chestOpen) {
-                        renderChest(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover);
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover);
+                        renderChest(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover);
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover);
                     }
                     if (this.playingState.shopOpen) {
                         renderShop(this.ctx, this.canvas, this.playingState);
                     }
                     if (this.playingState.rerollStationOpen) {
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover, { includeChestInPanel: true });
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover, { includeChestInPanel: true });
                         renderRerollOverlay(this.ctx, this.canvas, this.playingState);
                     }
                     if (this.playingState.inventoryOpen) {
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover);
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover);
                     }
                     if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone)) {
                         renderDragGhost(this.ctx, this.inventoryDragState);
@@ -2114,7 +1415,7 @@ class Game {
             this.hudController.setChestOverlayVisible(false);
 
             // Game world and entities (draw for both 'playing' and 'pause' so pause shows over frozen frame)
-            const currentLevel = this.systems.get('enemies') ? this.systems.get('enemies').getCurrentLevel() : 1;
+            const currentLevel = this.systemsTyped.enemies ? this.systemsTyped.enemies.getCurrentLevel() : 1;
             try {
                 renderSystem.clear();
                 renderSystem.renderWorld(cameraSystem, obstacleManager, currentLevel, null, null);
@@ -2126,7 +1427,7 @@ class Game {
                         renderSystem.renderPortalInteractionPrompt(this.playingState.portal, cameraSystem, this.playingState.playerNearPortal, delvePrompt, isStairs, this.playingState.portalChannelProgress);
                     }
                 }
-                const gatherableManager = this.systems.get('gatherables');
+                const gatherableManager = this.systemsTyped.gatherables;
                 if (gatherableManager) {
                     gatherableManager.render(this.ctx, cameraSystem);
                 }
@@ -2142,33 +1443,10 @@ class Game {
                         gatherableManager.renderGatherRing(this.ctx, cameraSystem, playerEntity);
                     }
                 }
-                const projectileManager = this.systems.get('projectiles');
-                if (projectileManager) {
-                    projectileManager.render(this.ctx, cameraSystem);
-                }
-                const hazardManager = this.systems.get('hazards');
+                renderSystem.renderOverlay(this.ctx, cameraSystem);
+                const hazardManager = this.systemsTyped.hazards;
                 if (hazardManager && hazardManager.renderFlamePillars) {
                     hazardManager.renderFlamePillars(this.ctx, cameraSystem);
-                }
-                const damageNumberManager = this.systems.get('damageNumbers');
-                if (damageNumberManager) {
-                    damageNumberManager.render(this.ctx, cameraSystem);
-                }
-                const healthOrbManager = this.systems.get('healthOrbs');
-                if (healthOrbManager) {
-                    healthOrbManager.render(this.ctx, cameraSystem);
-                }
-                const goldPickupManager = this.systems.get('goldPickups');
-                if (goldPickupManager && goldPickupManager.render) {
-                    goldPickupManager.render(this.ctx, cameraSystem);
-                }
-                const weaponPickupManager = this.systems.get('weaponPickups');
-                if (weaponPickupManager && weaponPickupManager.render) {
-                    weaponPickupManager.render(this.ctx, cameraSystem);
-                }
-                const whetstonePickupManager = this.systems.get('whetstonePickups');
-                if (whetstonePickupManager && whetstonePickupManager.render) {
-                    whetstonePickupManager.render(this.ctx, cameraSystem);
                 }
             } finally {
                 // Always reset context and draw UI so minimap/pause work even if entity render threw
@@ -2183,7 +1461,7 @@ class Game {
                     renderQuestCompleteFlair(this.ctx, this.canvas, this.playingState.questCompleteFlairRemaining);
                 }
                 if (this.screenManager.isScreen('playing')) {
-                    const inputSystem = this.systems.get('input');
+                    const inputSystem = this.systemsTyped.input;
                     const hoveredEnemy = inputSystem ? this.getEnemyAtScreenPoint(inputSystem.mouseX, inputSystem.mouseY) : null;
                     const lastHitEntity = this.playingState.lastHitEnemyId ? this.entities.get(this.playingState.lastHitEnemyId) : null;
                     const lastHitValid = lastHitEntity && lastHitEntity.getComponent(Renderable)?.type === 'enemy' && lastHitEntity.getComponent(Health) && !lastHitEntity.getComponent(Health).isDead;
@@ -2206,7 +1484,7 @@ class Game {
                     this.screenManager.render(this.settings);
                 }
                 if (this.playingState.inventoryOpen) {
-                    renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.weaponTooltipHover, this.armorTooltipHover);
+                    renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover);
                 }
                 if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone)) {
                     renderDragGhost(this.ctx, this.inventoryDragState);

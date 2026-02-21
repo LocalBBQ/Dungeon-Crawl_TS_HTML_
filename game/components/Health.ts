@@ -34,7 +34,7 @@ export class Health implements Component {
         const systems = this.entity.systems;
         if (systems?.eventBus) {
           const isPlayer = this.entity.id === 'player';
-          systems.eventBus.emit(EventTypes.DAMAGE_TAKEN, {
+          systems.eventBus.emitTyped(EventTypes.DAMAGE_TAKEN, {
             x: transform.x,
             y: transform.y - transform.height / 2,
             damage: actualDamage,

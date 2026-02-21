@@ -1,7 +1,7 @@
 /**
  * HUD and inventory panel updates: health/stamina orbs, inventory screen, player portrait, equipment chest overlay.
  */
-import type { Entity } from '../entities/Entity.js';
+import type { EntityShape } from '../types/entity.js';
 import type { ArmorSlotId, InventorySlot, PlayingStateShape } from '../state/PlayingState.js';
 import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, isWhetstoneSlot, isWeaponInstance } from '../state/PlayingState.js';
 import { swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
@@ -34,7 +34,7 @@ export interface SystemsLike {
 }
 
 export interface EntitiesLike {
-    get(id: string): Entity | undefined;
+    get(id: string): EntityShape | undefined;
 }
 
 export interface HUDControllerContext {
@@ -288,6 +288,11 @@ export class HUDController {
                 (el.closest('.equipment-slot') as HTMLElement)?.setAttribute('draggable', 'false');
             }
         }
+    }
+
+    /** Public so Game can delegate syncCombat to this. */
+    syncPlayerWeaponsFromState(): void {
+        this.syncPlayerWeapons();
     }
 
     private syncPlayerWeapons(): void {

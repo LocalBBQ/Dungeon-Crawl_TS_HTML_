@@ -2,6 +2,7 @@
  * Canvas-based inventory and equipment chest UI: layout, render, and hit-test.
  * Used when inventoryOpen or chestOpen; pointer events handled by Game.
  */
+import type { TooltipHover } from '../types/tooltip.js';
 import type { ArmorSlotId, InventorySlot, PlayingStateShape, WeaponInstance } from '../state/PlayingState.js';
 import { getSlotKey, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT, isWeaponInstance as isWeaponSlotItem, isWhetstoneSlot } from '../state/PlayingState.js';
 import { getArmor, getPlayerArmorReduction, getShopArmorBySlot, SHOP_ARMOR_SLOT_ORDER, SHOP_ARMOR_SLOT_LABELS } from '../armor/armorConfigs.js';
@@ -1305,8 +1306,7 @@ export function renderInventory(
     canvas: HTMLCanvasElement,
     ps: PlayingStateShape,
     dragState: DragState,
-    weaponTooltipHover: { weaponKey: string; x: number; y: number } | null,
-    armorTooltipHover: ArmorTooltipHover | null = null,
+    tooltipHover: TooltipHover,
     options?: { includeChestInPanel?: boolean }
 ): void {
     ensureInventoryInitialized(ps);
@@ -1484,8 +1484,8 @@ export function renderInventory(
         }
     }
 
-    renderWeaponTooltip(ctx, canvas, weaponTooltipHover, ps);
-    renderArmorTooltip(ctx, canvas, armorTooltipHover, ps);
+    renderWeaponTooltip(ctx, canvas, tooltipHover?.type === 'weapon' ? tooltipHover : null, ps);
+    renderArmorTooltip(ctx, canvas, tooltipHover?.type === 'armor' ? tooltipHover : null, ps);
     ctx.restore();
 }
 
@@ -1494,7 +1494,7 @@ export function renderChest(
     canvas: HTMLCanvasElement,
     ps: PlayingStateShape,
     dragState: DragState,
-    weaponTooltipHover: { weaponKey: string; x: number; y: number } | null
+    tooltipHover: TooltipHover
 ): void {
     const layout = getChestLayout(canvas);
     const chestSlots = ps.chestSlots ?? [];
@@ -1539,7 +1539,7 @@ export function renderChest(
     ctx.font = `600 ${backFontSize}px Cinzel, Georgia, serif`;
     ctx.fillText('Back', back.x + back.w / 2, back.y + back.h / 2);
 
-    renderWeaponTooltip(ctx, canvas, weaponTooltipHover, ps);
+    renderWeaponTooltip(ctx, canvas, tooltipHover?.type === 'weapon' ? tooltipHover : null, ps);
     ctx.restore();
 }
 

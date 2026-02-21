@@ -62,6 +62,8 @@ export class AI implements Component {
     _circularPatrolWaypointIndex: number;
     _guardTurnAngle: number;
     staminaExhausted: boolean;
+    /** Pack modifier key (e.g. from packModifiers config); set by EnemyManager. */
+    packModifierName: string | null;
 
     constructor(detectionRange: number, attackRange: number, patrolConfig: PatrolConfig | null = null) {
         this.detectionRange = detectionRange;
@@ -125,6 +127,7 @@ export class AI implements Component {
 
         // Stamina back-off: goblins and bandits back off when exhausted until 50% recovered
         this.staminaExhausted = false;
+        this.packModifierName = null;
     }
 
     update(deltaTime: number, systems?: SystemsMap): void {

@@ -9,5 +9,10 @@ export default defineConfig({
         main: 'index.html'
       }
     }
-  }
+  },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+  },
 });

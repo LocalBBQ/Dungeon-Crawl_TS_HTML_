@@ -101,7 +101,7 @@ export class ProjectileManager {
                                     (enemyMovement as Movement).applyKnockback(dx, dy, GameConfig.player.knockback.force);
                                 }
                                 if (systems?.eventBus) {
-                                    (systems.eventBus as { emit(name: string, payload?: unknown): void }).emit(EventTypes.PLAYER_HIT_ENEMY, {});
+                                    systems.eventBus.emitTyped(EventTypes.PLAYER_HIT_ENEMY, {});
                                 }
                             }
                             if (!projectile.pierce) {

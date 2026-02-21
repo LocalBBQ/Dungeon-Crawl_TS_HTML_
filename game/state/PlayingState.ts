@@ -317,6 +317,11 @@ export class PlayingState implements PlayingStateShape {
   questCompleteFlairRemaining = 0;
   questCompleteFlairTriggered = false;
   screenBeforePause: 'playing' | 'hub' | null = null;
+  savedSanctuaryHealth?: number;
+  savedSanctuaryStamina?: number;
+  shopExpandedWeapons?: Record<string, boolean>;
+  shopExpandedArmor?: Record<string, boolean>;
+  shopExpandedCategories?: Record<string, boolean>;
 
   constructor(defaultMainhand: string, defaultOffhand: string = 'none') {
     this.equippedMainhandKey = defaultMainhand;

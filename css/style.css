@@ -59,7 +59,7 @@ body {
     align-items: flex-end;
     justify-content: space-between;
     align-self: stretch;
-    padding: 0 100px 12px;
+    padding: 0 80px 12px;
 }
 
 #orb-row .orb-wrapper:first-child {

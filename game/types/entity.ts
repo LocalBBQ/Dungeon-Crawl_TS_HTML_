@@ -1,3 +1,5 @@
+import type { SystemsMap } from './systems.js';
+
 /**
  * Shape of an Entity for typing. Components are stored by constructor name.
  */
@@ -5,7 +7,7 @@ export interface EntityShape {
   id: string;
   active: boolean;
   components: Map<string, unknown>;
-  systems?: unknown;
+  systems?: SystemsMap;
   onHealthChanged?(current: number, max: number): void;
   getComponent<T>(componentClass: new (...args: unknown[]) => T): T | null;
   hasComponent(componentClass: new (...args: unknown[]) => unknown): boolean;
