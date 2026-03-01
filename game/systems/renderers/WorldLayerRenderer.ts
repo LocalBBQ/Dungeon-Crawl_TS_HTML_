@@ -1,6 +1,6 @@
 // Renders ground tiles only. Obstacles are rendered by ObstacleLayerRenderer.
-import { GameConfig } from '../../config/GameConfig.ts';
-import type { RenderContext } from './RenderContext.ts';
+import { GameConfig } from '../../config/GameConfig.js';
+import type { RenderContext } from './RenderContext.js';
 
 export class WorldLayerRenderer {
     render(context: RenderContext, data: { currentLevel?: number; worldWidth?: number | null; worldHeight?: number | null }): void {
@@ -21,12 +21,13 @@ export class WorldLayerRenderer {
             endY = Math.min(worldHeight, endY);
         }
 
+        type GroundLike = { texture?: string; patch?: { r: number; g: number; b: number; variation?: number; chance: number }; variation?: number; r?: number; g?: number; b?: number };
         const levelConfig = isHub ? GameConfig.hub : (GameConfig.levels && GameConfig.levels[currentLevel]);
-        const theme = levelConfig && levelConfig.theme ? levelConfig.theme : null;
-        const ground = theme && theme.ground ? theme.ground : { r: 30, g: 50, b: 30, variation: 18 };
+        const theme = (levelConfig && levelConfig.theme ? levelConfig.theme : null) as { ground?: GroundLike } | null;
+        const ground: GroundLike = theme && theme.ground ? theme.ground : { r: 30, g: 50, b: 30, variation: 18 };
 
         const useEnvironmentSprites = !settings || settings.useEnvironmentSprites !== false;
-        const spriteManager = systems && systems.get ? systems.get('sprites') : null;
+        const spriteManager = systems && systems.get ? (systems.get('sprites') as { getGroundTexture?(id: string): HTMLImageElement | null } | null) : null;
         const groundImage = useEnvironmentSprites && ground.texture && spriteManager && spriteManager.getGroundTexture ? spriteManager.getGroundTexture(ground.texture) : null;
         const tileScreenSize = tileSize * camera.zoom;
 
@@ -35,7 +36,7 @@ export class WorldLayerRenderer {
             ctx.imageSmoothingEnabled = false;
         }
 
-        const patch = ground.patch != null && typeof ground.patch === 'object' ? ground.patch as { r: number; g: number; b: number; variation?: number; chance: number } : null;
+        const patch = ground.patch != null && typeof ground.patch === 'object' ? ground.patch : null;
         const tileHash = (tx: number, ty: number) => ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const isPatchTile = patch && patch.chance > 0 ? (x: number, y: number) => (tileHash(Math.floor(x / tileSize), Math.floor(y / tileSize)) % 1000) / 1000 < patch.chance : () => false;
 

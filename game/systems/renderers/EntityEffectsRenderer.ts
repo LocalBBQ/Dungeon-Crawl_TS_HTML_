@@ -1,17 +1,17 @@
 // Shared entity effects: shadow, healing vial, modifier tags, stun symbol, health/stamina/stun bars.
-import { Movement } from '../../components/Movement.ts';
-import { GameConfig } from '../../config/GameConfig.ts';
-import { Transform } from '../../components/Transform.ts';
-import { PlayerHealing } from '../../components/PlayerHealing.ts';
-import { Renderable } from '../../components/Renderable.ts';
-import { StatusEffects } from '../../components/StatusEffects.ts';
-import { AI } from '../../components/AI.ts';
-import { Health } from '../../components/Health.ts';
-import { Rally } from '../../components/Rally.ts';
-import { Stamina } from '../../components/Stamina.ts';
-import type { RenderContext } from './RenderContext.ts';
-import type { EntityShape } from '../../types/entity.ts';
-import type { CameraShape } from '../../types/camera.ts';
+import { Movement } from '../../components/Movement.js';
+import { GameConfig } from '../../config/GameConfig.js';
+import { Transform } from '../../components/Transform.js';
+import { PlayerHealing } from '../../components/PlayerHealing.js';
+import { Renderable } from '../../components/Renderable.js';
+import { StatusEffects } from '../../components/StatusEffects.js';
+import { AI } from '../../components/AI.js';
+import { Health } from '../../components/Health.js';
+import { Rally } from '../../components/Rally.js';
+import { Stamina } from '../../components/Stamina.js';
+import type { RenderContext } from './RenderContext.js';
+import type { EntityShape } from '../../types/entity.js';
+import type { CameraShape } from '../../types/camera.js';
 
 /** Enemy type IDs that are tier-2 (2★) variants. */
 const TIER2_ENEMY_TYPES = new Set<string>([
@@ -161,7 +161,7 @@ export const EntityEffectsRenderer = {
     },
 
     /** Draw health, stamina, stun bars, modifier labels, stun duration bar, stun symbol for any entity. */
-    renderBarsAndEffects(context: RenderContext, entity: EntityShape, screenX: number, screenY: number, options: { skipShadow?: boolean; skipVial?: boolean; skipBars?: boolean } = {}): void {
+    renderBarsAndEffects(context: RenderContext, entity: EntityShape, screenX: number, screenY: number, options: { skipShadow?: boolean; skipVial?: boolean; skipBars?: boolean; isPlayer?: boolean } = {}): void {
         const { ctx, camera, settings } = context;
         const transform = entity.getComponent(Transform);
         const health = entity.getComponent(Health);
@@ -261,6 +261,11 @@ export const EntityEffectsRenderer = {
     }
 };
 
+declare global {
+    interface Window {
+        EntityEffectsRenderer?: typeof EntityEffectsRenderer;
+    }
+}
 if (typeof window !== 'undefined') {
     window.EntityEffectsRenderer = EntityEffectsRenderer;
 }

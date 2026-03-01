@@ -1,5 +1,5 @@
 // Shared weapon behavior: config parsing and attack/charge resolution.
-import { Utils } from '../utils/Utils.ts';
+import { Utils } from '../utils/Utils.js';
 
 /** Extra hold time required beyond minChargeTime before release counts as a charged attack (avoids quick taps triggering charge). */
 const CHARGE_HOLD_BUFFER = 0.12;
@@ -255,7 +255,8 @@ export const WeaponBehavior = {
             staminaCost: effective.staminaCost ?? 5,
             animationKey: effective.animationKey ?? 'block',
             parryWindowMs: effective.parryWindowMs ?? 0,
-            parryRallyPercent: Math.max(0, Math.min(1, effective.parryRallyPercent ?? 0))
+            parryRallyPercent: Math.max(0, Math.min(1, effective.parryRallyPercent ?? 0)),
+            blockAttack: (effective as { blockAttack?: BlockAttackResult | null }).blockAttack ?? null
         };
         if (effective.shieldBash) {
             const sb = effective.shieldBash;
@@ -423,6 +424,7 @@ export const WeaponBehavior = {
         baseRange?: number;
         baseDamage?: number;
         baseArcDegrees?: number;
+        baseStunBuildup?: number;
         /** Weapon speed (number); higher = faster. */
         speed?: number;
         cooldown?: number;

@@ -7,7 +7,7 @@ import type { EnchantmentEffect } from '../config/enchantmentConfig.js';
 import { getEnchantmentById } from '../config/enchantmentConfig.js';
 import { getWeaponDisplayName } from './InventoryChestCanvas.js';
 import { drawWeaponIcon } from './InventoryChestCanvas.js';
-import { REROLL_PREFIX_COST, REROLL_SUFFIX_COST, REROLL_BOTH_COST } from '../state/InventoryActions.js';
+import { REROLL_PREFIX_COST, REROLL_SUFFIX_COST, REROLL_BOTH_COST, getTotalGoldFromInventory } from '../state/InventoryActions.js';
 
 export interface RerollOverlayLayout {
   panel: { x: number; y: number; w: number; h: number };
@@ -188,7 +188,7 @@ export function renderRerollOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLC
   }
 
   if (hasItem) {
-    const gold = ps.gold ?? 0;
+    const gold = getTotalGoldFromInventory(ps);
     for (const btn of buttons) {
       const canAfford = gold >= btn.cost;
       ctx.fillStyle = canAfford ? 'rgba(80, 60, 40, 0.9)' : 'rgba(50, 38, 28, 0.9)';

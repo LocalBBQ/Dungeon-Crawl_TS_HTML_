@@ -1,10 +1,10 @@
 // Shared attack handler for both player and enemy: weapon, combo state, options.
-import { Movement } from '../components/Movement.ts';
-import { Transform } from '../components/Transform.ts';
-import { Combat } from '../components/Combat.ts';
-import { StatusEffects } from '../components/StatusEffects.ts';
-import { Utils } from '../utils/Utils.ts';
-import type { EntityShape } from '../types/entity.ts';
+import { Movement } from '../components/Movement.js';
+import { Transform } from '../components/Transform.js';
+import { Combat } from '../components/Combat.js';
+import { StatusEffects } from '../components/StatusEffects.js';
+import { Utils } from '../utils/Utils.js';
+import type { EntityShape } from '../types/entity.js';
 
 /** Storm Release (Blessed Winds 3rd hit): tornado projectile damage, range, speed, airborne duration. */
 const STORM_RELEASE_DAMAGE = 28;
@@ -14,19 +14,39 @@ const STORM_RELEASE_AIRBORNE = 1.0;
 
 export type AttackHandlerBehaviorType = 'slashOnly' | 'slashAndLeap' | 'chargeRelease' | 'rangedOnly' | 'comboAndCharge';
 
+/** Minimal weapon shape used inside WeaponAttackHandler (player Weapon or EnemyWeaponLike). */
+export interface WeaponLikeForHandler {
+    noMelee?: boolean;
+    cooldown?: number;
+    comboWindow?: number;
+    maxComboStage?: number;
+    dashAttack?: unknown;
+    getComboStageProperties?(stage: number): unknown;
+    getDashAttackProperties?(): unknown;
+    getHeavySmashProperties?(): unknown;
+    getChargeReleaseProperties?(): unknown;
+    getResolvedAttack?(stage: number): unknown;
+}
+
+/** Stage props from getComboStageProperties or resolved attack. */
+type StageLike = { range?: number; damage?: number; arc?: number; duration?: number; arcOffset?: number; reverseSweep?: boolean; stageName?: string; animationKey?: string; isCircular?: boolean; isThrust?: boolean; thrustWidth?: number; knockbackForce?: number; stunBuildup?: number };
+/** Return type of weapon.getResolvedAttack(). */
+type ResolvedLike = { stageProps: StageLike; finalDamage: number; finalRange: number; finalStaminaCost?: number; dashSpeed?: number; dashDuration?: number; nextComboStage: number; isCharged?: boolean; chargeMultiplier?: number };
+
 export interface WeaponAttackHandlerOptions {
     isPlayer?: boolean;
-    behaviorType?: AttackHandlerBehaviorType;
+    behaviorType?: AttackHandlerBehaviorType | string;
     comboWindow?: number;
     windUpTime?: number;
     cooldownMultiplier?: number;
     damageMultiplier?: number;
     attackBufferDuration?: number;
     attackDurationMultiplier?: number;
+    heavySmash?: { aoeOffset?: number; aoeRadius?: number };
 }
 
 export class WeaponAttackHandler {
-    weapon: unknown;
+    weapon: WeaponLikeForHandler;
     isPlayer: boolean;
     behaviorType: AttackHandlerBehaviorType;
     options: WeaponAttackHandlerOptions;
@@ -66,9 +86,9 @@ export class WeaponAttackHandler {
     attackDurationEnemy: number;
 
     constructor(weapon: unknown, options: WeaponAttackHandlerOptions = {}) {
-            this.weapon = weapon;
+            this.weapon = weapon as WeaponLikeForHandler;
             this.isPlayer = options.isPlayer === true;
-            this.behaviorType = options.behaviorType || 'slashOnly';
+            this.behaviorType = (options.behaviorType || 'slashOnly') as AttackHandlerBehaviorType;
             this.options = options;
 
             this.attackRange = 40;
@@ -132,22 +152,23 @@ export class WeaponAttackHandler {
                     }
                 }
             } else if (this.behaviorType === 'slashOnly' || this.behaviorType === 'slashAndLeap') {
-                const first = w.getComboStageProperties && w.getComboStageProperties(1);
-                const dash = w.getDashAttackProperties && w.getDashAttackProperties();
+                type StageLike = { range?: number; damage?: number; arc?: number };
+                const first = (w.getComboStageProperties && w.getComboStageProperties(1)) as StageLike | null;
+                const dash = (w.getDashAttackProperties && w.getDashAttackProperties()) as { damage?: number } | null;
                 if (first) {
-                    this.attackRange = first.range;
-                    this.attackDamage = first.damage;
-                    this.attackArc = first.arc;
+                    this.attackRange = first.range ?? 0;
+                    this.attackDamage = first.damage ?? 0;
+                    this.attackArc = first.arc ?? 0;
                 }
                 if (w.cooldown != null) this.maxCooldown = w.cooldown;
                 if (w.comboWindow != null) this.comboWindow = w.comboWindow;
-                if (dash) this.lungeDamage = dash.damage;
+                if (dash) this.lungeDamage = dash.damage ?? 0;
             } else if (this.behaviorType === 'comboAndCharge') {
-                const first = w.getComboStageProperties && w.getComboStageProperties(1);
-                if (first) {
-                    this.attackRange = first.range;
-                    this.attackDamage = first.damage;
-                    this.attackArc = first.arc;
+                const firstC = (w.getComboStageProperties && w.getComboStageProperties(1)) as { range?: number; damage?: number; arc?: number } | null;
+                if (firstC) {
+                    this.attackRange = firstC.range ?? 0;
+                    this.attackDamage = firstC.damage ?? 0;
+                    this.attackArc = firstC.arc ?? 0;
                 }
                 if (w.cooldown != null) this.maxCooldown = w.cooldown;
                 if (this.options && this.options.comboWindow != null) this.comboWindow = this.options.comboWindow;
@@ -195,7 +216,7 @@ export class WeaponAttackHandler {
             const useThirdHit = weaponName === 'Blessed Winds' && hasTwoStacks;
             const effectiveComboStage = useThirdHit ? 2 : (wouldBeThirdHit && !hasTwoStacks ? 0 : this.comboStage);
 
-            const resolved = w.getResolvedAttack(chargeDuration, effectiveComboStage, options);
+            const resolved = (w.getResolvedAttack as (charge: number, stage: number, opts: unknown) => ResolvedLike | null)(chargeDuration, effectiveComboStage, options);
             if (!resolved) return null;
 
             const isThirdHitStormRelease = useThirdHit;
@@ -243,8 +264,8 @@ export class WeaponAttackHandler {
                 thrustWidth: stageProps.thrustWidth ?? 40,
                 knockbackForce: stageProps.knockbackForce,
                 stunBuildup: stageProps.stunBuildup ?? 25,
-                isCharged: resolved.isCharged,
-                chargeMultiplier: resolved.chargeMultiplier,
+                isCharged: (resolved as ResolvedLike).isCharged,
+                chargeMultiplier: (resolved as ResolvedLike).chargeMultiplier,
                 isDashAttack: !!(options.useDashAttack && w.dashAttack)
             };
             if (isThirdHitStormRelease && entity) {
@@ -276,10 +297,10 @@ export class WeaponAttackHandler {
             if (!this.canAttack()) return null;
             const w = this.weapon;
             if (!w || typeof w.getResolvedAttack !== 'function') return null;
-            const resolved = w.getResolvedAttack(chargeDuration, this.comboStage, {});
-            if (!resolved) return null;
+            const resolvedEnemy = (w.getResolvedAttack as (charge: number, stage: number, opts: unknown) => ResolvedLike | null)(chargeDuration, this.comboStage, {});
+            if (!resolvedEnemy) return null;
 
-            const { stageProps, finalDamage, finalRange, nextComboStage } = resolved;
+            const { stageProps, finalDamage, finalRange, nextComboStage } = resolvedEnemy;
             const packMult = options.cooldownMultiplier != null ? options.cooldownMultiplier : 1;
             const effectiveMult = this.damageMultiplier * packMult;
 
@@ -343,30 +364,30 @@ export class WeaponAttackHandler {
             if (typeof w.getResolvedAttack === 'function') {
                 const stage = useDashAttack ? 1 : (this.comboStage >= 1 ? this.comboStage : 1);
                 const attackOptions = useDashAttack ? { useDashAttack: true } : {};
-                const resolved = w.getResolvedAttack(0, stage, attackOptions);
-                if (!resolved) return null;
-                stageProps = resolved.stageProps;
-                finalDamage = resolved.finalDamage;
-                finalRange = resolved.finalRange;
-                nextComboStage = resolved.nextComboStage;
-                dashSpeed = resolved.dashSpeed ?? null;
-                dashDuration = resolved.dashDuration ?? null;
+                const resolvedSlash = (w.getResolvedAttack as (a: number, b: number, c: unknown) => ResolvedLike | null)(0, stage, attackOptions);
+                if (!resolvedSlash) return null;
+                stageProps = resolvedSlash.stageProps;
+                finalDamage = resolvedSlash.finalDamage;
+                finalRange = resolvedSlash.finalRange;
+                nextComboStage = resolvedSlash.nextComboStage;
+                dashSpeed = resolvedSlash.dashSpeed ?? null;
+                dashDuration = resolvedSlash.dashDuration ?? null;
             } else if (w.getComboStageProperties) {
                 const maxStage = w.maxComboStage != null ? w.maxComboStage : 3;
-                const stage = this.comboStage >= 1 ? this.comboStage : 1;
-                stageProps = w.getComboStageProperties(stage);
+                const stageNum = this.comboStage >= 1 ? this.comboStage : 1;
+                stageProps = w.getComboStageProperties(stageNum) as StageLike | null;
                 if (!stageProps) return null;
-                finalDamage = stageProps.damage;
-                finalRange = stageProps.range;
-                nextComboStage = stage < maxStage ? stage + 1 : 1;
+                finalDamage = stageProps.damage ?? 0;
+                finalRange = stageProps.range ?? 0;
+                nextComboStage = stageNum < maxStage ? stageNum + 1 : 1;
             } else {
                 return null;
             }
 
             this.attackRange = finalRange;
             this.attackDamage = finalDamage * this.damageMultiplier;
-            this.attackArc = stageProps.arc;
-            this.knockbackForce = stageProps.knockbackForce != null ? stageProps.knockbackForce : null;
+            this.attackArc = (stageProps as StageLike).arc ?? 0;
+            this.knockbackForce = (stageProps as StageLike & { knockbackForce?: number }).knockbackForce != null ? (stageProps as StageLike & { knockbackForce?: number }).knockbackForce : null;
 
             const speedMult = Math.max(0.2, Math.min(2, effectiveCooldownMult));
             let baseSlashMs = stageProps.duration >= 50 ? stageProps.duration : Math.round((stageProps.duration || 0.28) * 1000);

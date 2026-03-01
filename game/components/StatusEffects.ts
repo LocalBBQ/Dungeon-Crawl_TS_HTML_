@@ -1,8 +1,8 @@
 // Status effects (stun, etc.) - shared by player and enemies
 import type { Component } from '../types/component.js';
 import type { SystemsMap } from '../types/systems.js';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
 
 /** Pack modifier stats from config (set by EnemyManager when in pack). */
 export interface PackBuffStats {
@@ -65,7 +65,7 @@ export class StatusEffects implements Component {
     this.speedMultiplier = 1;
     this.damageMultiplier = 1;
     this.knockbackResist = isPlayer
-      ? (typeof GameConfig !== 'undefined' ? (GameConfig.player?.knockback?.knockbackResist ?? 0) : 0)
+      ? (typeof GameConfig !== 'undefined' ? ((GameConfig.player?.knockback as { knockbackResist?: number } | undefined)?.knockbackResist ?? 0) : 0)
       : 0;
     this.packModifierName = null;
     this.packSpeedMultiplier = 1;

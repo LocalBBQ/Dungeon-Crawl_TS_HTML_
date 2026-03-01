@@ -4,7 +4,7 @@
 import { Entity } from './Entity.js';
 import { Transform } from '../components/Transform.js';
 import { Health } from '../components/Health.js';
-import { Rally } from '../components/Rally.ts';
+import { Rally } from '../components/Rally.js';
 import { StatusEffects } from '../components/StatusEffects.js';
 import { Stamina } from '../components/Stamina.js';
 import { PlayerHealing } from '../components/PlayerHealing.js';
@@ -217,9 +217,8 @@ export function createPlayer(
     }
 
     const unarmed = !equippedMainhandKey || equippedMainhandKey === 'none';
-    const mainhand = unarmed
-        ? null
-        : (Weapons[equippedMainhandKey] ?? null);
+    type WeaponLike = { getComboStageProperties?(s: number): { range?: number; damage?: number; arc?: number } | null; baseRange?: number; baseDamage?: number; baseArcDegrees?: number; cooldown?: number };
+    const mainhand = (unarmed ? null : (Weapons[equippedMainhandKey] ?? null)) as WeaponLike | null;
     const offhand =
         equippedOffhandKey && equippedOffhandKey !== 'none'
             ? (Weapons[equippedOffhandKey] ?? null)

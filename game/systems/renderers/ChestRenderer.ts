@@ -1,5 +1,5 @@
 // Renders equipment chest and interaction prompt. data: { chest, playerNearChest }
-import type { RenderContext } from './RenderContext.ts';
+import type { RenderContext } from './RenderContext.js';
 
 interface ChestLike {
   x: number;

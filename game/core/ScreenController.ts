@@ -2,11 +2,13 @@
  * Handles screen-driven input: canvas click (title/hub/death/pause/settings) and global keys (Tab, Escape, Space, Enter).
  */
 import { EventTypes } from './EventTypes.js';
+import { getTotalGoldFromInventory, tryConsumeGold } from '../state/InventoryActions.js';
 import { getRandomQuestsForBoard, difficulties } from '../config/questConfig.js';
 import { STATIC_QUESTS } from '../config/staticQuests.js';
 import type { ScreenName } from './ScreenManager.js';
 import type { SettingsLike } from './ScreenManager.js';
 import type { Quest } from '../types/quest.js';
+import type { PlayingStateShape } from '../state/PlayingState.js';
 
 export interface ScreenControllerContext {
     screenManager: {
@@ -29,27 +31,7 @@ export interface ScreenControllerContext {
         getSettingsItemAt(x: number, y: number, settings: SettingsLike): string | null;
         getControlsItemAt(x: number, y: number): string | null;
     };
-    playingState: {
-        inventoryOpen: boolean;
-        chestOpen: boolean;
-        boardOpen: boolean;
-        boardTab: 'bulletin' | 'mainQuest';
-        unlockedLevelIds: number[];
-        hubSelectedMainQuestIndex: number;
-        shopOpen: boolean;
-        rerollStationOpen?: boolean;
-        equippedMainhandKey: string;
-        equippedOffhandKey: string;
-        hubSelectedLevel: number;
-        hubSelectedQuestIndex: number;
-        questList: { level: number; difficultyId: string; difficulty?: { goldMultiplier?: number; label?: string } }[];
-        activeQuest: Quest | null;
-        questGoldMultiplier: number;
-        chestUseCooldown: number;
-        boardUseCooldown: number;
-        shopUseCooldown: number;
-        screenBeforePause: 'playing' | 'hub' | null;
-    };
+    playingState: PlayingStateShape;
     config?: { levels?: Record<number, { name?: string }> };
     entities: { get(id: string): { getComponent(c: unknown): unknown } | undefined };
     settings: SettingsLike;
@@ -61,6 +43,7 @@ export interface ScreenControllerContext {
     loadGame(slotId: string): void;
     returnToSanctuaryOnDeath(): void;
     saveGame(slotId: string): void;
+    deleteSave(slotId: string): void;
     quitToMainMenu(): void;
     clearPlayerInputsForMenu(): void;
 }
@@ -72,31 +55,34 @@ export class ScreenController {
         this.context = context;
     }
 
-    handleCanvasClick(x: number, y: number) {
+    handleCanvasClick(x: number, y: number): boolean {
         const ctx = this.context;
         const sm = ctx.screenManager;
         const ps = ctx.playingState;
+        let handled = false;
         if (sm.isScreen('title')) {
             const titleBtn = sm.getTitleButtonAt(x, y);
-            if (titleBtn === 'newGame') sm.setScreen('classSelect');
-            else if (titleBtn === 'loadGame') sm.setScreen('saveSelect');
+            if (titleBtn === 'newGame') { sm.setScreen('classSelect'); handled = true; }
+            else if (titleBtn === 'loadGame') { sm.setScreen('saveSelect'); handled = true; }
         } else if (sm.isScreen('classSelect')) {
             const classBtn = sm.getClassSelectButtonAt(x, y);
-            if (classBtn === 'back') sm.setScreen('title');
+            if (classBtn === 'back') { sm.setScreen('title'); handled = true; }
             else if (classBtn === 'warrior' || classBtn === 'mage' || classBtn === 'rogue') {
                 sm.selectedStartLevel = 0;
                 ctx.startNewGame(classBtn);
+                handled = true;
             }
         } else if (sm.isScreen('saveSelect')) {
             const saveBtn = sm.getSaveSelectButtonAt(x, y);
-            if (saveBtn === 'back') sm.setScreen('title');
-            else if (saveBtn && saveBtn !== 'back') ctx.loadGame(saveBtn);
+            if (saveBtn === 'back') { sm.setScreen('title'); handled = true; }
+            else if (saveBtn?.startsWith('delete-')) { ctx.deleteSave(saveBtn.slice(7)); handled = true; }
+            else if (saveBtn && saveBtn !== 'back') { ctx.loadGame(saveBtn); handled = true; }
         } else if (sm.isScreen('hub') && ps.boardOpen) {
             const t = sm.getTabbedBoardFrame();
             const tab = sm.getBoardTabAt(x, y);
             if (tab !== null) {
                 ps.boardTab = tab;
-                return;
+                return true;
             }
             const levelNames: Record<number, string> = ctx.config?.levels
                 ? Object.fromEntries(
@@ -110,6 +96,7 @@ export class ScreenController {
                 if (questIndex !== null) {
                     ps.hubSelectedQuestIndex = questIndex;
                     ps.hubSelectedLevel = ps.questList[questIndex].level;
+                    handled = true;
                 } else {
                     const btn = sm.getHubBoardButtonAt(x, y, ps.questList.length, t.contentTop);
                     if (btn === 'start' && ps.questList.length > 0) {
@@ -118,19 +105,23 @@ export class ScreenController {
                             ps.activeQuest = quest;
                             ps.questGoldMultiplier = quest.difficulty?.goldMultiplier ?? 1;
                             sm.selectedStartLevel = quest.level;
+                            ps.hubReenterLevel = null;
+                            ps.hubReenterQuest = null;
+                            ps.hubReenterDelveFloor = 0;
                         }
                         ps.boardOpen = false;
+                        handled = true;
                     } else if (btn === 'reroll') {
                         const REROLL_COST = 200;
-                        const currentGold = ps.gold ?? 0;
-                        if (currentGold >= REROLL_COST) {
-                            ps.gold = currentGold - REROLL_COST;
+                        if (getTotalGoldFromInventory(ps) >= REROLL_COST && tryConsumeGold(ps, REROLL_COST)) {
                             ps.questList = getRandomQuestsForBoard(3);
                             ps.hubSelectedQuestIndex = 0;
                             if (ps.questList.length > 0) ps.hubSelectedLevel = ps.questList[0].level;
                         }
+                        handled = true;
                     } else if (btn === 'back') {
                         ps.boardOpen = false;
+                        handled = true;
                     }
                 }
             } else {
@@ -138,6 +129,7 @@ export class ScreenController {
                 const rowIndex = sm.getMainQuestSelectAt(x, y, unlocked, t.contentTop, t.contentHeight);
                 if (rowIndex !== null) {
                     ps.hubSelectedMainQuestIndex = rowIndex;
+                    handled = true;
                 } else {
                     const btn = sm.getMainQuestButtonAt(x, y, unlocked, t.contentTop, t.contentHeight);
                     if (btn === 'accept') {
@@ -153,67 +145,57 @@ export class ScreenController {
                             };
                             ps.questGoldMultiplier = difficulty?.goldMultiplier ?? 1;
                             sm.selectedStartLevel = selected.level;
+                            ps.hubReenterLevel = null;
+                            ps.hubReenterQuest = null;
+                            ps.hubReenterDelveFloor = 0;
                             ps.boardOpen = false;
                         }
+                        handled = true;
                     } else if (btn === 'back') {
                         ps.boardOpen = false;
+                        handled = true;
                     }
                 }
             }
         } else if (sm.isScreen('death')) {
             if (sm.checkButtonClick(x, y, 'death')) {
                 ctx.returnToSanctuaryOnDeath();
+                handled = true;
             }
         } else if (sm.isScreen('pause')) {
             const pauseBtn = sm.getPauseButtonAt(x, y);
-            if (pauseBtn === 'resume') {
-                sm.setScreen(ps.screenBeforePause || 'playing');
-            } else if (pauseBtn === 'save') {
-                ctx.saveGame('1');
-            } else if (pauseBtn === 'quit') {
-                ctx.quitToMainMenu();
-            } else if (pauseBtn === 'settings') {
-                sm.setScreen('settings');
-            } else if (pauseBtn === 'help') {
-                sm.setScreen('help');
-            }
+            if (pauseBtn === 'resume') { sm.setScreen(ps.screenBeforePause || 'playing'); handled = true; }
+            else if (pauseBtn === 'save') { ctx.saveGame('1'); handled = true; }
+            else if (pauseBtn === 'quit') { ctx.quitToMainMenu(); handled = true; }
+            else if (pauseBtn === 'settings') { sm.setScreen('settings'); handled = true; }
+            else if (pauseBtn === 'help') { sm.setScreen('help'); handled = true; }
         } else if (sm.isScreen('help')) {
             if (sm.getHelpBackButtonAt(x, y)) {
                 sm.setScreen('pause');
+                handled = true;
             }
         } else if (sm.isScreen('settings')) {
             const item = sm.getSettingsItemAt(x, y, ctx.settings);
-            if (item === 'music') {
-                ctx.settings.musicEnabled = !ctx.settings.musicEnabled;
-            } else if (item === 'sfx') {
-                ctx.settings.sfxEnabled = !ctx.settings.sfxEnabled;
-            } else if (item === 'minimap') {
-                ctx.settings.showMinimap = !ctx.settings.showMinimap;
-            } else if (item === 'characterSprites') {
-                ctx.settings.useCharacterSprites = !ctx.settings.useCharacterSprites;
-            } else if (item === 'environmentSprites') {
-                ctx.settings.useEnvironmentSprites = !ctx.settings.useEnvironmentSprites;
-            } else if (item === 'playerHitboxIndicators') {
-                ctx.settings.showPlayerHitboxIndicators = !ctx.settings.showPlayerHitboxIndicators;
-            } else if (item === 'enemyHitboxIndicators') {
-                ctx.settings.showEnemyHitboxIndicators = !ctx.settings.showEnemyHitboxIndicators;
-            } else if (item === 'enemyStaminaBars') {
-                ctx.settings.showEnemyStaminaBars = !ctx.settings.showEnemyStaminaBars;
-            } else if (item === 'playerHealthBarAlways') {
-                ctx.settings.showPlayerHealthBarAlways = !ctx.settings.showPlayerHealthBarAlways;
-            } else if (item === 'enemyHealthBars') {
-                ctx.settings.showEnemyHealthBars = !ctx.settings.showEnemyHealthBars;
-            } else if (item === 'controls') {
-                sm.setScreen('settings-controls');
-            } else if (item === 'back') {
-                sm.setScreen('pause');
-            }
+            if (item === 'music') { ctx.settings.musicEnabled = !ctx.settings.musicEnabled; handled = true; }
+            else if (item === 'sfx') { ctx.settings.sfxEnabled = !ctx.settings.sfxEnabled; handled = true; }
+            else if (item === 'minimap') { ctx.settings.showMinimap = !ctx.settings.showMinimap; handled = true; }
+            else if (item === 'characterSprites') { ctx.settings.useCharacterSprites = !ctx.settings.useCharacterSprites; handled = true; }
+            else if (item === 'environmentSprites') { ctx.settings.useEnvironmentSprites = !ctx.settings.useEnvironmentSprites; handled = true; }
+            else if (item === 'playerHitboxIndicators') { ctx.settings.showPlayerHitboxIndicators = !ctx.settings.showPlayerHitboxIndicators; handled = true; }
+            else if (item === 'enemyHitboxIndicators') { ctx.settings.showEnemyHitboxIndicators = !ctx.settings.showEnemyHitboxIndicators; handled = true; }
+            else if (item === 'enemyStaminaBars') { ctx.settings.showEnemyStaminaBars = !ctx.settings.showEnemyStaminaBars; handled = true; }
+            else if (item === 'playerHealthBarAlways') { ctx.settings.showPlayerHealthBarAlways = !ctx.settings.showPlayerHealthBarAlways; handled = true; }
+            else if (item === 'enemyHealthBars') { ctx.settings.showEnemyHealthBars = !ctx.settings.showEnemyHealthBars; handled = true; }
+            else if (item === 'controls') { sm.setScreen('settings-controls'); handled = true; }
+            else if (item === 'back') { sm.setScreen('pause'); handled = true; }
         } else if (sm.isScreen('settings-controls')) {
             const item = sm.getControlsItemAt(x, y);
             if (item === 'back') {
                 sm.setScreen('settings');
+                handled = true;
             }
         }
+        return handled;
     }
 
     bindGlobalKeys(eventBus: { on(event: string, fn: (key: string) => void): void }) {

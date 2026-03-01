@@ -1,14 +1,14 @@
 // AI component for enemy behavior
 import type { Component } from '../types/component.js';
 import type { SystemsMap } from '../types/systems.js';
-import { Movement } from './Movement.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
-import { Transform } from './Transform.ts';
-import { Combat } from './Combat.ts';
-import { Health } from './Health.ts';
-import { StatusEffects } from './StatusEffects.ts';
-import { Stamina } from './Stamina.ts';
+import { Movement } from './Movement.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
+import { Transform } from './Transform.js';
+import { Combat } from './Combat.js';
+import { Health } from './Health.js';
+import { StatusEffects } from './StatusEffects.js';
+import { Stamina } from './Stamina.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 
 export interface PatrolConfig {
@@ -19,7 +19,7 @@ export interface PatrolConfig {
   distance?: number;
 }
 
-export type AIState = 'idle' | 'chase' | 'attack' | 'patrol' | 'lunge' | 'backOff';
+export type AIState = 'idle' | 'chase' | 'attack' | 'patrol' | 'lunge' | 'backOff' | 'sleep' | 'guard' | 'circularPatrol' | 'packFollow';
 export type IdleBehavior = 'patrol' | 'guard' | 'wander' | 'loiter' | 'sleep' | 'circularPatrol' | 'packFollow';
 
 export class AI implements Component {
@@ -153,8 +153,9 @@ export class AI implements Component {
         this.attackInitiatedThisFrame = false;
 
         // Get player
-        const entityManager = systems ? systems.get('entities') : null;
-        const player = entityManager ? entityManager.get('player') : null;
+        const sys = systems as SystemsMap | undefined;
+        const entityManager = sys ? (sys.get('entities') as { get(key: string): unknown } | null) : null;
+        const player = entityManager ? (entityManager.get('player') as { getComponent<T>(c: new (...args: unknown[]) => T): T | null } | null) : null;
         if (!player) return;
 
         const playerTransform = player.getComponent(Transform);
@@ -196,7 +197,7 @@ export class AI implements Component {
         );
         let effectiveDetectionRange = this.detectionRange * (statusEffects && statusEffects.packDetectionRangeMultiplier != null ? statusEffects.packDetectionRangeMultiplier : 1);
         // Hold the line (survive) quest: enemies always aggro the player regardless of distance
-        const ps = systems ? systems.get<PlayingStateShape>('playingState') : null;
+        const ps = sys ? (sys.get('playingState') as PlayingStateShape | null) : null;
         if (ps?.activeQuest?.objectiveType === 'survive') {
             effectiveDetectionRange = 99999;
         }
@@ -234,20 +235,22 @@ export class AI implements Component {
         }
 
         // Get enemy config once (used for lunge, projectile, and pillar checks)
-        const enemyConfig = this.enemyType ? GameConfig.enemy.types[this.enemyType] : null;
-        const pillarConfig = this.enemyType === 'greaterDemon' && enemyConfig && enemyConfig.pillarFlame ? enemyConfig.pillarFlame : null;
+        const enemyConfig = this.enemyType ? (GameConfig.enemy.types[this.enemyType as keyof typeof GameConfig.enemy.types] as { pillarFlame?: { cooldown?: number; castDelay?: number; pillarRange?: number }; warCry?: { enabled?: boolean; radius?: number; cooldown?: number; buffDuration?: number; speedMultiplier?: number; damageMultiplier?: number }; lunge?: { enabled?: boolean; chargeTime?: number; chargeRange?: number }; projectile?: { enabled?: boolean; range?: number; speed?: number; damage?: number; cooldown?: number; stunBuildup?: number; width?: number; height?: number; color?: string; visualType?: string } } | null) : null;
+        const pillarConfig = this.enemyType === 'greaterDemon' && enemyConfig && (enemyConfig as { pillarFlame?: unknown }).pillarFlame ? (enemyConfig as { pillarFlame: { cooldown: number; castDelay: number; pillarRange: number } }).pillarFlame : null;
 
         // Goblin Chieftain war cry: buff nearby goblins when in chase range and not attacking
-        const warCryConfig = this.enemyType === 'goblinChieftain' && enemyConfig && enemyConfig.warCry ? enemyConfig.warCry : null;
+        const warCryConfig = this.enemyType === 'goblinChieftain' && enemyConfig && (enemyConfig as { warCry?: unknown }).warCry ? (enemyConfig as { warCry: { enabled?: boolean; radius?: number; cooldown?: number; buffDuration?: number; speedMultiplier?: number; damageMultiplier?: number } }).warCry : null;
         if (warCryConfig && warCryConfig.enabled && this.warCryCooldown === 0 && !combat.isAttacking) {
             const inChaseRange = distToPlayer < effectiveDetectionRange && distToPlayer > this.attackRange;
             if (inChaseRange) {
-                const enemyManager = systems ? systems.get('enemies') : null;
+                const enemyManager = sys ? (sys.get('enemies') as { enemies?: unknown[] } | null) : null;
                 if (enemyManager && enemyManager.enemies) {
                     const radius = warCryConfig.radius || 180;
                     let buffedAny = false;
-                    for (const other of enemyManager.enemies) {
+                    const entityWithComponent = (e: unknown): e is { getComponent<T>(c: new (...args: unknown[]) => T): T | null } => e != null && typeof (e as { getComponent?: unknown }).getComponent === 'function';
+                        for (const other of enemyManager.enemies) {
                         if (other === this.entity) continue;
+                        if (!entityWithComponent(other)) continue;
                         const otherAI = other.getComponent(AI);
                         const otherHealth = other.getComponent(Health);
                         const otherTransform = other.getComponent(Transform);
@@ -270,8 +273,9 @@ export class AI implements Component {
         
         // Check for lunge attack (goblin and lesser demon)
         const isGoblin = this.enemyType === 'goblin';
-        const hasLunge = enemyConfig && enemyConfig.lunge && enemyConfig.lunge.enabled;
-        const lungeConfig = hasLunge && enemyConfig.lunge ? enemyConfig.lunge : null;
+        const lungeRaw = enemyConfig && (enemyConfig as { lunge?: { enabled?: boolean; chargeTime?: number; chargeRange?: number } }).lunge;
+        const hasLunge = lungeRaw && lungeRaw.enabled;
+        const lungeConfig = hasLunge && lungeRaw ? lungeRaw : null;
         // Can lunge if: lunge enabled in config, not on cooldown, haven't used all lunges, and not already charging
         const canLunge = hasLunge && lungeConfig && combat && 
                         this.lungeCooldown === 0 && 
@@ -289,7 +293,7 @@ export class AI implements Component {
             if (dx !== 0 || dy !== 0) movement.facingAngle = Math.atan2(dy, dx);
             if (this.pillarCastTimer <= 0) {
                 this.isCastingPillar = false;
-                const hazardManager = systems ? systems.get('hazards') : null;
+                const hazardManager = sys ? (sys.get('hazards') as { createPillar?(x: number, y: number, config: unknown): void } | null) : null;
                 if (hazardManager && hazardManager.createPillar) {
                     // Cast pillar near player, not directly on them (random offset of 30-80 pixels)
                     const offsetDistance = Utils.random(30, 80);
@@ -324,11 +328,12 @@ export class AI implements Component {
                 // Increment lunge count
                 this.lungeCount++;
                 // Start lunge attack (movement + combat handler)
-                if (combat.enemyAttackHandler && combat.enemyAttackHandler.startLunge) {
-                    combat.enemyAttackHandler.startLunge(this.lungeTargetX, this.lungeTargetY, lungeConfig);
+                const attackHandler = combat.enemyAttackHandler as { startLunge?(x: number, y: number, config: unknown): void } | null;
+                if (attackHandler && attackHandler.startLunge) {
+                    attackHandler.startLunge(this.lungeTargetX, this.lungeTargetY, lungeConfig);
                 }
                 // Start lunge movement
-                movement.startLunge(this.lungeTargetX, this.lungeTargetY, lungeConfig);
+                (movement as { startLunge?(x: number, y: number, config: unknown): void }).startLunge?.(this.lungeTargetX, this.lungeTargetY, lungeConfig);
                 
                 // If we've used all lunges, set cooldown (will be set again when lunge ends, but set it here too in case lunge is interrupted)
                 if (this.lungeCount >= this.maxLunges) {
@@ -349,22 +354,22 @@ export class AI implements Component {
             this.state = 'lunge';
         }
         // Check for projectile attack (ranged enemies like skeleton)
-        const projectileConfig = enemyConfig && enemyConfig.projectile ? enemyConfig.projectile : null;
+        const projectileConfig = enemyConfig && (enemyConfig as { projectile?: { enabled?: boolean; range?: number; speed?: number; damage?: number; cooldown?: number; stunBuildup?: number; width?: number; height?: number; color?: string; visualType?: string } }).projectile ? (enemyConfig as { projectile: { enabled?: boolean; range: number; speed: number; damage: number; cooldown: number; stunBuildup?: number; width?: number; height?: number; color?: string; visualType?: string } }).projectile : null;
         const canShootProjectile = projectileConfig && projectileConfig.enabled && 
                                    this.projectileCooldown === 0 && 
                                    distToPlayer <= projectileConfig.range && 
                                    distToPlayer > this.attackRange;
         
-        if (canShootProjectile) {
+        if (canShootProjectile && projectileConfig) {
             // Shoot projectile at player
-            const projectileManager = systems ? systems.get('projectiles') : null;
-            if (projectileManager) {
+            const projectileManager = sys ? (sys.get('projectiles') as { createProjectile?(...args: unknown[]): void } | null) : null;
+            if (projectileManager && projectileManager.createProjectile) {
                 const angle = Utils.angleTo(transform.x, transform.y, playerTransform.x, playerTransform.y);
                 const projWidth = (projectileConfig as { width?: number }).width ?? 8;
                 const projHeight = (projectileConfig as { height?: number }).height ?? 8;
                 const projColor = (projectileConfig as { color?: string }).color;
                 const projVisualType = (projectileConfig as { visualType?: string }).visualType;
-                projectileManager.createProjectile(
+                (projectileManager.createProjectile as (...args: unknown[]) => void)(
                     transform.x,
                     transform.y,
                     angle,
@@ -435,7 +440,7 @@ export class AI implements Component {
                     const inCombo = (handler.comboStage ?? 0) > 0;
                     if (!inCombo) {
                         const w = handler.weapon;
-                        const chargeConfig = w.chargeAttack;
+                        const chargeConfig = (w as { chargeAttack?: { minChargeTime?: number; maxChargeTime?: number } }).chargeAttack;
                         if (chargeConfig && chargeConfig.minChargeTime != null) {
                             const roll = Math.random();
                             if (roll < 0.35) {
@@ -480,7 +485,7 @@ export class AI implements Component {
             } else {
                 this.backOffFromPlayer(playerTransform, movement, systems);
             }
-        } else if (this.idleBehavior === 'sleep' && this.idleBehaviorConfig && this.idleBehaviorConfig.wakeRadius != null && distToPlayer > this.idleBehaviorConfig.wakeRadius) {
+        } else if (this.idleBehavior === 'sleep' && this.idleBehaviorConfig && (this.idleBehaviorConfig as { wakeRadius?: number }).wakeRadius != null && distToPlayer > (this.idleBehaviorConfig as { wakeRadius: number }).wakeRadius) {
             this.state = 'sleep';
             this.sleep(transform, movement);
         } else if (distToPlayer < effectiveDetectionRange) {
@@ -491,7 +496,7 @@ export class AI implements Component {
         }
     }
 
-    runIdleBehavior(transform, movement, systems) {
+    runIdleBehavior(transform: { x: number; y: number; width?: number; height?: number }, movement: Movement | null, systems?: SystemsMap) {
         const behavior = this.idleBehavior || (this.patrolConfig ? 'patrol' : 'wander');
         const config = this.idleBehaviorConfig;
         if (behavior === 'patrol' && this.patrolConfig) {
@@ -518,24 +523,25 @@ export class AI implements Component {
         }
     }
 
-    chasePlayer(playerTransform, movement, systems) {
+    chasePlayer(playerTransform: { x: number; y: number }, movement: Movement | null, systems?: SystemsMap) {
         this.pathUpdateTimer--;
-        
+if (!systems) return;
         const pathfinding = systems.get('pathfinding');
-        const transform = this.entity.getComponent(Transform);
+        const transform = this.entity!.getComponent(Transform);
+        if (!transform) return;
         const obstacleManager = systems.get('obstacles');
-        
         if (pathfinding && movement) {
-            if (!movement.hasPath() || this.pathUpdateTimer <= 0) {
-                const destX = playerTransform.x + Math.cos(this._chaseOffsetAngle) * this._chaseOffsetDist;
-                const destY = playerTransform.y + Math.sin(this._chaseOffsetAngle) * this._chaseOffsetDist;
-                const path = pathfinding.findPath(
-                    transform.x, transform.y,
-                    destX, destY,
-                    transform.width, transform.height
-                );
+                if (!movement.hasPath() || this.pathUpdateTimer <= 0) {
+                    const destX = playerTransform.x + Math.cos(this._chaseOffsetAngle) * this._chaseOffsetDist;
+                    const destY = playerTransform.y + Math.sin(this._chaseOffsetAngle) * this._chaseOffsetDist;
+const pathFind = pathfinding as { findPath(ax: number, ay: number, bx: number, by: number, w: number, h: number): unknown };
+                    const path = pathFind.findPath(
+                        transform.x, transform.y,
+                        destX, destY,
+                        transform.width ?? 16, transform.height ?? 16
+                    ) as { length: number }[] | null;
                 if (path && path.length > 0) {
-                    movement.followPath(path);
+                    movement.followPath(path as unknown as Parameters<Movement['followPath']>[0]);
                 } else {
                     // Pathfinding failed - try to find a nearby valid position and move towards player
                     this.handlePathfindingFailure(transform, playerTransform, movement, obstacleManager);
@@ -555,7 +561,7 @@ export class AI implements Component {
     }
 
     /** Move away from player (goblin/bandit back off when stamina exhausted until 50% recovered). */
-    backOffFromPlayer(playerTransform, movement, systems) {
+    backOffFromPlayer(playerTransform: { x: number; y: number }, movement: Movement | null, _systems?: SystemsMap) {
         const transform = this.entity.getComponent(Transform);
         if (!transform || !movement) return;
         const dx = transform.x - playerTransform.x;
@@ -586,13 +592,13 @@ export class AI implements Component {
         movement.setVelocity(dx, dy);
     }
 
-    wander(transform, movement, systems) {
+    wander(transform: { x: number; y: number; width?: number; height?: number }, movement: Movement | null, systems?: SystemsMap) {
         this.idleTimer--;
 
         if (this.idleTimer <= 0) {
             this.idleTimer = Utils.randomInt(60, 180);
             const worldConfig = GameConfig.world;
-            const config = this.idleBehaviorConfig;
+            const config = this.idleBehaviorConfig as { type?: string; centerX?: number; centerY?: number; radius?: number } | null;
             const useWanderConfig = config && config.type === 'wander' && typeof config.centerX === 'number' && typeof config.centerY === 'number' && typeof config.radius === 'number';
             const centerX = useWanderConfig ? config.centerX as number : this.roamCenterX;
             const centerY = useWanderConfig ? config.centerY as number : this.roamCenterY;
@@ -611,15 +617,17 @@ export class AI implements Component {
             this.wanderTargetX = Utils.clamp(this.wanderTargetX, 0, worldConfig.width);
             this.wanderTargetY = Utils.clamp(this.wanderTargetY, 0, worldConfig.height);
             
-            const pathfinding = systems.get('pathfinding');
+            const pathfinding = systems ? (systems.get('pathfinding') as { findPath(ax: number, ay: number, bx: number, by: number, w: number, h: number): unknown } | null) : null;
             if (pathfinding && movement) {
+                const w = transform.width ?? 16;
+                const h = transform.height ?? 16;
                 const path = pathfinding.findPath(
                     transform.x, transform.y,
                     this.wanderTargetX, this.wanderTargetY,
-                    transform.width, transform.height
-                );
+                    w, h
+                ) as { length: number }[] | null;
                 if (path && path.length > 0) {
-                    movement.followPath(path);
+                    movement.followPath(path as unknown as Parameters<Movement['followPath']>[0]);
                 } else {
                     // Pathfinding failed, just set target and let movement handle it
                     movement.setTarget(this.wanderTargetX, this.wanderTargetY);
@@ -643,7 +651,7 @@ export class AI implements Component {
         }
     }
 
-    patrol(transform, movement, systems) {
+    patrol(transform: { x: number; y: number }, movement: Movement | null, _systems?: SystemsMap) {
         if (!this.patrolConfig) return;
 
         // Initialize patrol targets if not set: spread along segment so enemies don't march in lockstep
@@ -691,11 +699,11 @@ export class AI implements Component {
         }
     }
 
-    guard(transform, movement, systems) {
-        const config = this.idleBehaviorConfig;
+    guard(transform: { x: number; y: number }, movement: Movement | null, _systems?: SystemsMap) {
+        const config = this.idleBehaviorConfig as { type?: string; centerX?: number; centerY?: number; radius?: number; faceAngle?: number; turnSpeed?: number } | null;
         if (!config || config.type !== 'guard') return;
-        const cx = config.centerX;
-        const cy = config.centerY;
+        const cx = config.centerX ?? 0;
+        const cy = config.centerY ?? 0;
         const radius = config.radius != null ? config.radius : 60;
         const dist = Math.sqrt((transform.x - cx) ** 2 + (transform.y - cy) ** 2);
         if (dist > radius && movement) {
@@ -715,12 +723,12 @@ export class AI implements Component {
         }
     }
 
-    sleep(transform, movement, systems) {
+    sleep(transform: { x: number; y: number }, movement: Movement | null, _systems?: SystemsMap) {
         if (movement) movement.stop();
     }
 
-    circularPatrol(transform, movement, systems) {
-        const config = this.idleBehaviorConfig;
+    circularPatrol(transform: { x: number; y: number }, movement: Movement | null, _systems?: SystemsMap) {
+        const config = this.idleBehaviorConfig as { type?: string; waypoints?: { x: number; y: number }[]; reachedThreshold?: number } | null;
         if (!config || config.type !== 'circularPatrol' || !config.waypoints || !config.waypoints.length) return;
         const waypoints = config.waypoints;
         const idx = this._circularPatrolWaypointIndex != null ? this._circularPatrolWaypointIndex : 0;
@@ -740,11 +748,11 @@ export class AI implements Component {
         }
     }
 
-    packFollow(transform, movement, systems) {
-        const config = this.idleBehaviorConfig;
+    packFollow(transform: { x: number; y: number }, movement: Movement | null, _systems?: SystemsMap) {
+        const config = this.idleBehaviorConfig as { type?: string; centerX?: number; centerY?: number; followRadius?: number; offsetAngle?: number } | null;
         if (!config || config.type !== 'packFollow') return;
-        const cx = config.centerX;
-        const cy = config.centerY;
+        const cx = (config.centerX ?? 0) as number;
+        const cy = (config.centerY ?? 0) as number;
         const followRadius = config.followRadius != null ? config.followRadius : 50;
         const angle = config.offsetAngle != null ? config.offsetAngle : 0;
         const targetX = cx + Math.cos(angle) * followRadius * 0.6;

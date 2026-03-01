@@ -1,5 +1,5 @@
 // Renders quest board (top-down bulletin board) and interaction prompt. data: { board, playerNearBoard }
-import type { RenderContext } from './RenderContext.ts';
+import type { RenderContext } from './RenderContext.js';
 
 interface BoardLike {
   x: number;

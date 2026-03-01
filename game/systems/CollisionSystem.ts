@@ -1,7 +1,7 @@
 // Collision System
-import { Transform } from '../components/Transform.ts';
-import { Utils } from '../utils/Utils.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import { Transform } from '../components/Transform.js';
+import { Utils } from '../utils/Utils.js';
+import type { SystemManager } from '../core/SystemManager.js';
 
 interface EntityWithGetComponent {
   getComponent<T>(ctor: new (...args: unknown[]) => T): T | null;

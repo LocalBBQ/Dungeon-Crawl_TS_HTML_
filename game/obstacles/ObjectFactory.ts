@@ -13,7 +13,6 @@
 //   ironFence- vertical bars
 //   barrel   - wooden hoops + bulging body
 //   rock     - irregular blob + highlight
-//   well     - stone ring + dark shaft + roof/crank
 //   fence    - wooden post + horizontal rails
 //   pillar   - rounded column with base and cap
 //   bush     - leafy blob (overlapping ellipses)
@@ -24,7 +23,7 @@
 //   house, wall, door, shed, brokenPillar, crumblingWall, arch, statueBase,
 //   column, stoneDebris
 //
-import { Utils } from '../utils/Utils.ts';
+import { Utils } from '../utils/Utils.js';
 
 export interface ObjectConfig {
   minSize: number;
@@ -35,6 +34,8 @@ export interface ObjectConfig {
   breakable?: boolean;
   /** Hit points when breakable (default 1). */
   hp?: number;
+  /** If true, entity can walk through (no collision). */
+  passable?: boolean;
 }
 
 export interface CreatedObject {
@@ -60,7 +61,6 @@ export class ObjectFactory {
       door: { minSize: 60, maxSize: 80, defaultSpritePath: 'assets/sprites/environment/door.png', color: '#654321' },
       shed: { minSize: 100, maxSize: 140, defaultSpritePath: 'assets/sprites/environment/shed.png', color: '#654321' },
       firepit: { minSize: 30, maxSize: 40, defaultSpritePath: 'assets/sprites/environment/firepit.png', color: '#ff6600' },
-      well: { minSize: 40, maxSize: 50, defaultSpritePath: 'assets/sprites/environment/well.png', color: '#888888' },
       fence: { minSize: 15, maxSize: 20, defaultSpritePath: 'assets/sprites/environment/fence.png', color: '#8b7355' },
       ironFence: { minSize: 12, maxSize: 22, defaultSpritePath: null, color: '#1a1a1a' },
       barrel: { minSize: 25, maxSize: 35, defaultSpritePath: 'assets/sprites/environment/barrel.png', color: '#4a4a4a', breakable: true, hp: 20 },

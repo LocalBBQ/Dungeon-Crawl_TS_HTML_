@@ -1,11 +1,11 @@
 // Gatherable Manager - handles herbs, ore, chests, shrine blessings placed from scene tiles.
-import { Transform } from '../components/Transform.ts';
-import { Health } from '../components/Health.ts';
-import { Utils } from '../utils/Utils.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
-import type { CameraShape } from '../types/camera.ts';
-import type { EntityShape } from '../types/entity.ts';
-import { drawHerbIcon, drawMushroomIcon } from '../graphics/herbMushroomIcons.ts';
+import { Transform } from '../components/Transform.js';
+import { Health } from '../components/Health.js';
+import { Utils } from '../utils/Utils.js';
+import type { SystemManager } from '../core/SystemManager.js';
+import type { CameraShape } from '../types/camera.js';
+import type { EntityShape } from '../types/entity.js';
+import { drawHerbIcon, drawMushroomIcon } from '../graphics/herbMushroomIcons.js';
 
 export type GatherableType = 'herb' | 'mushroom' | 'ore' | 'chest' | 'shrineBlessing';
 
@@ -25,10 +25,10 @@ interface GatheringState {
 }
 
 interface GameRefLike {
-    gold?: number;
     playerInGatherableRange?: boolean;
     addHerbToInventory?(): boolean;
     addMushroomToInventory?(): boolean;
+    addGold?(amount: number): boolean;
 }
 
 interface InputSystemLike {
@@ -93,10 +93,10 @@ export class GatherableManager {
                 if (game?.addMushroomToInventory) game.addMushroomToInventory();
                 break;
             case 'ore':
-                if (game && typeof game.gold === 'number') game.gold += 5;
+                if (game?.addGold) game.addGold(5);
                 break;
             case 'chest':
-                if (game && typeof game.gold === 'number') game.gold += 15;
+                if (game?.addGold) game.addGold(15);
                 break;
             case 'shrineBlessing':
                 if (health) health.heal(Math.floor(health.maxHealth * 0.5));

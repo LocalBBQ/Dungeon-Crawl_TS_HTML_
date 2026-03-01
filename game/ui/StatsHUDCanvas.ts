@@ -1,15 +1,17 @@
 /**
- * Canvas-rendered stats HUD (health/stamina orbs, stun, heal charges).
- * Drawn in the game render loop so it respects draw order and is covered by inventory/other UI.
+ * Canvas-rendered stats HUD (health/stamina orbs, stun, toolbelt, recall portal).
+ * Drawn last in the game render loop so orbs stay visible above inventory/chest/shop/reroll panels.
  */
 import type { EntityShape } from '../types/entity.js';
+import type { PotionConsumable } from '../state/PlayingState.js';
 import { Health } from '../components/Health.js';
 import { Rally } from '../components/Rally.js';
 import { Stamina } from '../components/Stamina.js';
 import { Combat } from '../components/Combat.js';
-import { PlayerHealing } from '../components/PlayerHealing.js';
 import { StatusEffects } from '../components/StatusEffects.js';
 import { DELVE_LEVEL } from '../config/questConfig.js';
+import { drawPotionIcon } from '../graphics/herbMushroomIcons.js';
+import { TOOLBELT_SLOT_COUNT } from '../state/PlayingState.js';
 
 const PAD = 16;
 const ORB_RADIUS = 60;
@@ -20,21 +22,20 @@ const ORB_TEXT_SPACE = 44;
 const BOTTOM_BAR_PAD_BOTTOM = 10;
 const STUN_BAR_W = 72;
 const STUN_BAR_H = 12;
-const POTION_W = 26;
-const POTION_H = 34;
 /** Card style: rounded rect matching orb frame */
 const CARD_RADIUS = 8;
 const CARD_PAD = 10;
-/** Combined stun+potion card width; sits left of skill row */
-const STUN_POTION_CARD_W = 160;
-const STUN_POTION_CARD_H = 52;
-/** Single row of 4 skill slots (grid squares) */
-const SKILL_SLOT_COUNT = 4;
-const SKILL_SLOT_SIZE = 48;
-const SKILL_SLOT_GAP = 6;
-const SKILL_ROW_W = SKILL_SLOT_COUNT * SKILL_SLOT_SIZE + (SKILL_SLOT_COUNT - 1) * SKILL_SLOT_GAP;
+/** Stun-only card width; sits left of toolbelt row */
+const STUN_CARD_W = 118;
+const STUN_CARD_H = 52;
+/** Toolbelt: 4 slots + 1 recall portal slot */
+const TOOLBELT_SLOT_SIZE = 48;
+const TOOLBELT_SLOT_GAP = 6;
+const RECALL_PORTAL_SLOT_COUNT = 1;
+const TOTAL_BOTTOM_SLOTS = TOOLBELT_SLOT_COUNT + RECALL_PORTAL_SLOT_COUNT;
+const TOOLBELT_ROW_W = TOTAL_BOTTOM_SLOTS * TOOLBELT_SLOT_SIZE + (TOTAL_BOTTOM_SLOTS - 1) * TOOLBELT_SLOT_GAP;
 const BAR_GAP = 12;
-const BOTTOM_BAR_TOTAL_W = STUN_POTION_CARD_W + BAR_GAP + SKILL_ROW_W;
+const BOTTOM_BAR_TOTAL_W = STUN_CARD_W + BAR_GAP + TOOLBELT_ROW_W;
 const FONT_LABEL = '700 14px Cinzel, Georgia, serif';
 const FONT_TEXT = '700 15px Cinzel, Georgia, serif';
 const FONT_STAT = '600 15px Cinzel, Georgia, serif';
@@ -44,10 +45,14 @@ const COLOR_STUN_LABEL = '#706858';
 
 export interface StatsHUDData {
   delveFloor: number;
+  /** 0..1 progress while holding B to spawn recall portal; 0 when not holding. */
+  recallChannelProgress?: number;
+  /** Toolbelt slots (potions); length TOOLBELT_SLOT_COUNT. */
+  toolbeltSlots?: (PotionConsumable | null)[];
 }
 
 /**
- * Render the stats HUD on the game canvas. Call after world/entities, before inventory.
+ * Render the stats HUD on the game canvas. Call after world/entities and all UI panels so orbs render on top.
  * Uses same visual style as the original DOM HUD (orbs, bottom bar, stun, heal charges).
  */
 export function renderStatsHUD(
@@ -62,7 +67,6 @@ export function renderStatsHUD(
   const stamina = player.getComponent(Stamina);
   const rally = player.getComponent(Rally);
   const combat = player.getComponent(Combat);
-  const healing = player.getComponent(PlayerHealing);
   const statusEffects = player.getComponent(StatusEffects);
 
   const W = canvas.width;
@@ -134,28 +138,27 @@ export function renderStatsHUD(
     ctx.fillText('STAMINA', rightOrbX, orbCenterY + ORB_RADIUS + 8);
   }
 
-  // Bottom row: one centered bar = [ combined stun+potion card | 4 skill slots ]
-  const barHeight = Math.max(STUN_POTION_CARD_H, SKILL_SLOT_SIZE);
+  // Bottom row: [ stun card | 4 toolbelt slots | recall portal slot ]
+  const barHeight = Math.max(STUN_CARD_H, TOOLBELT_SLOT_SIZE);
   const bottomRowY = H - PAD - BOTTOM_BAR_PAD_BOTTOM - barHeight - 8;
   const barLeftX = W / 2 - BOTTOM_BAR_TOTAL_W / 2;
-  const stunPotionCardX = barLeftX;
-  const skillRowX = barLeftX + STUN_POTION_CARD_W + BAR_GAP;
+  const stunCardX = barLeftX;
+  const toolbeltRowX = barLeftX + STUN_CARD_W + BAR_GAP;
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  // Combined stun + potion card (left part of bar)
-  roundRect(ctx, stunPotionCardX, bottomRowY, STUN_POTION_CARD_W, STUN_POTION_CARD_H, CARD_RADIUS);
+  // Stun card (left part of bar)
+  roundRect(ctx, stunCardX, bottomRowY, STUN_CARD_W, STUN_CARD_H, CARD_RADIUS);
   ctx.fillStyle = 'rgba(28, 22, 18, 0.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(61, 40, 23, 0.6)';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  const cardInnerX = stunPotionCardX + CARD_PAD;
-  const cardMidY = bottomRowY + STUN_POTION_CARD_H / 2;
+  const cardInnerX = stunCardX + CARD_PAD;
+  const cardMidY = bottomRowY + STUN_CARD_H / 2;
 
-  // Stun (left side of combined card)
   if (statusEffects) {
     const barY = cardMidY - STUN_BAR_H / 2;
     ctx.fillStyle = COLOR_STUN_LABEL;
@@ -188,46 +191,76 @@ export function renderStatsHUD(
     }
   }
 
-  // Potion (right side of combined card)
-  if (healing) {
-    const potionX = cardInnerX + STUN_BAR_W + 28 + 8;
-    const potionY = cardMidY - POTION_H / 2;
-    const fillPct = healing.maxCharges > 0 ? healing.charges / healing.maxCharges : 1;
-    ctx.fillStyle = 'rgba(20, 12, 8, 0.95)';
-    roundRect(ctx, potionX, potionY, POTION_W, POTION_H, 4);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(80, 50, 30, 0.7)';
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, potionX, potionY, POTION_W, POTION_H, 4);
-    ctx.stroke();
-    ctx.fillStyle = '#902020';
-    const fillH = Math.max(0, (POTION_H - 4) * fillPct);
-    if (fillH > 0) {
-      roundRect(ctx, potionX + 2, potionY + POTION_H - fillH - 2, POTION_W - 4, fillH, 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = COLOR_LABEL;
-    ctx.font = '700 10px Cinzel, Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('POTION', potionX + POTION_W / 2, potionY - 4);
-    ctx.fillStyle = '#d4bc8c';
-    ctx.font = '700 13px Cinzel, Georgia, serif';
-    ctx.fillText(`×${healing.charges}`, potionX + POTION_W / 2, potionY + POTION_H + 10);
-    ctx.textAlign = 'left';
-  }
-
-  // 4 skill slots: single row of grid squares, centered in their row
-  const skillRowY = bottomRowY + (barHeight - SKILL_SLOT_SIZE) / 2;
-  for (let i = 0; i < SKILL_SLOT_COUNT; i++) {
-    const slotX = skillRowX + i * (SKILL_SLOT_SIZE + SKILL_SLOT_GAP);
-    roundRect(ctx, slotX, skillRowY, SKILL_SLOT_SIZE, SKILL_SLOT_SIZE, 6);
+  // Toolbelt: 4 slots (potions or empty) + 1 recall portal slot
+  const toolbeltRowY = bottomRowY + (barHeight - TOOLBELT_SLOT_SIZE) / 2;
+  const toolbeltSlots = data.toolbeltSlots ?? [];
+  for (let i = 0; i < TOOLBELT_SLOT_COUNT; i++) {
+    const slotX = toolbeltRowX + i * (TOOLBELT_SLOT_SIZE + TOOLBELT_SLOT_GAP);
+    roundRect(ctx, slotX, toolbeltRowY, TOOLBELT_SLOT_SIZE, TOOLBELT_SLOT_SIZE, 6);
     ctx.fillStyle = 'rgba(20, 16, 12, 0.95)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(61, 40, 23, 0.6)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // Placeholder: empty slot (skills can be wired later)
+    const slot = toolbeltSlots[i];
+    if (slot && slot.type === 'potion' && slot.count >= 1) {
+      const cx = slotX + TOOLBELT_SLOT_SIZE / 2;
+      const cy = toolbeltRowY + TOOLBELT_SLOT_SIZE / 2 - 6;
+      drawPotionIcon(ctx, cx, cy, 24);
+      if (slot.count > 1) {
+        ctx.fillStyle = COLOR_TEXT;
+        ctx.font = '700 11px Cinzel, Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`×${slot.count}`, cx, toolbeltRowY + TOOLBELT_SLOT_SIZE - 4);
+        ctx.textAlign = 'left';
+      }
+    }
+    ctx.fillStyle = COLOR_LABEL;
+    ctx.font = '700 10px Cinzel, Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(String(i + 1), slotX + TOOLBELT_SLOT_SIZE - 6, toolbeltRowY + TOOLBELT_SLOT_SIZE - 2);
+    ctx.textAlign = 'left';
   }
+
+  // Recall portal slot (hold B 2.5s to spawn portal): icon + "B" key at bottom right
+  const portalSlotX = toolbeltRowX + TOOLBELT_SLOT_COUNT * (TOOLBELT_SLOT_SIZE + TOOLBELT_SLOT_GAP);
+  roundRect(ctx, portalSlotX, toolbeltRowY, TOOLBELT_SLOT_SIZE, TOOLBELT_SLOT_SIZE, 6);
+  ctx.fillStyle = 'rgba(20, 16, 12, 0.95)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(61, 40, 23, 0.6)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  const recallProgress = Math.min(1, data.recallChannelProgress ?? 0);
+  const portalCx = portalSlotX + TOOLBELT_SLOT_SIZE / 2;
+  const portalCy = toolbeltRowY + TOOLBELT_SLOT_SIZE / 2 - 6;
+  const portalR = 14;
+  const gradient = ctx.createRadialGradient(portalCx, portalCy, 0, portalCx, portalCy, portalR);
+  gradient.addColorStop(0, 'rgba(80, 140, 255, 0.9)');
+  gradient.addColorStop(0.5, 'rgba(40, 100, 220, 0.6)');
+  gradient.addColorStop(1, 'rgba(20, 60, 160, 0.3)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.ellipse(portalCx, portalCy, portalR * 0.9, portalR * 1.05, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120, 170, 255, 0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  if (recallProgress > 0.001) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    roundRect(ctx, portalSlotX + 4, toolbeltRowY + TOOLBELT_SLOT_SIZE - 12, TOOLBELT_SLOT_SIZE - 8, 6, 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(100, 160, 255, 0.95)';
+    roundRect(ctx, portalSlotX + 4, toolbeltRowY + TOOLBELT_SLOT_SIZE - 12, (TOOLBELT_SLOT_SIZE - 8) * recallProgress, 6, 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = COLOR_LABEL;
+  ctx.font = '700 11px Cinzel, Georgia, serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('B', portalSlotX + TOOLBELT_SLOT_SIZE - 4, toolbeltRowY + TOOLBELT_SLOT_SIZE - 4);
+  ctx.textAlign = 'left';
 
   // Delve floor (top-center)
   if (currentLevel === DELVE_LEVEL && data.delveFloor > 0) {
@@ -239,6 +272,41 @@ export function renderStatsHUD(
   }
 
   ctx.restore();
+}
+
+/** Layout of the 4 toolbelt slots (for hit-test and drag/drop). */
+export interface ToolbeltLayout {
+  slotRects: { x: number; y: number; w: number; h: number }[];
+}
+
+export function getToolbeltLayout(canvas: HTMLCanvasElement): ToolbeltLayout {
+  const W = canvas.width;
+  const H = canvas.height;
+  const barHeight = Math.max(STUN_CARD_H, TOOLBELT_SLOT_SIZE);
+  const bottomRowY = H - PAD - BOTTOM_BAR_PAD_BOTTOM - barHeight - 8;
+  const barLeftX = W / 2 - BOTTOM_BAR_TOTAL_W / 2;
+  const toolbeltRowX = barLeftX + STUN_CARD_W + BAR_GAP;
+  const toolbeltRowY = bottomRowY + (barHeight - TOOLBELT_SLOT_SIZE) / 2;
+  const slotRects: { x: number; y: number; w: number; h: number }[] = [];
+  for (let i = 0; i < TOOLBELT_SLOT_COUNT; i++) {
+    slotRects.push({
+      x: toolbeltRowX + i * (TOOLBELT_SLOT_SIZE + TOOLBELT_SLOT_GAP),
+      y: toolbeltRowY,
+      w: TOOLBELT_SLOT_SIZE,
+      h: TOOLBELT_SLOT_SIZE
+    });
+  }
+  return { slotRects };
+}
+
+/** Hit-test toolbelt slots. Returns 0..3 for a slot index, or -1 if not over a toolbelt slot. */
+export function hitTestToolbelt(x: number, y: number, canvas: HTMLCanvasElement): number {
+  const layout = getToolbeltLayout(canvas);
+  for (let i = 0; i < layout.slotRects.length; i++) {
+    const r = layout.slotRects[i];
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return i;
+  }
+  return -1;
 }
 
 function drawOrb(

@@ -1,31 +1,31 @@
 // Enemy Manager - manages enemy entities
-import { Movement } from '../components/Movement.ts';
-import { GameConfig } from '../config/GameConfig.ts';
+import { Movement } from '../components/Movement.js';
+import { GameConfig } from '../config/GameConfig.js';
 import type { GameConfigShape } from '../types/config.js';
-import { Utils } from '../utils/Utils.ts';
-import { Entity } from '../entities/Entity.ts';
-import { StatusEffects } from '../components/StatusEffects.ts';
-import { Transform } from '../components/Transform.ts';
-import { Health } from '../components/Health.ts';
-import { Rally } from '../components/Rally.ts';
-import { AI } from '../components/AI.ts';
-import { Combat } from '../components/Combat.ts';
-import { EnemyMovement } from '../components/EnemyMovement.ts';
-import { Renderable } from '../components/Renderable.ts';
-import { Stamina } from '../components/Stamina.ts';
-import { Sprite } from '../components/Sprite.ts';
-import { Animation } from '../components/Animation.ts';
-import { EventTypes } from '../core/EventTypes.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
-import { SceneTiles } from '../config/SceneTiles.ts';
-import { PatrolBehavior } from '../behaviors/PatrolBehavior.ts';
-import { CircularPatrolBehavior } from '../behaviors/CircularPatrolBehavior.ts';
-import { GuardBehavior } from '../behaviors/GuardBehavior.ts';
-import { SleepBehavior } from '../behaviors/SleepBehavior.ts';
-import { PackFollowBehavior } from '../behaviors/PackFollowBehavior.ts';
-import { WanderBehavior } from '../behaviors/WanderBehavior.ts';
-import type { Quest } from '../types/quest.ts';
-import { DELVE_LEVEL } from '../config/questConfig.ts';
+import { Utils } from '../utils/Utils.js';
+import { Entity } from '../entities/Entity.js';
+import { StatusEffects } from '../components/StatusEffects.js';
+import { Transform } from '../components/Transform.js';
+import { Health } from '../components/Health.js';
+import { Rally } from '../components/Rally.js';
+import { AI, type PatrolConfig, type IdleBehavior } from '../components/AI.js';
+import { Combat } from '../components/Combat.js';
+import { EnemyMovement } from '../components/EnemyMovement.js';
+import { Renderable } from '../components/Renderable.js';
+import { Stamina } from '../components/Stamina.js';
+import { Sprite } from '../components/Sprite.js';
+import { Animation } from '../components/Animation.js';
+import { EventTypes } from '../core/EventTypes.js';
+import type { SystemManager } from '../core/SystemManager.js';
+import { SceneTiles } from '../config/SceneTiles.js';
+import { PatrolBehavior } from '../behaviors/PatrolBehavior.js';
+import { CircularPatrolBehavior } from '../behaviors/CircularPatrolBehavior.js';
+import { GuardBehavior } from '../behaviors/GuardBehavior.js';
+import { SleepBehavior } from '../behaviors/SleepBehavior.js';
+import { PackFollowBehavior } from '../behaviors/PackFollowBehavior.js';
+import { WanderBehavior } from '../behaviors/WanderBehavior.js';
+import type { Quest } from '../types/quest.js';
+import { DELVE_LEVEL } from '../config/questConfig.js';
 import type { HitCategory } from '../types/combat.js';
 import { rollWeaponDrop, rollWhetstoneDrop } from '../config/lootConfig.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
@@ -68,12 +68,74 @@ const TIER3_MAP: Record<string, string> = {
 const SPAWN_MARGIN = 70;
 
 interface EntityManagerLike {
+    get(id: string): unknown;
     add(entity: Entity, group: string): void;
     remove(entityId: string): void;
 }
 
 interface ObstacleManagerLike {
     canMoveTo(x: number, y: number, w: number, h: number): boolean;
+    getLast1x1Offset?(): { x: number; y: number } | null;
+    getLastPlacedTiles?(): Array<{ tileId: string; originX: number; originY: number; tileSize?: number }>;
+    damageBreakablesInArc?(player: Entity, rangeSensitivity: number, arcSensitivity: number, hitBreakables: Set<string>): void;
+}
+
+/** Shape of a single enemy type entry in config.enemy.types. */
+interface EnemyTypeConfig {
+    detectionRange?: number;
+    attackRange?: number;
+    maxHealth?: number;
+    moveSpeed?: number;
+    speed?: number;
+    attackDamage?: number;
+    attackArcDegrees?: number;
+    attackCooldown?: number;
+    windUpTime?: number;
+    color?: string;
+    maxStamina?: number;
+    staminaRegen?: number;
+    knockbackResist?: number;
+    stunBuildupPerHit?: number;
+    knockback?: { force?: number; decay?: number };
+    lunge?: { hitRadiusBonus?: number; knockback?: { force?: number } };
+    hitboxPoints?: Array<{ x: number; y: number }>;
+}
+
+/** Sprite manager shape used when resolving goblin 8D sheets. */
+interface SpriteManagerLike {
+    goblin8DSheetKey?: string | null;
+    goblin8DLungeSheetKey?: string | null;
+    findSpriteSheetByPath(path: string): { key: string } | null | undefined;
+}
+
+/** Enemy attack handler shape for lunge damage and hit marking. */
+interface AttackHandlerLike {
+    lungeDamage?: number;
+    markEnemyHit?(target: string): void;
+}
+
+/** Options for generateEnemyPacks / spawnPackAt. */
+interface PackGenOptions {
+    patrol?: boolean;
+    packSpread?: { min: number; max: number };
+    packCountVariance?: number;
+    minPackDistance?: number;
+    idleBehavior?: IdleBehavior | string | null;
+    idleBehaviorConfig?: Record<string, unknown> | null;
+    deferToProximity?: boolean;
+    wanderRadius?: number;
+}
+
+/** Level packSpawn config shape. */
+interface PackSpawnConfig {
+    density?: number;
+    packSize?: { min: number; max: number };
+    patrol?: boolean;
+    packSpread?: { min: number; max: number } | null;
+    packCountVariance?: number;
+    minPackDistance?: number;
+    idleBehavior?: string | null;
+    idleBehaviorConfig?: Record<string, unknown> | null;
 }
 
 /** One deferred scene-tile spawn: spawn when player is within 2 tiles. Resolve entityManager/obstacleManager from systems at spawn time. */
@@ -135,15 +197,15 @@ export class EnemyManager {
         y: number,
         type: string = 'goblin',
         entityManager?: EntityManagerLike | null,
-        patrolConfig: unknown = null,
+        patrolConfig: PatrolConfig | null = null,
         packModifierOverride: string | null = null,
         packHasNoModifier = false,
         roamConfig: { centerX: number; centerY: number; radius: number } | null = null,
-        idleBehavior: string | null = null,
-        idleBehaviorConfig: unknown = null
+        idleBehavior: IdleBehavior | string | null = null,
+        idleBehaviorConfig: Record<string, unknown> | null = null
     ): Entity | null {
         if (type !== 'trainingDummy' && this.enemies.length >= this.maxEnemies) return null;
-        let config = this.config.enemy.types[type] || this.config.enemy.types.goblin;
+        let config = (this.config.enemy.types[type] || this.config.enemy.types.goblin) as EnemyTypeConfig;
         let weaponIdOverride: string | undefined;
         let behaviorIdOverride: string | undefined;
         const isBandit = type === 'bandit' || type === 'banditVeteran' || type === 'banditElite';
@@ -166,7 +228,7 @@ export class EnemyManager {
             ai.roamCenterY = roamConfig.centerY;
             ai.roamRadius = roamConfig.radius;
         }
-        if (idleBehavior != null) ai.idleBehavior = idleBehavior;
+        if (idleBehavior != null) ai.idleBehavior = idleBehavior as IdleBehavior;
         if (idleBehaviorConfig != null) ai.idleBehaviorConfig = idleBehaviorConfig;
         
         // Pack modifier: only when this spawn is from a pack that rolled a modifier (modifierChance in config)
@@ -177,7 +239,7 @@ export class EnemyManager {
         const maxHealth = config.maxHealth * healthMult;
 
         // Get sprite manager for sprite components
-        const spriteManager = this.systems ? this.systems.get('sprites') : null;
+        const spriteManager = this.systems ? this.systems.get<SpriteManagerLike>('sprites') : null;
         
         // Determine sprite path/sheet based on enemy type (prefer 8-direction goblin sheet when available)
         let spritePath = null;
@@ -224,7 +286,7 @@ export class EnemyManager {
                     spriteSheetKey: spriteSheetKey,
                     defaultAnimation: 'idle',
                     animations: (() => {
-                        const anims = {
+                        const anims: Record<string, { spriteSheetKey?: string; frames: number[]; frameDuration: number; useDirection?: boolean; useDirectionAsColumn?: boolean }> = {
                             idle: {
                                 frames: [0],
                                 frameDuration: 0.2,
@@ -275,7 +337,17 @@ export class EnemyManager {
         return enemy;
     }
 
-    generateEnemyPacks(worldWidth, worldHeight, packDensity = 0.008, packSize = { min: 2, max: 5 }, entityManager, obstacleManager, enemyTypes = null, options = null, playerSpawn = null) {
+    generateEnemyPacks(
+        worldWidth: number,
+        worldHeight: number,
+        packDensity = 0.008,
+        packSize = { min: 2, max: 5 },
+        entityManager: EntityManagerLike | null,
+        obstacleManager: ObstacleManagerLike | null,
+        enemyTypes: string[] | null = null,
+        options: PackGenOptions | null = null,
+        playerSpawn: { x: number; y: number } | null = null
+    ): void {
         const tileSize = this.config.world.tileSize;
         let numPacks = Math.floor(worldWidth * worldHeight * packDensity / (tileSize * tileSize));
         const usePatrol = options && options.patrol === true;
@@ -362,13 +434,13 @@ export class EnemyManager {
             let idleBehaviorConfig = (options && options.idleBehaviorConfig) || null;
             if (idleBehavior && !idleBehaviorConfig) {
                 if (idleBehavior === 'guard') {
-                    idleBehaviorConfig = GuardBehavior.createGuardConfig(packCenterX, packCenterY, packRadius);
-                } else if (idleBehavior === 'circularPatrol') {
-                    idleBehaviorConfig = CircularPatrolBehavior.createCircularPatrolConfig(packCenterX, packCenterY, packRadius);
+                    idleBehaviorConfig = GuardBehavior.createGuardConfig(packCenterX, packCenterY, packRadius) as unknown as Record<string, unknown>;
+                } else                 if (idleBehavior === 'circularPatrol') {
+                    idleBehaviorConfig = CircularPatrolBehavior.createCircularPatrolConfig(packCenterX, packCenterY, packRadius) as unknown as Record<string, unknown>;
                 } else if (idleBehavior === 'sleep') {
-                    idleBehaviorConfig = SleepBehavior.createSleepConfig(packRadius * 2);
+                    idleBehaviorConfig = SleepBehavior.createSleepConfig(packRadius * 2) as unknown as Record<string, unknown>;
                 } else if (idleBehavior === 'packFollow') {
-                    idleBehaviorConfig = PackFollowBehavior.createPackFollowConfig(packCenterX, packCenterY, packRadius);
+                    idleBehaviorConfig = PackFollowBehavior.createPackFollowConfig(packCenterX, packCenterY, packRadius) as unknown as Record<string, unknown>;
                 } else if (idleBehavior === 'patrol') {
                     idleBehavior = null;
                     idleBehaviorConfig = null;
@@ -379,7 +451,7 @@ export class EnemyManager {
                 idleBehaviorConfig = null;
             }
 
-            const packConfig = this.config.enemy.pack || {};
+            const packConfig = (this.config.enemy.pack || {}) as { modifierChance?: number };
             const modifierChance = typeof packConfig.modifierChance === 'number' ? packConfig.modifierChance : 0.5;
             const allModifierNames = Object.keys(this.config.packModifiers || {});
             const packGetsModifier = allModifierNames.length > 0 && Math.random() < modifierChance;
@@ -413,8 +485,8 @@ export class EnemyManager {
                 const clampedY = Utils.clamp(y, SPAWN_MARGIN, worldHeight - SPAWN_MARGIN);
 
                 const roamConfig = { centerX: packCenterX, centerY: packCenterY, radius: packRadius };
-                const finalIdleConfig = (idleBehavior === 'packFollow')
-                    ? PackFollowBehavior.createPackFollowConfig(packCenterX, packCenterY, packRadius, { offsetAngle: Math.random() * Math.PI * 2 })
+                const finalIdleConfig: Record<string, unknown> | null = (idleBehavior === 'packFollow')
+                    ? PackFollowBehavior.createPackFollowConfig(packCenterX, packCenterY, packRadius, { offsetAngle: Math.random() * Math.PI * 2 }) as unknown as Record<string, unknown>
                     : idleBehaviorConfig;
                 if (!obstacleManager || obstacleManager.canMoveTo(clampedX, clampedY, 25, 25)) {
                     this.spawnEnemy(clampedX, clampedY, resolvedType, entityManager, patrolConfig, packModifier, packHasNoModifier, roamConfig, idleBehavior, finalIdleConfig);
@@ -434,7 +506,16 @@ export class EnemyManager {
      * Spawn a single pack at a given center (for scene-tile spawn hints).
      * @param {Object} [options] - Optional. { patrol: true } to give this pack a shared patrol path.
      */
-        spawnPackAt(centerX, centerY, radius, packSize, entityManager, obstacleManager, enemyTypes, options = null) {
+        spawnPackAt(
+            centerX: number,
+            centerY: number,
+            radius: number,
+            packSize: number | { min: number; max: number },
+            entityManager: EntityManagerLike | null,
+            obstacleManager: ObstacleManagerLike | null,
+            enemyTypes: string[] | null,
+            options: PackGenOptions | null = null
+        ): void {
         const levelConfig = this.config.levels?.[this.currentLevel] as { worldWidth?: number; worldHeight?: number } | undefined;
         const worldW = levelConfig?.worldWidth ?? this.config.world?.width ?? 2400;
         const worldH = levelConfig?.worldHeight ?? this.config.world?.height ?? 2400;
@@ -459,7 +540,7 @@ export class EnemyManager {
         const patrolConfig = usePatrol
             ? PatrolBehavior.createPatrolConfigForPack(centerX, centerY, packRadius)
             : null;
-        const packConfig = this.config.enemy.pack || {};
+        const packConfig = (this.config.enemy.pack || {}) as { modifierChance?: number };
         const modifierChance = typeof packConfig.modifierChance === 'number' ? packConfig.modifierChance : 0.5;
         const allModifierNames = Object.keys(this.config.packModifiers || {});
         const packGetsModifier = allModifierNames.length > 0 && Math.random() < modifierChance;
@@ -523,7 +604,7 @@ export class EnemyManager {
         playerSpawn: { x: number; y: number } | null = null,
         options?: { delveFloor?: number }
     ): void {
-        const levelConfig = this.config.levels[level] as { packSpawn?: unknown; bossSpawn?: { x: number; y: number; type: string }; worldWidth?: number; worldHeight?: number; enemyTypes?: string[]; obstacles?: unknown; [key: string]: unknown } | undefined;
+        const levelConfig = this.config.levels[level] as { packSpawn?: PackSpawnConfig; bossSpawn?: { x: number; y: number; type: string }; worldWidth?: number; worldHeight?: number; enemyTypes?: string[]; obstacles?: { useSceneTiles?: boolean }; [key: string]: unknown } | undefined;
         if (!levelConfig) {
             console.warn(`No level config for level ${level}`);
             return;
@@ -537,9 +618,7 @@ export class EnemyManager {
         if (bossSpawn && bossSpawn.type) {
             let bx = bossSpawn.x ?? 0;
             let by = bossSpawn.y ?? 0;
-            const offset = obstacleManager && typeof (obstacleManager as { getLast1x1Offset?: () => { x: number; y: number } | null }).getLast1x1Offset === 'function'
-                ? (obstacleManager as { getLast1x1Offset(): { x: number; y: number } | null }).getLast1x1Offset()
-                : null;
+            const offset = obstacleManager?.getLast1x1Offset?.() ?? null;
             if (offset) {
                 bx += offset.x;
                 by += offset.y;
@@ -564,11 +643,11 @@ export class EnemyManager {
         const worldConfig = this.config.world;
         const worldWidth = (levelConfig.worldWidth != null) ? levelConfig.worldWidth : worldConfig.width;
         const worldHeight = (levelConfig.worldHeight != null) ? levelConfig.worldHeight : worldConfig.height;
-        const packConfig = levelConfig.packSpawn;
+        const packConfig = levelConfig.packSpawn as PackSpawnConfig | undefined;
         let enemyTypes = levelConfig.enemyTypes || null;
-        const diff = this.activeQuest?.difficulty;
-        let density = (packConfig.density ?? 0.008) * (diff?.packDensityMultiplier ?? 1);
-        const basePackSize = packConfig.packSize ?? { min: 2, max: 5 };
+        const diff = this.activeQuest?.difficulty as { packDensityMultiplier?: number; packSizeBonus?: number } | undefined;
+        let density = (packConfig?.density ?? 0.008) * (diff?.packDensityMultiplier ?? 1);
+        const basePackSize = packConfig?.packSize ?? { min: 2, max: 5 };
         let packSizeBonus = Math.max(0, diff?.packSizeBonus ?? 0);
 
         // Delve: scale difficulty and enemy mix by floor
@@ -590,13 +669,13 @@ export class EnemyManager {
             min: basePackSize.min,
             max: Math.min(10, basePackSize.max + packSizeBonus),
         };
-        const packOptions = {
-            patrol: !!packConfig.patrol,
-            packSpread: packConfig.packSpread || null,
-            packCountVariance: packConfig.packCountVariance,
-            minPackDistance: packConfig.minPackDistance,
-            idleBehavior: packConfig.idleBehavior || null,
-            idleBehaviorConfig: packConfig.idleBehaviorConfig || null,
+        const packOptions: PackGenOptions = {
+            patrol: !!packConfig?.patrol,
+            packSpread: packConfig?.packSpread || null,
+            packCountVariance: packConfig?.packCountVariance,
+            minPackDistance: packConfig?.minPackDistance,
+            idleBehavior: packConfig?.idleBehavior || null,
+            idleBehaviorConfig: packConfig?.idleBehaviorConfig || null,
             deferToProximity: true,
         };
         this.generateEnemyPacks(
@@ -614,29 +693,30 @@ export class EnemyManager {
         const SPAWN_EXCLUDE_RADIUS = 300;
 
         // Scene-tile spawn hints: defer until player is within 2 tiles (see update())
-        const obstacles = levelConfig.obstacles || {};
-        if (obstacles.useSceneTiles && obstacleManager && typeof obstacleManager.getLastPlacedTiles === 'function') {
+        const obstacles = (levelConfig.obstacles || {}) as { useSceneTiles?: boolean };
+        if (obstacles.useSceneTiles && obstacleManager?.getLastPlacedTiles) {
             const placed = obstacleManager.getLastPlacedTiles();
             const tileSizeDefault = SceneTiles.defaultTileSize;
             for (const cell of placed) {
                 const tile = SceneTiles.getTile(cell.tileId);
-                if (!tile || !tile.spawn || tile.spawn.type !== 'pack') continue;
+                const spawn = tile?.spawn as { type?: string; count?: number; enemyTypes?: string[] } | undefined;
+                if (!tile || !spawn || spawn.type !== 'pack') continue;
                 const tileSize = cell.tileSize != null ? cell.tileSize : tileSizeDefault;
                 const centerX = cell.originX + tileSize / 2;
                 const centerY = cell.originY + tileSize / 2;
                 if (playerSpawn && typeof playerSpawn.x === 'number' && typeof playerSpawn.y === 'number') {
                     if (Utils.distance(centerX, centerY, playerSpawn.x, playerSpawn.y) < SPAWN_EXCLUDE_RADIUS) continue;
                 }
-                const count = (tile.spawn.count != null && tile.spawn.count > 0) ? tile.spawn.count : 1;
+                const count = (spawn.count != null && spawn.count > 0) ? spawn.count : 1;
                 const tileWanderRadius = tileSize * 0.45;
                 const tilePackOptions: Record<string, unknown> = {
-                    patrol: !!packConfig.patrol,
-                    packSpread: packConfig.packSpread || null,
+                    patrol: !!packConfig?.patrol,
+                    packSpread: packConfig?.packSpread || null,
                     wanderRadius: tileWanderRadius,
                     idleBehavior: 'wander' as const,
                     idleBehaviorConfig: WanderBehavior.createWanderConfig(centerX, centerY, tileWanderRadius)
                 };
-                const tileEnemyTypes = (tile.spawn.enemyTypes && tile.spawn.enemyTypes.length > 0) ? tile.spawn.enemyTypes : enemyTypes;
+                const tileEnemyTypes = (spawn.enemyTypes && spawn.enemyTypes.length > 0) ? spawn.enemyTypes : enemyTypes;
                 this.pendingSceneTileSpawns.push({
                     centerX,
                     centerY,
@@ -651,8 +731,8 @@ export class EnemyManager {
     }
 
     update(deltaTime: number, systems: SystemManager | null): void {
-        const entityManager = systems.get('entities');
-        const obstacleManager = systems.get('obstacles');
+        const entityManager = systems?.get<EntityManagerLike>('entities') ?? null;
+        const obstacleManager = systems?.get<ObstacleManagerLike>('obstacles') ?? null;
         const packConfig = this.config.enemy.pack || { radius: 180, minAllies: 2 };
         const packRadius = packConfig.radius;
         const minAllies = packConfig.minAllies;
@@ -663,7 +743,7 @@ export class EnemyManager {
         const MAX_TILE_SPAWNS_PER_FRAME = 2;
         const levelConfig = this.config.levels[this.currentLevel] as { obstacles?: { sceneTileLayout?: { tileSize?: number } } } | undefined;
         const sceneTileSize = levelConfig?.obstacles?.sceneTileLayout?.tileSize ?? SceneTiles.defaultTileSize;
-        const playerEntity = systems?.get('entities')?.get('player');
+        const playerEntity = entityManager?.get('player') as Entity | undefined;
         const playerTransform = playerEntity?.getComponent(Transform);
         if (playerTransform && entityManager && obstacleManager && this.pendingSceneTileSpawns.length > 0) {
             const playerTileCol = Math.floor(playerTransform.x / sceneTileSize);
@@ -863,7 +943,7 @@ export class EnemyManager {
                         if (dist <= packRadius) sameTypeCount++;
                     }
                     if (sameTypeCount >= minAllies) {
-                        const def = packModifiers[modifierName];
+                        const def = packModifiers[modifierName] as { speedMultiplier?: number; damageMultiplier?: number; knockbackResist?: number; attackCooldownMultiplier?: number; stunBuildupPerHitMultiplier?: number; detectionRangeMultiplier?: number };
                         const stats = {
                             speedMultiplier: def.speedMultiplier,
                             damageMultiplier: def.damageMultiplier,
@@ -991,7 +1071,7 @@ export class EnemyManager {
                     if (enemyMovement) {
                         const dx = enemyTransform.x - transform.x;
                         const dy = enemyTransform.y - transform.y;
-                        const knockbackForce = combat.currentAttackKnockbackForce ?? this.config.player.knockback.force;
+                        const knockbackForce = combat.currentAttackKnockbackForce ?? (this.config.player as { knockback?: { force?: number } }).knockback?.force ?? 0;
                         enemyMovement.applyKnockback(dx, dy, knockbackForce);
                     }
                 }
@@ -1016,8 +1096,8 @@ export class EnemyManager {
 
         // Breakables: damage obstacles in attack arc (barrels, rubble, etc.)
         if (combat.isPlayer && combat.playerAttack && this.systems) {
-            const obstacleManager = this.systems.get('obstacles');
-            if (obstacleManager && typeof obstacleManager.damageBreakablesInArc === 'function') {
+            const obstacleManager = this.systems.get<ObstacleManagerLike>('obstacles');
+            if (obstacleManager?.damageBreakablesInArc) {
                 obstacleManager.damageBreakablesInArc(player, rangeSensitivity, arcSensitivity, combat.playerAttack.hitBreakables);
             }
         }
@@ -1056,7 +1136,8 @@ export class EnemyManager {
             
             // Check for lunge attack collision (continuous check during lunge)
             // Only check lunge if enemy is actively lunging (movement-wise)
-            if (enemyMovement && enemyMovement.isLunging && enemyCombat.isLunging) {
+            const movementWithLunge = enemyMovement as (Movement & { isLunging?: boolean }) | null;
+            if (movementWithLunge && movementWithLunge.isLunging && enemyCombat.isLunging) {
                 const currentDist = Utils.distance(
                     enemyTransform.x, enemyTransform.y,
                     playerTransform.x, playerTransform.y
@@ -1067,14 +1148,14 @@ export class EnemyManager {
                 const playerRadius = playerTransform.width / 2;
                 const ai = enemy.getComponent(AI);
                 const enemyType = ai ? ai.enemyType : 'goblin';
-                const enemyConfig = this.config.enemy.types[enemyType] || this.config.enemy.types.goblin;
+                const enemyConfig = (this.config.enemy.types[enemyType] || this.config.enemy.types.goblin) as EnemyTypeConfig;
                 const baseBuffer = 10; // Extra pixels for more forgiving collision
-                const hitBonus = (enemyConfig.lunge && enemyConfig.lunge.hitRadiusBonus) || 0;
+                const hitBonus = enemyConfig.lunge?.hitRadiusBonus ?? 0;
                 const collisionDist = enemyRadius + playerRadius + baseBuffer + hitBonus;
                 
                 if (currentDist < collisionDist && !enemyCombat.attackProcessed) {
-                    const h = enemyCombat.enemyAttackHandler;
-                    const lungeDamage = h && h.lungeDamage != null ? h.lungeDamage : enemyCombat.attackDamage;
+                    const h = enemyCombat.enemyAttackHandler as AttackHandlerLike | null | undefined;
+                    const lungeDamage = h?.lungeDamage != null ? h.lungeDamage : enemyCombat.attackDamage;
                     let finalDamage = lungeDamage;
                     const attackerStatusLunge = enemy.getComponent(StatusEffects);
                     if (attackerStatusLunge && attackerStatusLunge.packDamageMultiplier != null) finalDamage *= attackerStatusLunge.packDamageMultiplier;
@@ -1108,26 +1189,27 @@ export class EnemyManager {
                         let baseStun = enemyConfig.stunBuildupPerHit ?? 0;
                         const packStunMult = attackerStatusLunge && attackerStatusLunge.packStunBuildupMultiplier != null ? attackerStatusLunge.packStunBuildupMultiplier : 1;
                         baseStun *= packStunMult;
-                        const mult = blocked ? (this.config.player.stun?.blockedMultiplier ?? 0.5) : 1;
+                        const playerStunConfig = this.config.player as { stun?: { blockedMultiplier?: number } };
+                        const mult = blocked ? (playerStunConfig.stun?.blockedMultiplier ?? 0.5) : 1;
                         playerStatus.addStunBuildup(baseStun * mult);
                     }
                     if (playerMovement && !blocked) {
-                        const knockbackConfig = enemyConfig.knockback || { force: 160, decay: 0.88 };
+                        const knockbackConfig = enemyConfig.knockback ?? { force: 160, decay: 0.88 };
                         const lungeKnockbackForce = enemyConfig.lunge?.knockback?.force ?? knockbackConfig.force;
                         const dx = playerTransform.x - enemyTransform.x;
                         const dy = playerTransform.y - enemyTransform.y;
                         playerMovement.applyKnockback(dx, dy, lungeKnockbackForce);
                     }
-                    if (h) {
+                    if (h?.markEnemyHit) {
                         h.markEnemyHit('player'); // single hit per lunge; Combat.attackProcessed reads this
                     }
                 }
             }
             // Check if enemy attack has completed wind-up and is ready to hit (normal attacks)
             // Only process normal attacks if not currently lunging
-            if ((!enemyMovement || !enemyMovement.isLunging) && enemyCombat.isAttacking && !enemyCombat.attackProcessed && !enemyCombat.isLunging) {
-                const h = enemyCombat.enemyAttackHandler;
-                const useReleasePhase = h && h.hasChargeRelease && h.hasChargeRelease();
+            if ((!movementWithLunge || !movementWithLunge.isLunging) && enemyCombat.isAttacking && !enemyCombat.attackProcessed && !enemyCombat.isLunging) {
+                const h = enemyCombat.enemyAttackHandler as (AttackHandlerLike & { hasChargeRelease?(): boolean; isInReleasePhase?: boolean; getSlashSweepProgress?(): number }) | null | undefined;
+                const useReleasePhase = h?.hasChargeRelease?.();
                 // AOE in front (e.g. chieftain club slam): circle centered in front of enemy
                 const aoeInFront = enemyCombat.currentAttackAoeInFront && enemyCombat.currentAttackAoeRadius > 0;
                 // Ogre slam: destroy any terrain in AOE once per slam
@@ -1225,18 +1307,19 @@ export class EnemyManager {
                     if (ps) finalDamage *= Math.max(0, 1 - getPlayerArmorReduction(ps));
                     playerHealth.takeDamage(finalDamage, blocked, parried);
                     const enemyTypeForStun = ai ? ai.enemyType : 'goblin';
-                    const enemyConfigForStun = this.config.enemy.types[enemyTypeForStun] || this.config.enemy.types.goblin;
+                    const enemyConfigForStun = (this.config.enemy.types[enemyTypeForStun] || this.config.enemy.types.goblin) as EnemyTypeConfig;
                     const playerStatus = player.getComponent(StatusEffects);
                     if (playerStatus) {
                         let baseStun = enemyCombat.currentAttackStunBuildup || (enemyConfigForStun.stunBuildupPerHit ?? 0);
                         if (attackerStatus && attackerStatus.packStunBuildupMultiplier != null) baseStun *= attackerStatus.packStunBuildupMultiplier;
-                        const mult = blocked ? (this.config.player.stun?.blockedMultiplier ?? 0.5) : 1;
+                        const playerStunCfg = this.config.player as { stun?: { blockedMultiplier?: number } };
+                        const mult = blocked ? (playerStunCfg.stun?.blockedMultiplier ?? 0.5) : 1;
                         playerStatus.addStunBuildup(baseStun * mult);
                     }
 
                     // Apply knockback even when blocked (blocking reduces damage/stun but not push)
                     if (playerMovement) {
-                        const knockbackConfig = enemyConfigForStun.knockback || { force: 160, decay: 0.88 };
+                        const knockbackConfig = enemyConfigForStun.knockback ?? { force: 160, decay: 0.88 };
                         const baseForce = enemyCombat.currentAttackKnockbackForce ?? knockbackConfig.force;
                         // AOE-in-front: knockback away from slam center; otherwise away from enemy
                         let dx, dy;
@@ -1252,7 +1335,7 @@ export class EnemyManager {
                         playerMovement.applyKnockback(dx, dy, baseForce);
                     }
 
-                    if (h) {
+                    if (h?.markEnemyHit) {
                         h.markEnemyHit('player'); // single hit per attack; Combat.attackProcessed reads this
                     }
                 }
@@ -1280,8 +1363,8 @@ export class EnemyManager {
         this.enemyFarSince.clear();
         this.enemiesKilledThisLevel = 0;
         this.killsByTypeThisLevel = {};
-        const hazardManager = this.systems ? this.systems.get('hazards') : null;
-        if (hazardManager && hazardManager.clearFlamePillars) {
+        const hazardManager = this.systems?.get<{ clearFlamePillars(): void }>('hazards');
+        if (hazardManager?.clearFlamePillars) {
             hazardManager.clearFlamePillars();
         }
         // Clear all current enemies

@@ -1,7 +1,7 @@
 // Camera System
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
+import type { SystemManager } from '../core/SystemManager.js';
 import type { GameConfigShape } from '../types/config.js';
 
 interface TransformLike {

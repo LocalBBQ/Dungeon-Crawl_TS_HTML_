@@ -5,9 +5,10 @@
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getActiveWeaponSet, setActiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import { getInventoryLayout, getChestLayout, getShopLayout, hitTestInventory, hitTestChest, hitTestShop, ensureInventoryInitialized, type DragState, HEADER_H, SHOP_HEADER_HEIGHT } from '../ui/InventoryChestCanvas.js';
+import { hitTestToolbelt } from '../ui/StatsHUDCanvas.js';
 import type { TooltipHover } from '../types/tooltip.js';
 import { getRerollOverlayLayout, hitTestRerollOverlay, REROLL_HEADER_H } from '../ui/RerollOverlay.js';
-import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_ZOOM_STEP } from '../systems/renderers/MinimapRenderer.ts';
+import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_ZOOM_STEP } from '../systems/renderers/MinimapRenderer.js';
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { getArmor } from '../armor/armorConfigs.js';
 import {
@@ -26,6 +27,10 @@ import {
     moveToRerollSlot,
     moveFromRerollSlotTo,
     useWhetstoneOnWeapon,
+    addPotionToToolbeltFromInventory,
+    removePotionFromToolbeltToInventory,
+    getTotalGoldFromInventory,
+    tryConsumeGold,
 } from '../state/InventoryActions.js';
 import { equipArmorFromInventory, unequipArmorToInventory, swapArmorWithInventory, swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
 
@@ -193,14 +198,12 @@ export class InventoryChestUIController {
                 return true;
             }
             if (hit?.type === 'repair') {
-                const gold = (ps.gold as number) ?? 0;
-                if (gold >= hit.cost) {
-                    ps.gold = gold - hit.cost;
+                if (getTotalGoldFromInventory(ps) >= hit.cost && tryConsumeGold(ps, hit.cost)) {
                     if (hit.source === 'mainhand') setActiveWeaponSet(ps, { mainhandDurability: MAX_WEAPON_DURABILITY });
                     else if (hit.source === 'offhand') setActiveWeaponSet(ps, { offhandDurability: MAX_WEAPON_DURABILITY });
                     else if (hit.source === 'inventory' && 'bagIndex' in hit) {
                         const slot = ps.inventorySlots?.[hit.bagIndex];
-                        if (slot) ps.inventorySlots[hit.bagIndex] = { key: slot.key, durability: MAX_WEAPON_DURABILITY };
+                        if (slot && 'key' in slot) ps.inventorySlots[hit.bagIndex] = { key: slot.key, durability: MAX_WEAPON_DURABILITY };
                     } else if (hit.source === 'armor' && 'armorSlot' in hit) {
                         const s = hit.armorSlot;
                         if (s === 'head') ps.equippedArmorHeadDurability = MAX_ARMOR_DURABILITY;
@@ -209,19 +212,17 @@ export class InventoryChestUIController {
                         else if (s === 'feet') ps.equippedArmorFeetDurability = MAX_ARMOR_DURABILITY;
                     } else if (hit.source === 'armor-bag' && 'armorBagIndex' in hit) {
                         const item = ps.inventorySlots?.[hit.armorBagIndex];
-                        if (item) ps.inventorySlots![hit.armorBagIndex] = { key: item.key, durability: MAX_ARMOR_DURABILITY };
+                        if (item && 'key' in item) ps.inventorySlots![hit.armorBagIndex] = { key: item.key, durability: MAX_ARMOR_DURABILITY };
                     }
                     g.refreshInventoryPanel();
                 }
                 return true;
             }
             if (hit?.type === 'armor-item') {
-                const gold = (ps.gold as number) ?? 0;
-                if (gold >= hit.price) {
+                if (getTotalGoldFromInventory(ps) >= hit.price && tryConsumeGold(ps, hit.price)) {
                     ensureInventoryInitialized(ps);
                     const empty = ps.inventorySlots?.findIndex((s) => s == null) ?? -1;
                     if (empty >= 0) {
-                        ps.gold = gold - hit.price;
                         ps.inventorySlots![empty] = { key: hit.armorKey, durability: MAX_ARMOR_DURABILITY };
                         g.refreshInventoryPanel();
                     }
@@ -244,13 +245,11 @@ export class InventoryChestUIController {
                 return true;
             }
             if (hit?.type === 'item') {
-                const gold = (ps.gold as number) ?? 0;
-                if (gold >= hit.price) {
+                if (getTotalGoldFromInventory(ps) >= hit.price && tryConsumeGold(ps, hit.price)) {
                     ensureInventoryInitialized(ps);
                     const slots = ps.inventorySlots;
                     const idx = slots?.findIndex((s) => s == null) ?? -1;
                     if (idx >= 0) {
-                        ps.gold = gold - hit.price;
                         setInventorySlot(ps, idx, { key: hit.weaponKey, durability: MAX_WEAPON_DURABILITY });
                         g.refreshInventoryPanel();
                     }
@@ -372,7 +371,7 @@ export class InventoryChestUIController {
             ds.pointerY = y;
             return true;
         }
-        if (invHit?.type === 'inventory-slot' && (invHit.weaponKey || invHit.itemType === 'whetstone' || invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion')) {
+        if (invHit?.type === 'inventory-slot' && (invHit.weaponKey || invHit.itemType === 'whetstone' || invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion' || invHit.itemType === 'gold')) {
             if (invHit.itemType === 'whetstone') {
                 ds.isDragging = true;
                 ds.sourceSlotIndex = invHit.index;
@@ -383,7 +382,7 @@ export class InventoryChestUIController {
                 ds.pointerY = y;
                 return true;
             }
-            if (invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion') {
+            if (invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion' || invHit.itemType === 'gold') {
                 ds.isDragging = true;
                 ds.sourceSlotIndex = invHit.index;
                 ds.sourceContext = 'inventory';
@@ -431,6 +430,20 @@ export class InventoryChestUIController {
                 ds.armorKey = key;
                 ds.sourceArmorSlot = invHit.slot;
                 ds.sourceContext = 'armor';
+                ds.pointerX = x;
+                ds.pointerY = y;
+                return true;
+            }
+        }
+        if (ps.inventoryOpen || ps.chestOpen) {
+            const tbIdx = hitTestToolbelt(x, y, g.canvas);
+            const tbSlot = tbIdx >= 0 ? ps.toolbeltSlots?.[tbIdx] : null;
+            if (tbIdx >= 0 && tbSlot && tbSlot.type === 'potion' && tbSlot.count >= 1) {
+                ds.isDragging = true;
+                ds.sourceContext = 'toolbelt';
+                ds.sourceToolbeltIndex = tbIdx;
+                ds.dragConsumableType = 'potion';
+                ds.weaponKey = '';
                 ds.pointerX = x;
                 ds.pointerY = y;
                 return true;
@@ -529,6 +542,12 @@ export class InventoryChestUIController {
             g.setTooltipHover({ type: 'potion', x, y, count });
             return;
         }
+        if (invHit?.type === 'inventory-slot' && invHit.itemType === 'gold') {
+            const slot = ps.inventorySlots?.[invHit.index];
+            const count = slot && 'count' in slot ? slot.count : 1;
+            g.setTooltipHover({ type: 'gold', x, y, count });
+            return;
+        }
         if (invHit?.type === 'inventory-slot' && invHit.weaponKey) {
             if (getArmor(invHit.weaponKey)) {
                 g.setTooltipHover({ type: 'armor', armorKey: invHit.weaponKey, x, y, durability: invHit.durability });
@@ -575,12 +594,15 @@ export class InventoryChestUIController {
         const sourceContext = ds.sourceContext;
         const sourceArmorSlot = ds.sourceArmorSlot;
         const sourceArmorInvIndex = ds.sourceContext === 'inventory' && ds.armorKey ? ds.sourceSlotIndex : undefined;
+        const sourceToolbeltIndex = ds.sourceToolbeltIndex;
         const dragDurability = ds.durability;
         const wasWhetstone = ds.isWhetstone === true;
+        const wasPotionDrag = ds.dragConsumableType === 'potion';
         ds.isDragging = false;
         ds.weaponKey = '';
         ds.armorKey = undefined;
         ds.sourceArmorSlot = undefined;
+        ds.sourceToolbeltIndex = undefined;
         ds.durability = undefined;
         ds.sourceSlotIndex = -1;
         ds.isWhetstone = false;
@@ -588,6 +610,23 @@ export class InventoryChestUIController {
 
         const ps = g.playingState;
         const sync = g.syncCombat;
+
+        const tbIdx = hitTestToolbelt(x, y, g.canvas);
+        if (tbIdx >= 0 && wasPotionDrag && sourceContext === 'inventory' && sourceIndex >= 0) {
+            addPotionToToolbeltFromInventory(ps, sourceIndex, tbIdx);
+            g.refreshInventoryPanel();
+            return true;
+        }
+        if (tbIdx >= 0 && wasPotionDrag && sourceContext === 'toolbelt' && sourceToolbeltIndex !== undefined && sourceToolbeltIndex >= 0 && tbIdx !== sourceToolbeltIndex) {
+            const a = ps.toolbeltSlots?.[sourceToolbeltIndex];
+            const b = ps.toolbeltSlots?.[tbIdx];
+            if (ps.toolbeltSlots) {
+                ps.toolbeltSlots[sourceToolbeltIndex] = b ?? null;
+                ps.toolbeltSlots[tbIdx] = a ?? null;
+            }
+            g.refreshInventoryPanel();
+            return true;
+        }
 
         if (!ps.inventorySlots || ps.inventorySlots.length < INVENTORY_SLOT_COUNT) {
             if (armorKey && (ps.inventoryOpen || ps.chestOpen)) {
@@ -616,7 +655,7 @@ export class InventoryChestUIController {
             const rerollLayout = getRerollOverlayLayout(g.canvas, ps);
             const s = rerollLayout.slot;
             const inRerollSlot = x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h;
-            if (inRerollSlot && sourceContext !== 'rerollSlot') {
+            if (inRerollSlot && sourceContext !== 'rerollSlot' && (sourceContext === 'inventory' || sourceContext === 'chest' || sourceContext === 'equipment')) {
                 moveToRerollSlot(ps, sourceContext, sourceIndex, sync);
                 g.refreshInventoryPanel();
                 return true;

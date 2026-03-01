@@ -7,6 +7,10 @@ import { INVENTORY_SLOT_COUNT, isHerbSlot, isMushroomSlot, isWhetstoneSlot } fro
 import { getStrategyRecipe, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
 import { addPotionToInventory, useWhetstoneOnWeapon } from './InventoryActions.js';
 
+export type ExecuteRecipeResult =
+  | { success: true }
+  | { success: false; reason: string };
+
 export interface StrategyCraftingContext {
   /** Add one heal charge to the player (e.g. crafted potion). */
   addHealCharge?(): void;
@@ -62,46 +66,51 @@ function findWhetstoneSlotIndex(ps: PlayingStateShape): number {
 }
 
 /**
- * Execute a strategy recipe by id. Returns true if the recipe was unlocked and executed successfully.
+ * Execute a strategy recipe by id. Returns a result with success and optional failure reason.
  */
 export function executeRecipe(
   ps: PlayingStateShape,
   recipeId: string,
   context?: StrategyCraftingContext
-): boolean {
+): ExecuteRecipeResult {
   const unlocked = migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []);
-  if (!unlocked.includes(recipeId)) return false;
+  if (!unlocked.includes(recipeId)) return { success: false, reason: 'Recipe not unlocked' };
 
   const recipe = getStrategyRecipe(recipeId);
-  if (!recipe) return false;
+  if (!recipe) return { success: false, reason: 'Unknown recipe' };
 
   const out = recipe.output;
 
   if (out.type === 'craft') {
     const herbNeed = out.consumes.herb ?? 0;
     const mushroomNeed = out.consumes.mushroom ?? 0;
-    if (countHerbs(ps) < herbNeed || countMushrooms(ps) < mushroomNeed) return false;
+    const hasHerb = countHerbs(ps) >= herbNeed;
+    const hasMushroom = countMushrooms(ps) >= mushroomNeed;
+    if (!hasHerb && !hasMushroom) return { success: false, reason: 'Not enough herbs and mushrooms' };
+    if (!hasHerb) return { success: false, reason: 'Not enough herbs' };
+    if (!hasMushroom) return { success: false, reason: 'Not enough mushrooms' };
     consumeHerbs(ps, herbNeed);
     consumeMushrooms(ps, mushroomNeed);
     if (out.produces === 'healCharge' && context?.addHealCharge) {
       context.addHealCharge();
     } else if (out.produces === 'potion') {
-      addPotionToInventory(ps);
+      if (!addPotionToInventory(ps)) return { success: false, reason: 'Inventory full' };
     }
-    return true;
+    return { success: true };
   }
 
   if (out.type === 'use') {
-    if (out.use !== 'whetstone') return false;
+    if (out.use !== 'whetstone') return { success: false, reason: 'Invalid recipe' };
     const slotIndex = findWhetstoneSlotIndex(ps);
-    if (slotIndex < 0) return false;
-    return useWhetstoneOnWeapon(ps, slotIndex, out.target);
+    if (slotIndex < 0) return { success: false, reason: 'No whetstone' };
+    const ok = useWhetstoneOnWeapon(ps, slotIndex, out.target);
+    return ok ? { success: true } : { success: false, reason: 'Could not sharpen weapon' };
   }
 
   if (out.type === 'ability') {
     // Placeholder for future ability system
-    return true;
+    return { success: true };
   }
 
-  return false;
+  return { success: false, reason: 'Unknown recipe type' };
 }

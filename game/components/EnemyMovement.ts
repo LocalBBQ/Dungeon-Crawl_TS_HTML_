@@ -1,13 +1,13 @@
 // Enemy-specific movement component - type-aware for different enemy behaviors
 import type { SystemsMap } from '../types/systems.js';
-import { Movement } from './Movement.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
-import { Transform } from './Transform.ts';
-import { StatusEffects } from './StatusEffects.ts';
-import { Combat } from './Combat.ts';
-import { Renderable } from './Renderable.ts';
-import { AI } from './AI.ts';
+import { Movement } from './Movement.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
+import { Transform } from './Transform.js';
+import { StatusEffects } from './StatusEffects.js';
+import { Combat } from './Combat.js';
+import { Renderable } from './Renderable.js';
+import { AI } from './AI.js';
 
 interface LungeConfig {
   lungeSpeed?: number;

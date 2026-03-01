@@ -11,18 +11,21 @@ import {
   type MushroomConsumable,
   type HoneyConsumable,
   type PotionConsumable,
+  type GoldConsumable,
   getSlotKey,
   getActiveWeaponSet,
   setActiveWeaponSet,
   INVENTORY_SLOT_COUNT,
   MAX_WEAPON_DURABILITY,
   CHEST_SLOT_COUNT,
+  TOOLBELT_SLOT_COUNT,
   isWeaponInstance,
   isWhetstoneSlot,
   isHerbSlot,
   isMushroomSlot,
   isHoneySlot,
-  isPotionSlot
+  isPotionSlot,
+  isGoldSlot
 } from './PlayingState.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
@@ -334,7 +337,7 @@ export function rerollEnchantSlot(ps: PlayingStateShape, which: 'prefix' | 'suff
   const instance = ps.rerollSlotItem;
   if (!instance?.key) return false;
   const cost = which === 'both' ? REROLL_BOTH_COST : which === 'prefix' ? REROLL_PREFIX_COST : REROLL_SUFFIX_COST;
-  if ((ps.gold ?? 0) < cost) return false;
+  if (getTotalGoldFromInventory(ps) < cost) return false;
   const enchantSlot: EnchantmentSlot = getEquipSlotForWeapon(instance.key) === 'offhand' ? 'offhand' : 'weapon';
   if (which === 'prefix' || which === 'both') {
     const rolled = rollEnchantForSlot(enchantSlot);
@@ -344,8 +347,7 @@ export function rerollEnchantSlot(ps: PlayingStateShape, which: 'prefix' | 'suff
     const rolled = rollEnchantForSlot(enchantSlot);
     instance.suffixId = rolled?.id;
   }
-  ps.gold = (ps.gold ?? 0) - cost;
-  return true;
+  return tryConsumeGold(ps, cost);
 }
 
 /**
@@ -576,6 +578,56 @@ export function addPotionToInventory(ps: PlayingStateShape): boolean {
 }
 
 /**
+ * Total gold from all inventory slots. Migrates legacy ps.gold into inventory on first read.
+ */
+export function getTotalGoldFromInventory(ps: PlayingStateShape): number {
+  const legacy = (ps as { gold?: number }).gold;
+  if (legacy != null && legacy > 0) {
+    addGoldToInventory(ps, legacy);
+    (ps as { gold?: number }).gold = 0;
+  }
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return 0;
+  return ps.inventorySlots.reduce((sum, s) => (isGoldSlot(s) ? sum + s.count : sum), 0);
+}
+
+/**
+ * Add gold to inventory: stack with existing gold slot or use first empty slot.
+ * Returns true if all amount was added (inventory had room).
+ */
+export function addGoldToInventory(ps: PlayingStateShape, amount: number): boolean {
+  if (amount <= 0 || !ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return amount <= 0;
+  const existing = ps.inventorySlots.findIndex((s): s is GoldConsumable => isGoldSlot(s));
+  if (existing >= 0) {
+    (ps.inventorySlots[existing] as GoldConsumable).count += amount;
+    return true;
+  }
+  const empty = ps.inventorySlots.findIndex((s) => s == null);
+  if (empty < 0) return false;
+  ps.inventorySlots[empty] = { type: 'gold', count: amount };
+  return true;
+}
+
+/**
+ * Spend gold from inventory. Deducts from gold slot(s); returns true if enough was present.
+ */
+export function tryConsumeGold(ps: PlayingStateShape, amount: number): boolean {
+  if (amount <= 0) return true;
+  const total = getTotalGoldFromInventory(ps);
+  if (total < amount) return false;
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  let remaining = amount;
+  for (let i = 0; i < ps.inventorySlots.length && remaining > 0; i++) {
+    const slot = ps.inventorySlots[i];
+    if (!isGoldSlot(slot)) continue;
+    const take = Math.min(remaining, slot.count);
+    slot.count -= take;
+    remaining -= take;
+    if (slot.count <= 0) ps.inventorySlots[i] = null;
+  }
+  return true;
+}
+
+/**
  * Find first inventory slot index containing at least one potion.
  */
 export function findFirstPotionSlotIndex(ps: PlayingStateShape): number {
@@ -595,6 +647,83 @@ export function usePotionFromInventory(ps: PlayingStateShape, slotIndex: number)
     ps.inventorySlots[slotIndex] = null;
   } else {
     (ps.inventorySlots[slotIndex] as PotionConsumable).count -= 1;
+  }
+  return true;
+}
+
+/**
+ * Use one potion from the given toolbelt slot (consumes 1; caller adds heal charge).
+ * Returns true if a potion was consumed.
+ */
+export function usePotionFromToolbelt(ps: PlayingStateShape, toolbeltIndex: number): boolean {
+  if (toolbeltIndex < 0 || toolbeltIndex >= TOOLBELT_SLOT_COUNT || !ps.toolbeltSlots) return false;
+  const slot = ps.toolbeltSlots[toolbeltIndex];
+  if (!slot || slot.type !== 'potion' || slot.count < 1) return false;
+  if (slot.count === 1) {
+    ps.toolbeltSlots[toolbeltIndex] = null;
+  } else {
+    ps.toolbeltSlots[toolbeltIndex] = { type: 'potion', count: slot.count - 1 };
+  }
+  return true;
+}
+
+/**
+ * Find first toolbelt slot index with at least one potion, or -1.
+ */
+export function findFirstPotionToolbeltIndex(ps: PlayingStateShape): number {
+  if (!ps.toolbeltSlots || ps.toolbeltSlots.length !== TOOLBELT_SLOT_COUNT) return -1;
+  return ps.toolbeltSlots.findIndex((s) => s != null && s.type === 'potion' && s.count >= 1);
+}
+
+/**
+ * Move one potion from an inventory slot to a toolbelt slot. Stacks if toolbelt slot already has potions.
+ * Returns true if moved.
+ */
+export function addPotionToToolbeltFromInventory(
+  ps: PlayingStateShape,
+  fromInventoryIndex: number,
+  toolbeltIndex: number
+): boolean {
+  if (toolbeltIndex < 0 || toolbeltIndex >= TOOLBELT_SLOT_COUNT || !ps.toolbeltSlots) return false;
+  if (fromInventoryIndex < 0 || fromInventoryIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return false;
+  const invSlot = ps.inventorySlots[fromInventoryIndex];
+  if (!isPotionSlot(invSlot) || invSlot.count < 1) return false;
+  const existing = ps.toolbeltSlots[toolbeltIndex];
+  if (existing != null && existing.type !== 'potion') return false;
+  if (invSlot.count === 1) {
+    ps.inventorySlots[fromInventoryIndex] = null;
+  } else {
+    (ps.inventorySlots[fromInventoryIndex] as PotionConsumable).count -= 1;
+  }
+  if (existing && existing.type === 'potion') {
+    ps.toolbeltSlots[toolbeltIndex] = { type: 'potion', count: existing.count + 1 };
+  } else {
+    ps.toolbeltSlots[toolbeltIndex] = { type: 'potion', count: 1 };
+  }
+  return true;
+}
+
+/**
+ * Move one potion from a toolbelt slot back to inventory (stack with existing potion or first empty slot).
+ * Returns true if moved.
+ */
+export function removePotionFromToolbeltToInventory(ps: PlayingStateShape, toolbeltIndex: number): boolean {
+  if (toolbeltIndex < 0 || toolbeltIndex >= TOOLBELT_SLOT_COUNT || !ps.toolbeltSlots) return false;
+  const slot = ps.toolbeltSlots[toolbeltIndex];
+  if (!slot || slot.type !== 'potion' || slot.count < 1) return false;
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  const existing = ps.inventorySlots.findIndex((s): s is PotionConsumable => isPotionSlot(s));
+  if (existing >= 0) {
+    (ps.inventorySlots[existing] as PotionConsumable).count += 1;
+  } else {
+    const empty = ps.inventorySlots.findIndex((s) => s == null);
+    if (empty < 0) return false;
+    ps.inventorySlots[empty] = { type: 'potion', count: 1 };
+  }
+  if (slot.count === 1) {
+    ps.toolbeltSlots[toolbeltIndex] = null;
+  } else {
+    ps.toolbeltSlots[toolbeltIndex] = { type: 'potion', count: slot.count - 1 };
   }
   return true;
 }

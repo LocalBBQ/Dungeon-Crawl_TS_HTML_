@@ -1,7 +1,7 @@
 // Renders shopkeeper NPC and interaction prompt. data: { shop, playerNearShop, playerWorldPos? }
 // When the player is within HEAD_LOOK_RADIUS (world units), the shopkeeper's head turns to face them.
-import type { RenderContext } from './RenderContext.ts';
-import { Utils } from '../../utils/Utils.ts';
+import type { RenderContext } from './RenderContext.js';
+import { Utils } from '../../utils/Utils.js';
 
 /** World distance within which the shopkeeper's head tracks the player. */
 const HEAD_LOOK_RADIUS = 140;

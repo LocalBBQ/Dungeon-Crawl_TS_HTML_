@@ -1,6 +1,6 @@
 // Input System
-import { EventTypes } from '../core/EventTypes.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import { EventTypes } from '../core/EventTypes.js';
+import type { SystemManager } from '../core/SystemManager.js';
 
 export class InputSystem {
   canvas: HTMLCanvasElement;
@@ -15,6 +15,8 @@ export class InputSystem {
   systems: SystemManager | null;
   chargeStartTime: number;
   isCharging: boolean;
+  /** When set, left mousedown only starts charge if this returns false (e.g. pointer not on UI/drag). */
+  getPointerDownConsumedByUI: (() => boolean) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -86,8 +88,12 @@ export class InputSystem {
       if (e.button === 0) {
         this.mouseDown = true;
         this.mouseClicked = true;
-        this.isCharging = true;
-        this.chargeStartTime = performance.now();
+        // Do not build charge when pointer down was consumed by UI (e.g. clicking/dragging inventory, chest, shop)
+        const consumedByUI = this.getPointerDownConsumedByUI?.() === true;
+        if (!consumedByUI) {
+          this.isCharging = true;
+          this.chargeStartTime = performance.now();
+        }
         this.systems!.eventBus.emit(EventTypes.INPUT_MOUSEDOWN, {
           x: this.mouseX,
           y: this.mouseY,

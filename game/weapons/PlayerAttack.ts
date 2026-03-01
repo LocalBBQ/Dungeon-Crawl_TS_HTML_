@@ -1,9 +1,9 @@
 // Player-specific attack handler: delegates all attack/charge resolution to the equipped weapon.
-import { Movement } from '../components/Movement.ts';
-import { Transform } from '../components/Transform.ts';
-import { Utils } from '../utils/Utils.ts';
-import type { EntityShape } from '../types/entity.ts';
-import type { ResolveAttackResult, StagePropsResult } from './weaponBehavior.ts';
+import { Movement } from '../components/Movement.js';
+import { Transform } from '../components/Transform.js';
+import { Utils } from '../utils/Utils.js';
+import type { EntityShape } from '../types/entity.js';
+import type { ResolveAttackResult, StagePropsResult } from './weaponBehavior.js';
 
 export interface PlayerWeaponLike {
     comboWindow?: number;

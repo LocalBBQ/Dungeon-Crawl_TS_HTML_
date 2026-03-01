@@ -1,18 +1,18 @@
 // Combat component - uses shared WeaponAttackHandler for both player and enemy
 import type { Component } from '../types/component.js';
 import type { SystemsMap } from '../types/systems.js';
-import { Movement } from './Movement.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
-import { StatusEffects } from './StatusEffects.ts';
-import { Stamina } from './Stamina.ts';
-import { Transform } from './Transform.ts';
-import { Health } from './Health.ts';
-import { AI } from './AI.ts';
-import { Weapons } from '../weapons/WeaponsRegistry.ts';
-import { Enemies } from '../enemies/EnemiesRegistry.ts';
-import { PlayerAttack } from '../weapons/PlayerAttack.ts';
-import { WeaponAttackHandler } from '../weapons/WeaponAttackHandler.ts';
+import { Movement } from './Movement.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
+import { StatusEffects } from './StatusEffects.js';
+import { Stamina } from './Stamina.js';
+import { Transform } from './Transform.js';
+import { Health } from './Health.js';
+import { AI } from './AI.js';
+import { Weapons } from '../weapons/WeaponsRegistry.js';
+import { Enemies } from '../enemies/EnemiesRegistry.js';
+import { PlayerAttack } from '../weapons/PlayerAttack.js';
+import { WeaponAttackHandler } from '../weapons/WeaponAttackHandler.js';
 import type { HitCategory } from '../types/combat.js';
 import {
   HEAVY_BLOCK_EFFECTIVITY,
@@ -20,12 +20,16 @@ import {
   LUNGE_BLOCK_STAMINA_MULT
 } from '../types/combat.js';
 
+/** Flat stamina cost to initiate a block attack (charged shove). */
+const BLOCK_ATTACK_INITIAL_STAMINA_COST = 25;
+
 /** Minimal attack handler interface used by Combat. */
 export interface AttackHandlerLike {
   attackRange?: number;
   attackDamage?: number;
   attackArc?: number;
   weapon?: unknown;
+  behaviorType?: string;
   isAttacking?: boolean;
   attackTimer?: number;
   attackDuration?: number | null;
@@ -48,7 +52,7 @@ export interface AttackHandlerLike {
   update?(deltaTime: number, entity: unknown): void;
   startAttack?(...args: unknown[]): unknown;
   endAttack?(): void;
-  startLunge?(): void;
+  startLunge?(targetX?: number, targetY?: number, lungeConfig?: { lungeDamage?: number }): void;
   endLunge?(...args: unknown[]): void;
   setWeapon?(weapon: unknown): void;
   getNextAttackStaminaCost?(chargeDuration: number, options?: unknown, entity?: unknown): number;
@@ -374,10 +378,12 @@ export class Combat implements Component {
     this.isBlockAttacking = false;
   }
 
-  /** Start charging block attack (call when left-click down while blocking). */
+  /** Start charging block attack (call when left-click down while blocking). Costs 25 stamina upfront. */
   startChargingBlockAttack(): boolean {
     const blockConfig = this._getBlockConfig() as { blockAttack?: unknown } | null;
-    if (!this.isPlayer || !this.isBlocking || !blockConfig?.blockAttack) return false;
+    if (!this.isPlayer || !this.isBlocking || !blockConfig?.blockAttack || !this.entity) return false;
+    const stamina = this.entity.getComponent(Stamina);
+    if (!stamina || !stamina.use(BLOCK_ATTACK_INITIAL_STAMINA_COST)) return false;
     this.isChargingBlockAttack = true;
     this.blockAttackChargeStartTime = performance.now() / 1000;
     return true;
@@ -428,6 +434,13 @@ export class Combat implements Component {
     const ba = blockConfig?.blockAttack ?? Combat.DEFAULT_BLOCK_ATTACK;
 
     const chargeStart = this.blockAttackChargeStartTime;
+    const wasCharging = chargeStart > 0;
+    // If they never started charging (e.g. tap release while blocking), require 25 stamina upfront
+    if (!wasCharging) {
+      const stamina = this.entity.getComponent(Stamina);
+      if (!stamina || !stamina.use(BLOCK_ATTACK_INITIAL_STAMINA_COST)) return false;
+    }
+
     const now = performance.now() / 1000;
     const chargeDuration = chargeStart > 0 ? Math.max(0, now - chargeStart) : 0;
     this.isChargingBlockAttack = false;
@@ -678,7 +691,7 @@ export class Combat implements Component {
       if (result.isStormRelease === true && this.entity) {
         const systems = this.entity.systems as { get?(k: string): unknown } | undefined;
         const projectileManager = systems?.get?.('projectiles') as {
-          createProjectile(x: number, y: number, angle: number, speed: number, damage: number, range: number, owner: unknown, ownerType: string, stunBuildup: number, pierce?: boolean, airborneDuration?: number): unknown;
+          createProjectile(x: number, y: number, angle: number, speed: number, damage: number, range: number, owner: unknown, ownerType: string, stunBuildup?: number, pierce?: boolean, airborneDuration?: number, width?: number, height?: number, color?: string, visualType?: string, aoeRadius?: number, aoeDamage?: number): unknown;
         } | undefined;
         const transform = this.entity.getComponent(Transform);
         if (projectileManager && transform && typeof projectileManager.createProjectile === 'function') {
@@ -703,14 +716,18 @@ export class Combat implements Component {
         const eventBus =
           (this.entity.systems as { eventBus?: { emit(n: string, p: unknown): void }; get?(k: string): unknown }).eventBus ??
           (this.entity.systems.get?.('eventBus') as { emit(n: string, p: unknown): void } | undefined);
-        if (eventBus)
+        if (eventBus) {
+          const weapon = this.attackHandler?.weapon as { isRanged?: boolean } | null;
+          const isMeleeSwing = !weapon || weapon.isRanged !== true;
           eventBus.emit('entity:attack', {
             entity: this.entity,
             range: result.range,
             damage: result.damage,
             arc: result.arc,
             comboStage: result.comboStage,
+            isMeleeSwing,
           });
+        }
       }
       const durationMs =
         (result.duration as number) >= 100

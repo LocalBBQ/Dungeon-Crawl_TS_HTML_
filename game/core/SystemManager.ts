@@ -2,13 +2,21 @@
 // Lean ECS pattern: systems may query entities by component set (e.g. get('entities').getAll(),
 // then filter by entity.getComponent(Transform) && entity.getComponent(Movement)) and implement
 // behavior in their update(); components remain the data store. No formal ECS library required.
-import { EventBus } from './EventBus.ts';
+import { EventBus } from './EventBus.js';
 import type { GameSystems } from '../types/systems.js';
 
 export interface SystemLike {
   init?(systems: SystemManager): void;
   update?(deltaTime: number, systems: SystemManager): void;
   destroy?(): void;
+  // Optional methods used by camera, input, projectiles, obstacles (typed as unknown for flexibility)
+  screenToWorld?(x: number, y: number): { x: number; y: number };
+  createProjectile?(...args: unknown[]): unknown;
+  isKeyPressed?(key: string): boolean;
+  mouseX?: number;
+  mouseY?: number;
+  getObstacleAt?(x: number, y: number): unknown;
+  damageObstacle?(...args: unknown[]): void;
 }
 
 export class SystemManager {
@@ -50,7 +58,7 @@ export class SystemManager {
       get input() { return s.systems.get('input') as GameSystems['input']; },
       get camera() { return s.systems.get('camera') as GameSystems['camera']; },
       get collision() { return s.systems.get('collision') as GameSystems['collision']; },
-      get obstacles() { return s.systems.get('obstacles') as GameSystems['obstacles']; },
+      get obstacles() { return s.systems.get('obstacles') as unknown as GameSystems['obstacles']; },
       get gatherables() { return s.systems.get('gatherables') as GameSystems['gatherables']; },
       get pathfinding() { return s.systems.get('pathfinding') as GameSystems['pathfinding']; },
       get enemies() { return s.systems.get('enemies') as GameSystems['enemies']; },

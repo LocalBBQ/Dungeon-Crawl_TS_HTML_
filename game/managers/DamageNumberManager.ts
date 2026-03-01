@@ -1,6 +1,6 @@
 // Manages floating damage numbers displayed on screen
-import type { CameraShape } from '../types/camera.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import type { CameraShape } from '../types/camera.js';
+import type { SystemManager } from '../core/SystemManager.js';
 
 interface DamageNumberEntry {
     x: number;

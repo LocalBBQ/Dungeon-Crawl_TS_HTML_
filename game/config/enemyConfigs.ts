@@ -1,7 +1,7 @@
 // All enemy configs and type exports. Single module replacing Goblin, Skeleton, etc. files.
-import { EnemyType } from '../enemies/EnemyType.ts';
-import { EnemyWeapons } from '../weapons/EnemyWeaponsRegistry.ts';
-import { Weapons } from '../weapons/WeaponsRegistry.ts';
+import { EnemyType } from '../enemies/EnemyType.js';
+import { EnemyWeapons } from '../weapons/EnemyWeaponsRegistry.js';
+import { Weapons } from '../weapons/WeaponsRegistry.js';
 
 type ChieftainClubWeaponType = {
   heavySmash?: {

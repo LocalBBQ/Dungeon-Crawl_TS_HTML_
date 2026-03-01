@@ -44,9 +44,10 @@ export interface Quest {
   description?: string[];
   level: number;
   difficultyId: string;
-  difficulty?: DifficultyDef;
+  /** Full difficulty (static quests) or partial (e.g. bulletin quests with goldMultiplier, label). */
+  difficulty?: Partial<DifficultyDef> & { goldMultiplier?: number; label?: string };
   seed?: number;
-  /** When 'delve', player enters a dungeon entrance and descends floor by floor (2x2 tiles per floor, kill all to progress). */
+  /** When 'delve', player enters a dungeon entrance and descends floor by floor (1x1 underground scene tile per floor, kill all to progress). */
   questType?: QuestType;
   /** Objective type for this run (static quests). When set, completion uses objectiveParams. */
   objectiveType?: QuestObjectiveType;

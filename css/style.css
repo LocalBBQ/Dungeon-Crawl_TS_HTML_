@@ -1202,3 +1202,34 @@ body {
     color: rgba(160, 145, 110, 0.85);
 }
 
+/* Strategy Crafting outcome notification */
+.strategy-crafting-notification {
+    margin-top: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    min-height: 20px;
+}
+
+.strategy-crafting-notification.strategy-crafting-notification-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.strategy-crafting-notification-success {
+    background: rgba(50, 75, 40, 0.9);
+    border-color: rgba(120, 160, 60, 0.6);
+    color: #b8d090;
+}
+
+.strategy-crafting-notification-failure {
+    background: rgba(70, 35, 30, 0.9);
+    border-color: rgba(180, 80, 60, 0.6);
+    color: #e0a090;
+}
+

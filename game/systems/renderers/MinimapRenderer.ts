@@ -1,10 +1,10 @@
 // Renders minimap panel. data: { entityManager, worldWidth, worldHeight, portal, currentLevel, activeQuest?, questSurviveStartTime? }
-import { GameConfig } from '../../config/GameConfig.ts';
-import { DELVE_LEVEL } from '../../config/questConfig.ts';
-import { Transform } from '../../components/Transform.ts';
-import { Renderable } from '../../components/Renderable.ts';
-import type { Quest } from '../../types/quest.ts';
-import type { RenderContext } from './RenderContext.ts';
+import { GameConfig } from '../../config/GameConfig.js';
+import { DELVE_LEVEL } from '../../config/questConfig.js';
+import { Transform } from '../../components/Transform.js';
+import { Renderable } from '../../components/Renderable.js';
+import type { Quest } from '../../types/quest.js';
+import type { RenderContext } from './RenderContext.js';
 
 export const MINIMAP_ZOOM_MIN = 0.5;
 export const MINIMAP_ZOOM_MAX = 3;
@@ -117,9 +117,10 @@ export class MinimapRenderer {
 
         const tileSize = isHub && GameConfig.hub.tileSize ? GameConfig.hub.tileSize : GameConfig.world.tileSize;
         const levelConfigMinimap = isHub ? GameConfig.hub : (GameConfig.levels && GameConfig.levels[currentLevel]);
-        const theme = levelConfigMinimap && levelConfigMinimap.theme ? levelConfigMinimap.theme : null;
-        const ground = theme && theme.ground ? theme.ground : { r: 30, g: 50, b: 30, variation: 18 };
-        const patch = ground.patch != null && typeof ground.patch === 'object' ? ground.patch as { r: number; g: number; b: number; variation?: number; chance: number } : null;
+        type GroundLike = { patch?: { r: number; g: number; b: number; variation?: number; chance: number }; variation?: number; r?: number; g?: number; b?: number };
+        const theme = (levelConfigMinimap && levelConfigMinimap.theme ? levelConfigMinimap.theme : null) as { ground?: GroundLike } | null;
+        const ground: GroundLike = theme && theme.ground ? theme.ground : { r: 30, g: 50, b: 30, variation: 18 };
+        const patch = ground.patch != null && typeof ground.patch === 'object' ? ground.patch : null;
         const tileHash = (tx: number, ty: number) => ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
         const isPatchTile = patch && patch.chance > 0 ? (x: number, y: number) => (tileHash(Math.floor(x / tileSize), Math.floor(y / tileSize)) % 1000) / 1000 < patch.chance : () => false;
         for (let x = 0; x < worldWidth; x += tileSize) {
@@ -136,15 +137,16 @@ export class MinimapRenderer {
             }
         }
 
-        const obstacleManager = systems && systems.get ? systems.get('obstacles') : null;
+        const obstacleManager = systems && systems.get ? (systems.get('obstacles') as { obstacles: { type?: string; color?: string; x?: number; y?: number; width?: number; height?: number }[] } | null) : null;
+        type ObstacleLike = { type?: string; color?: string; x?: number; y?: number; width?: number; height?: number };
         if (obstacleManager) {
-            for (const obstacle of obstacleManager.obstacles) {
+            for (const obstacle of obstacleManager.obstacles as ObstacleLike[]) {
                 if (obstacle.type === 'caveEntrance') {
                     ctx.fillStyle = obstacle.color || 'rgba(60, 50, 35, 0.9)';
-                    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-                    const cx = obstacle.x + obstacle.width / 2;
-                    const cy = obstacle.y + obstacle.height / 2;
-                    const r = Math.max(8 / scale, (obstacle.width + obstacle.height) / 3);
+                    ctx.fillRect(obstacle.x ?? 0, obstacle.y ?? 0, obstacle.width ?? 0, obstacle.height ?? 0);
+                    const cx = (obstacle.x ?? 0) + (obstacle.width ?? 0) / 2;
+                    const cy = (obstacle.y ?? 0) + (obstacle.height ?? 0) / 2;
+                    const r = Math.max(8 / scale, ((obstacle.width ?? 0) + (obstacle.height ?? 0)) / 3);
                     ctx.fillStyle = 'rgba(200, 140, 60, 0.95)';
                     ctx.beginPath();
                     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -154,29 +156,31 @@ export class MinimapRenderer {
                     ctx.stroke();
                 } else {
                     ctx.fillStyle = obstacle.color || '#2d5016';
-                    ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                    ctx.fillRect(obstacle.x ?? 0, obstacle.y ?? 0, obstacle.width ?? 0, obstacle.height ?? 0);
                 }
             }
         }
 
-        const entities = entityManager ? entityManager.getAll() : [];
+        const entities = entityManager ? (entityManager as { get?(id: string): unknown; getGroup?(name: string): unknown[]; getAll?(): { active?: boolean; getComponent(c: unknown): unknown }[] }).getAll?.() ?? [] : [];
         for (const entity of entities) {
-            if (!entity.active) continue;
-            const transform = entity.getComponent(Transform);
-            const renderable = entity.getComponent(Renderable);
+            const e = entity as { active?: boolean; getComponent(c: unknown): unknown };
+            if (!e.active) continue;
+            const transform = e.getComponent(Transform) as { x: number; y: number } | null;
+            const renderable = e.getComponent(Renderable) as { type?: string; color?: string } | null;
             if (!transform || !renderable) continue;
             const isEnemy = renderable.type === 'enemy';
             const dotRadius = isEnemy ? 1.5 / scale : 3 / scale;
-            ctx.fillStyle = renderable.color;
+            ctx.fillStyle = renderable.color ?? '#888';
             ctx.beginPath();
             ctx.arc(transform.x, transform.y, dotRadius, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        if (portal && portal.spawned) {
-            const px = portal.x + portal.width / 2;
-            const py = portal.y + portal.height / 2;
-            const r = Math.max(6 / scale, (portal.width + portal.height) / 4);
+        const portalShape = portal as { spawned?: boolean; x?: number; y?: number; width?: number; height?: number; hasNextLevel?: boolean } | null;
+        if (portalShape && portalShape.spawned) {
+            const px = (portalShape.x ?? 0) + (portalShape.width ?? 0) / 2;
+            const py = (portalShape.y ?? 0) + (portalShape.height ?? 0) / 2;
+            const r = Math.max(6 / scale, ((portalShape.width ?? 0) + (portalShape.height ?? 0)) / 4);
             ctx.fillStyle = 'rgba(120, 80, 255, 0.9)';
             ctx.beginPath();
             ctx.arc(px, py, r, 0, Math.PI * 2);
@@ -206,9 +210,9 @@ export class MinimapRenderer {
 
         const isDelve = currentLevel === DELVE_LEVEL;
         const objectiveText = isHub ? 'Approach the board and press E to select a level' : (() => {
-            if (portal && portal.spawned) {
-                if (isDelve) return portal.hasNextLevel ? 'E Descend' : 'E Return to Sanctuary';
-                return portal.hasNextLevel ? 'E Next area' : 'E Return to Sanctuary';
+            if (portalShape && portalShape.spawned) {
+                if (isDelve) return portalShape.hasNextLevel ? 'E Descend' : 'E Return to Sanctuary';
+                return portalShape.hasNextLevel ? 'E Next area' : 'E Return to Sanctuary';
             }
             if (isDelve) return 'Slay all foes to open the stairs';
             const enemyManager = systems && systems.get ? (systems.get('enemies') as { getEnemiesKilledThisLevel(): number; getKillsByTypeThisLevel?(): Record<string, number>; getAliveCount?(): number } | undefined) : null;

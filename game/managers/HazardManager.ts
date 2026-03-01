@@ -1,10 +1,10 @@
 // HazardManager - manages environmental hazards like flame pillars
-import { Transform } from '../components/Transform.ts';
-import { Health } from '../components/Health.ts';
-import { Utils } from '../utils/Utils.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
-import type { CameraShape } from '../types/camera.ts';
-import type { EntityShape } from '../types/entity.ts';
+import { Transform } from '../components/Transform.js';
+import { Health } from '../components/Health.js';
+import { Utils } from '../utils/Utils.js';
+import type { SystemManager } from '../core/SystemManager.js';
+import type { CameraShape } from '../types/camera.js';
+import type { EntityShape } from '../types/entity.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 

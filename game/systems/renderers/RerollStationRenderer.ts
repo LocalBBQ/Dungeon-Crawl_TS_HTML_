@@ -1,5 +1,5 @@
 // Renders reroll enchant NPC station and interaction prompt. data: { rerollStation, playerNearRerollStation }
-import type { RenderContext } from './RenderContext.ts';
+import type { RenderContext } from './RenderContext.js';
 
 interface RerollStationLike {
   x: number;

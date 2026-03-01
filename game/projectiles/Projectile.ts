@@ -1,8 +1,8 @@
 // Projectile entity - represents a single projectile
-import { Transform } from '../components/Transform.ts';
-import { Health } from '../components/Health.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
+import { Transform } from '../components/Transform.js';
+import { Health } from '../components/Health.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
 
 interface EntityWithComponents {
   getComponent<T>(ctor: new (...args: unknown[]) => T): T | null;

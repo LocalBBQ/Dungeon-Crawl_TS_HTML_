@@ -3,8 +3,9 @@
  * Used when inventoryOpen or chestOpen; pointer events handled by Game.
  */
 import type { TooltipHover } from '../types/tooltip.js';
-import type { ArmorSlotId, InventorySlot, PlayingStateShape, WeaponInstance } from '../state/PlayingState.js';
-import { getSlotKey, getActiveWeaponSet, getInactiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT, isWeaponInstance as isWeaponSlotItem, isWhetstoneSlot, isHerbSlot, isMushroomSlot, isHoneySlot, isPotionSlot } from '../state/PlayingState.js';
+import type { ArmorSlotId, InventorySlot, PlayingStateShape, WeaponInstance, PotionConsumable } from '../state/PlayingState.js';
+import { getSlotKey, getActiveWeaponSet, getInactiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT, TOOLBELT_SLOT_COUNT, isWeaponInstance as isWeaponSlotItem, isWhetstoneSlot, isHerbSlot, isMushroomSlot, isHoneySlot, isPotionSlot, isGoldSlot } from '../state/PlayingState.js';
+import { getTotalGoldFromInventory } from '../state/InventoryActions.js';
 import { getArmor, getPlayerArmorReduction, getShopArmorBySlot, SHOP_ARMOR_SLOT_ORDER, SHOP_ARMOR_SLOT_LABELS } from '../armor/armorConfigs.js';
 import { canEquipArmorInSlot } from '../state/ArmorActions.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
@@ -17,7 +18,7 @@ import {
 } from '../config/shopConfig.js';
 import { getEnchantmentById, applyEnchantEffectsToWeapon } from '../config/enchantmentConfig.js';
 import { WHETSTONE_REPAIR_PERCENT } from '../config/lootConfig.js';
-import { drawHerbIcon, drawMushroomIcon, drawHoneyIcon, drawPotionIcon } from '../graphics/herbMushroomIcons.js';
+import { drawHerbIcon, drawMushroomIcon, drawHoneyIcon, drawPotionIcon, drawGoldIcon } from '../graphics/herbMushroomIcons.js';
 
 function isWeaponInstance(w: unknown): w is Weapon {
     return !!w && typeof (w as Weapon).baseDamage === 'number';
@@ -263,6 +264,35 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, cx: number, cy: nu
         ctx.moveTo(stockLen * 0.4, -limbH * 0.4);
         ctx.lineTo(stockLen * 0.4, limbH * 0.4);
         ctx.stroke();
+    } else if (base === 'bow') {
+        const halfLen = s * 0.5;
+        const nockY = s * 0.42;
+        const limbCurve = 0.52;
+        const staveW = Math.max(2, s * 0.08);
+        ctx.strokeStyle = colors.stroke;
+        ctx.fillStyle = colors.fill;
+        ctx.lineWidth = staveW;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(halfLen, nockY);
+        ctx.quadraticCurveTo(halfLen * 0.5, nockY * limbCurve, 0, 0);
+        ctx.quadraticCurveTo(halfLen * 0.5, -nockY * limbCurve, halfLen, -nockY);
+        ctx.stroke();
+        ctx.strokeStyle = '#5a4030';
+        ctx.lineWidth = Math.max(1, staveW * 0.4);
+        const bellyCurve = limbCurve + 0.02;
+        ctx.beginPath();
+        ctx.moveTo(halfLen, nockY * 0.98);
+        ctx.quadraticCurveTo(halfLen * 0.5, nockY * bellyCurve, 0, 0);
+        ctx.quadraticCurveTo(halfLen * 0.5, -nockY * bellyCurve, halfLen, -nockY * 0.98);
+        ctx.stroke();
+        ctx.strokeStyle = '#b8a888';
+        ctx.lineWidth = lw * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(halfLen, -nockY);
+        ctx.lineTo(halfLen, nockY);
+        ctx.stroke();
     } else if (base === 'defender') {
         const bladeLen = s * 0.7;
         const guardW = s * 0.2;
@@ -328,7 +358,7 @@ export interface DragState {
     /** When dragging from equipment, current durability of that item. */
     durability?: number;
     sourceSlotIndex: number;
-    sourceContext: 'inventory' | 'chest' | 'equipment' | 'rerollSlot' | 'armor';
+    sourceContext: 'inventory' | 'chest' | 'equipment' | 'rerollSlot' | 'armor' | 'toolbelt';
     pointerX: number;
     pointerY: number;
     /** When dragging armor: key and source (inventory index or equipment slot). */
@@ -336,8 +366,10 @@ export interface DragState {
     sourceArmorSlot?: ArmorSlotId;
     /** True when dragging a whetstone from inventory (use-on-weapon drop). */
     isWhetstone?: boolean;
-    /** When dragging herb, mushroom, or honey from inventory (reorder only). */
-    dragConsumableType?: 'herb' | 'mushroom' | 'honey' | 'potion';
+    /** When dragging herb, mushroom, honey, potion, or gold from inventory (reorder only). */
+    dragConsumableType?: 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold';
+    /** When sourceContext is 'toolbelt': which toolbelt slot (0..3). */
+    sourceToolbeltIndex?: number;
 }
 
 export function createDragState(): DragState {
@@ -359,6 +391,9 @@ export function ensureInventoryInitialized(ps: PlayingStateShape): void {
         ps.inventorySlots = [...ps.inventorySlots, ...Array(INVENTORY_SLOT_COUNT - ps.inventorySlots.length).fill(null)] as InventorySlot[];
     } else if (ps.inventorySlots.length > INVENTORY_SLOT_COUNT) {
         ps.inventorySlots = ps.inventorySlots.slice(0, INVENTORY_SLOT_COUNT);
+    }
+    if (!ps.toolbeltSlots || ps.toolbeltSlots.length !== TOOLBELT_SLOT_COUNT) {
+        ps.toolbeltSlots = Array(TOOLBELT_SLOT_COUNT).fill(null) as (PotionConsumable | null)[];
     }
 }
 
@@ -497,7 +532,7 @@ export function getInventoryLayout(canvas: HTMLCanvasElement, options?: { includ
 }
 
 export type InventoryHit =
-    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; prefixId?: string; suffixId?: string; itemType?: 'weapon' | 'armor' | 'whetstone' | 'herb' | 'mushroom' | 'honey' | 'potion' }
+    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; prefixId?: string; suffixId?: string; itemType?: 'weapon' | 'armor' | 'whetstone' | 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold' }
     | { type: 'equipment'; slot: 'mainhand' | 'offhand' }
     | { type: 'chest-slot'; index: number; key: string }
     | { type: 'armor-equipment'; slot: ArmorSlotId }
@@ -1288,6 +1323,17 @@ export function renderPotionTooltip(
     renderGatherTooltip(ctx, canvas, title, line1, hover);
 }
 
+export function renderGoldTooltip(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    hover: { x: number; y: number; count: number } | null
+): void {
+    if (!hover) return;
+    const title = hover.count > 1 ? `Gold ×${hover.count}` : 'Gold';
+    const line1 = 'Currency. Used at the shop and reroll station.';
+    renderGatherTooltip(ctx, canvas, title, line1, hover);
+}
+
 function renderGatherTooltip(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
@@ -1463,7 +1509,7 @@ function drawShopParentHeader(ctx: CanvasRenderingContext2D, header: ShopParentH
     ctx.fillText(header.title, header.x + 32, header.y + header.h / 2);
 }
 
-function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, options: { filled?: boolean; symbol?: string; weaponKey?: string; label?: string; highlight?: boolean; emptyLabel?: string; broken?: boolean; itemIcon?: 'herb' | 'mushroom' | 'honey' | 'potion'; stackCount?: number; dimmed?: boolean }) {
+function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, options: { filled?: boolean; symbol?: string; weaponKey?: string; label?: string; highlight?: boolean; emptyLabel?: string; broken?: boolean; itemIcon?: 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold'; stackCount?: number; dimmed?: boolean }) {
     const dimmed = options.dimmed === true;
     ctx.fillStyle = dimmed
         ? (options.filled ? 'rgba(12, 10, 6, 0.75)' : 'rgba(14, 12, 8, 0.5)')
@@ -1491,6 +1537,8 @@ function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: n
         drawHoneyIcon(ctx, cx, cy, iconSize);
     } else if (options.itemIcon === 'potion') {
         drawPotionIcon(ctx, cx, cy, iconSize);
+    } else if (options.itemIcon === 'gold') {
+        drawGoldIcon(ctx, cx, cy, iconSize);
     } else {
         const fontSize = r.w >= 56 ? 24 : 20;
         if (options.symbol) {
@@ -1588,7 +1636,7 @@ export function renderInventory(
     ctx.textBaseline = 'middle';
     ctx.fillText('Character', panel.x + headerPad, panel.y + 28);
 
-    // Stats block (Damage, Armor, Gold) – rounded rect for clear hierarchy
+    // Stats block (Damage, Armor) – rounded rect for clear hierarchy
     const statsBlockX = panel.x + headerPad;
     const statsBlockW = panel.w - headerPad * 2;
     roundRect(ctx, statsBlockX, statsBlockTop, statsBlockW, statsBlockH, 8);
@@ -1614,10 +1662,6 @@ export function renderInventory(
     const armorLabelW2 = ctx.measureText('Armor: ').width;
     ctx.fillStyle = '#e8dcc8';
     ctx.fillText(armorPct + '%', armorX + armorLabelW2, statY);
-    const goldText = 'Gold: ' + (ps.gold ?? 0);
-    ctx.fillStyle = '#c9a227';
-    ctx.textAlign = 'right';
-    ctx.fillText(goldText, statsBlockX + statsBlockW - statsBlockPad, statY);
     ctx.textAlign = 'left';
 
     // Close button (rounded)
@@ -1728,16 +1772,17 @@ export function renderInventory(
         const isMushroom = isMushroomSlot(slot);
         const isHoney = isHoneySlot(slot);
         const isPotion = isPotionSlot(slot);
-        const isConsumable = isWhetstone || isHerb || isMushroom || isHoney || isPotion;
+        const isGold = isGoldSlot(slot);
+        const isConsumable = isWhetstone || isHerb || isMushroom || isHoney || isPotion || isGold;
         const stackCount = isConsumable && slot && 'count' in slot ? slot.count : undefined;
         drawSlot(ctx, s, {
             filled: !!key || isConsumable,
             weaponKey: isWeapon ? key ?? undefined : undefined,
             symbol: isArmor ? '◆' : isWhetstone ? '◉' : undefined,
-            itemIcon: isHerb ? 'herb' : isMushroom ? 'mushroom' : isHoney ? 'honey' : isPotion ? 'potion' : undefined,
+            itemIcon: isHerb ? 'herb' : isMushroom ? 'mushroom' : isHoney ? 'honey' : isPotion ? 'potion' : isGold ? 'gold' : undefined,
             emptyLabel: !key && !isConsumable ? undefined : undefined,
-            stackCount: stackCount != null && stackCount > 1 ? stackCount : undefined,
-            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : isHerb ? (slot.count > 1 ? `Herb ×${slot.count}` : 'Herb') : isMushroom ? (slot.count > 1 ? `Mushroom ×${slot.count}` : 'Mushroom') : isHoney ? (slot.count > 1 ? `Honey ×${slot.count}` : 'Honey') : isPotion ? (slot.count > 1 ? `Potion ×${slot.count}` : 'Potion') : undefined,
+            stackCount: stackCount != null && (stackCount > 1 || isGold) ? stackCount : undefined,
+            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : isHerb ? (slot.count > 1 ? `Herb ×${slot.count}` : 'Herb') : isMushroom ? (slot.count > 1 ? `Mushroom ×${slot.count}` : 'Mushroom') : isHoney ? (slot.count > 1 ? `Honey ×${slot.count}` : 'Honey') : isPotion ? (slot.count > 1 ? `Potion ×${slot.count}` : 'Potion') : isGold ? (slot.count > 1 ? `Gold ×${slot.count}` : 'Gold') : undefined,
             broken: !!(key && isWeaponSlotItem(slot) && slot.durability === 0)
         });
         if (isArmor && key && slot && 'durability' in slot) {
@@ -1777,6 +1822,7 @@ export function renderInventory(
     renderMushroomTooltip(ctx, canvas, tooltipHover?.type === 'mushroom' ? tooltipHover : null);
     renderHoneyTooltip(ctx, canvas, tooltipHover?.type === 'honey' ? tooltipHover : null);
     renderPotionTooltip(ctx, canvas, tooltipHover?.type === 'potion' ? tooltipHover : null);
+    renderGoldTooltip(ctx, canvas, tooltipHover?.type === 'gold' ? tooltipHover : null);
     ctx.restore();
 }
 
@@ -1874,7 +1920,7 @@ export function renderDragGhost(
         ctx.restore();
         return;
     }
-    if (dragState.dragConsumableType === 'herb' || dragState.dragConsumableType === 'mushroom' || dragState.dragConsumableType === 'honey' || dragState.dragConsumableType === 'potion') {
+    if (dragState.dragConsumableType === 'herb' || dragState.dragConsumableType === 'mushroom' || dragState.dragConsumableType === 'honey' || dragState.dragConsumableType === 'potion' || dragState.dragConsumableType === 'gold') {
         const ghostSize = 44;
         const gx = dragState.pointerX - ghostSize / 2;
         const gy = dragState.pointerY - ghostSize / 2;
@@ -1892,6 +1938,7 @@ export function renderDragGhost(
         if (dragState.dragConsumableType === 'herb') drawHerbIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         else if (dragState.dragConsumableType === 'mushroom') drawMushroomIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         else if (dragState.dragConsumableType === 'potion') drawPotionIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
+        else if (dragState.dragConsumableType === 'gold') drawGoldIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         else drawHoneyIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         ctx.restore();
         return;
@@ -1925,7 +1972,7 @@ export function renderShop(
     const expandedCategories = ps.shopExpandedCategories;
     const layout = getShopLayout(canvas, scrollOffset, expandedWeapons, expandedArmor, expandedCategories, ps);
     const { panel, dropdowns, back } = layout;
-    const gold = ps.gold ?? 0;
+    const gold = getTotalGoldFromInventory(ps);
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);

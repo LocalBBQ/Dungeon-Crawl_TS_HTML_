@@ -28,11 +28,12 @@ import {
     EnemyVillageOgre,
     EnemyVillageOgreAlpha,
     EnemyVillageOgreElite
-} from '../config/enemyConfigs.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { EnemyWeapons } from '../weapons/EnemyWeaponsRegistry.ts';
-import { WeaponAttackHandler } from '../weapons/WeaponAttackHandler.ts';
-import type { EnemyTypeDefinition } from './EnemyType.ts';
+} from '../config/enemyConfigs.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { EnemyWeapons } from '../weapons/EnemyWeaponsRegistry.js';
+import { WeaponAttackHandler } from '../weapons/WeaponAttackHandler.js';
+import { EnemyAttackHandler } from '../weapons/EnemyAttackHandler.js';
+import type { EnemyTypeDefinition } from './EnemyType.js';
 
 export interface WeaponAndBehaviorEntry {
   weaponId: string;
@@ -70,11 +71,13 @@ const weaponAndBehavior: Record<string, WeaponAndBehaviorEntry> = {
   villageOgreElite: { weaponId: 'chieftainClub', behaviorId: 'chargeRelease' }
 };
 
-export const Enemies: Record<string, EnemyTypeDefinition | undefined> & {
+export type EnemiesRegistryType = Record<string, EnemyTypeDefinition | undefined> & {
   weaponAndBehavior: Record<string, WeaponAndBehaviorEntry>;
   getConfig(type: string): Record<string, unknown> | null;
-  createAttackHandler(enemyType: string): InstanceType<typeof WeaponAttackHandler> | null;
-} = {
+  createAttackHandler(enemyType: string, overrides?: { weaponId?: string; behaviorId?: string }): InstanceType<typeof WeaponAttackHandler> | InstanceType<typeof EnemyAttackHandler> | null;
+};
+
+export const Enemies = {
   goblin: EnemyGoblin,
   skeleton: EnemySkeleton,
   lesserDemon: EnemyLesserDemon,
@@ -119,7 +122,7 @@ export const Enemies: Record<string, EnemyTypeDefinition | undefined> & {
     const configHeavySmash = (config as { heavySmash?: { aoeOffset?: number; aoeRadius?: number } } | null)?.heavySmash;
     const options = {
       isPlayer: false,
-      behaviorType: behaviorId,
+      behaviorType: behaviorId as import('../weapons/WeaponAttackHandler.js').AttackHandlerBehaviorType,
       windUpTime: (config as { windUpTime?: number } | null)?.windUpTime != null ? (config as { windUpTime: number }).windUpTime : 0.6,
       cooldownMultiplier: (config as { attackCooldownMultiplier?: number } | null)?.attackCooldownMultiplier ?? 1,
       damageMultiplier: (config as { damageMultiplier?: number } | null)?.damageMultiplier ?? 1,
@@ -129,7 +132,7 @@ export const Enemies: Record<string, EnemyTypeDefinition | undefined> & {
     };
     return new WeaponAttackHandler(weapon, options);
   }
-};
+} as unknown as EnemiesRegistryType;
 
 // Populate GameConfig.enemy.types so existing callers keep working.
 if (GameConfig?.enemy) {

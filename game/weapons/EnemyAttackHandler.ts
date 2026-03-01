@@ -1,7 +1,7 @@
 // Single enemy attack handler: weapon + behavior type. Used by registry; EnemyAttack is fallback for unknown types.
 // Behavior types: slashOnly, slashAndLeap, chargeRelease, rangedOnly.
-import type { EnemyWeaponLike } from './EnemyWeaponsRegistry.ts';
-import { StatusEffects } from '../components/StatusEffects.ts';
+import type { EnemyWeaponLike } from './EnemyWeaponsRegistry.js';
+import { StatusEffects } from '../components/StatusEffects.js';
 
 export type EnemyAttackHandlerBehaviorType = 'slashOnly' | 'slashAndLeap' | 'chargeRelease' | 'rangedOnly';
 
@@ -113,17 +113,17 @@ export class EnemyAttackHandler {
                 }
             }
         } else if (this.behaviorType === 'slashOnly' || this.behaviorType === 'slashAndLeap') {
-            const first = w.getComboStageProperties && w.getComboStageProperties(1);
-            const dash = w.getDashAttackProperties && w.getDashAttackProperties();
+            const first = w.getComboStageProperties && w.getComboStageProperties(1) as { range?: number; damage?: number; arc?: number } | null;
+            const dash = w.getDashAttackProperties && w.getDashAttackProperties() as { damage?: number } | null;
             if (first) {
-                this.attackRange = first.range;
-                this.attackDamage = first.damage;
-                this.attackArc = first.arc;
+                this.attackRange = first.range ?? 0;
+                this.attackDamage = first.damage ?? 0;
+                this.attackArc = first.arc ?? 0;
             }
             if (w.cooldown != null) this.maxCooldown = w.cooldown;
             if (w.comboWindow != null) this.comboWindow = w.comboWindow;
             if (dash) {
-                this.lungeDamage = dash.damage;
+                this.lungeDamage = dash.damage ?? 0;
             }
         }
     }
@@ -251,12 +251,12 @@ export class EnemyAttackHandler {
 
         if (typeof w.getResolvedAttack === 'function') {
             const stage = this.comboStage >= 1 ? this.comboStage : 1;
-            const resolved = w.getResolvedAttack(0, stage, {});
+            const resolved = (w.getResolvedAttack as (a?: number, b?: number, c?: unknown) => { stageProps?: { damage?: number; range?: number; arc?: number }; finalDamage?: number; finalRange?: number; nextComboStage?: number } | null)(0, stage, {});
             if (!resolved) return false;
-            stageProps = resolved.stageProps;
-            finalDamage = resolved.finalDamage;
-            finalRange = resolved.finalRange;
-            nextComboStage = resolved.nextComboStage;
+            stageProps = resolved.stageProps ?? null;
+            finalDamage = resolved.finalDamage ?? 0;
+            finalRange = resolved.finalRange ?? 0;
+            nextComboStage = resolved.nextComboStage ?? 1;
         } else if (w.getComboStageProperties) {
             const maxStage = w.maxComboStage != null ? w.maxComboStage : 3;
             const stage = this.comboStage >= 1 ? this.comboStage : 1;

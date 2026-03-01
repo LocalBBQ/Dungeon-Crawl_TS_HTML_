@@ -1,16 +1,16 @@
 // Manages all projectiles in the game
-import { Movement } from '../components/Movement.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
-import { Health } from '../components/Health.ts';
-import { Transform } from '../components/Transform.ts';
-import { StatusEffects } from '../components/StatusEffects.ts';
-import { Combat } from '../components/Combat.ts';
-import { Rally } from '../components/Rally.ts';
-import { Projectile } from '../projectiles/Projectile.ts';
-import { EventTypes } from '../core/EventTypes.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
-import type { CameraShape } from '../types/camera.ts';
+import { Movement } from '../components/Movement.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
+import { Health } from '../components/Health.js';
+import { Transform } from '../components/Transform.js';
+import { StatusEffects } from '../components/StatusEffects.js';
+import { Combat } from '../components/Combat.js';
+import { Rally } from '../components/Rally.js';
+import { Projectile } from '../projectiles/Projectile.js';
+import { EventTypes } from '../core/EventTypes.js';
+import type { SystemManager } from '../core/SystemManager.js';
+import type { CameraShape } from '../types/camera.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 
@@ -71,7 +71,7 @@ export class ProjectileManager {
             }
             const enemyMovement = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(Movement);
             if (enemyMovement) {
-                (enemyMovement as Movement).applyKnockback(dx, dy, GameConfig.player.knockback.force);
+                (enemyMovement as Movement).applyKnockback(dx, dy, (GameConfig.player.knockback as { force: number }).force);
             }
             if (systems?.eventBus) {
                 systems.eventBus.emitTyped(EventTypes.PLAYER_HIT_ENEMY, {});
@@ -81,7 +81,8 @@ export class ProjectileManager {
 
     update(deltaTime: number, systems: SystemManager | null): void {
         const entityManager = systems ? systems.get('entities') : null;
-        const obstacleManager = systems ? systems.get('obstacles') : null;
+        type ObstacleManagerLike = { canMoveTo(x: number, y: number, w: number, h: number): boolean; getObstacleAt?(x: number, y: number, w: number, h: number): unknown; damageObstacle?(o: unknown, d: number): void };
+        const obstacleManager = systems ? (systems.get('obstacles') as ObstacleManagerLike | null) : null;
         const enemyManager = systems ? systems.get<{ enemies: unknown[] }>('enemies') : null;
 
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -102,9 +103,9 @@ export class ProjectileManager {
             if (projectile.checkObstacleCollision(obstacleManager)) {
                 // If we hit a breakable, damage it (and remove if hp <= 0)
                 if (obstacleManager && typeof obstacleManager.getObstacleAt === 'function') {
-                    const hitObstacle = obstacleManager.getObstacleAt(projectile.x, projectile.y, projectile.width, projectile.height);
+                    const hitObstacle = obstacleManager.getObstacleAt(projectile.x, projectile.y, projectile.width, projectile.height) as { breakable?: boolean; hp?: number } | null;
                     if (hitObstacle && hitObstacle.breakable && hitObstacle.hp != null) {
-                        obstacleManager.damageObstacle(hitObstacle, projectile.damage);
+                        obstacleManager.damageObstacle!(hitObstacle, projectile.damage);
                     }
                 }
                 if (projectile.ownerType === 'player' && projectile.aoeRadius > 0) {
@@ -119,7 +120,7 @@ export class ProjectileManager {
                 if (enemyManager) {
                     for (const enemy of enemyManager.enemies) {
                         const enemyId = (enemy as { id?: string }).id;
-                        if (projectile.checkCollision(enemy, enemyId)) {
+                        if (projectile.checkCollision(enemy as { getComponent<T>(c: new (...args: unknown[]) => T): T | null }, enemyId)) {
                             const enemyHealth = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(Health);
                             const enemyTransform = (enemy as { getComponent: (c: unknown) => unknown }).getComponent(Transform);
                             if (enemyHealth) {
@@ -142,7 +143,7 @@ export class ProjectileManager {
                                 if (enemyMovement && enemyTransform) {
                                     const dx = (enemyTransform as Transform).x - projectile.x;
                                     const dy = (enemyTransform as Transform).y - projectile.y;
-                                    (enemyMovement as Movement).applyKnockback(dx, dy, GameConfig.player.knockback.force);
+                                    (enemyMovement as Movement).applyKnockback(dx, dy, (GameConfig.player.knockback as { force: number }).force);
                                 }
                                 if (systems?.eventBus) {
                                     systems.eventBus.emitTyped(EventTypes.PLAYER_HIT_ENEMY, {});
@@ -162,7 +163,7 @@ export class ProjectileManager {
             } else {
                 if (entityManager) {
                     const player = (entityManager as { get: (id: string) => unknown }).get('player');
-                    if (player && projectile.checkCollision(player)) {
+                    if (player && projectile.checkCollision(player as { getComponent<T>(c: new (...args: unknown[]) => T): T | null })) {
                         const playerHealth = (player as { getComponent: (c: unknown) => unknown }).getComponent(Health);
                         const playerCombat = (player as { getComponent: (c: unknown) => unknown }).getComponent(Combat);
                         const playerMovement = (player as { getComponent: (c: unknown) => unknown }).getComponent(Movement);
@@ -200,7 +201,7 @@ export class ProjectileManager {
                             const playerStatus = (player as { getComponent: (c: unknown) => unknown }).getComponent(StatusEffects);
                             if (playerStatus) {
                                 const baseStun = projectile.stunBuildup || 0;
-                                const mult = blocked ? (GameConfig.player.stun?.blockedMultiplier ?? 0.5) : 1;
+                                const mult = blocked ? ((GameConfig.player.stun as { blockedMultiplier?: number } | undefined)?.blockedMultiplier ?? 0.5) : 1;
                                 (playerStatus as StatusEffects).addStunBuildup(baseStun * mult);
                             }
 
@@ -208,8 +209,8 @@ export class ProjectileManager {
                                 const dx = (playerTransform as Transform).x - projectile.x;
                                 const dy = (playerTransform as Transform).y - projectile.y;
                                 const enemyConfig = GameConfig.enemy.types.skeleton || GameConfig.enemy.types.goblin;
-                                const knockbackConfig = enemyConfig.knockback || { force: 160, decay: 0.88 };
-                                const baseForce = knockbackConfig.force * GameConfig.player.knockback.receivedMultiplier;
+                                const knockbackConfig = (enemyConfig as { knockback?: { force?: number; decay?: number } }).knockback || { force: 160, decay: 0.88 };
+                                const baseForce = knockbackConfig.force! * (GameConfig.player.knockback as { receivedMultiplier?: number }).receivedMultiplier!;
                                 (playerMovement as Movement).applyKnockback(dx, dy, baseForce);
                             }
                         }

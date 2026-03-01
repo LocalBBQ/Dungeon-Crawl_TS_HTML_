@@ -1,5 +1,5 @@
 // Renders obstacle list (trees, walls, etc.) using context + obstacleManager.
-import type { RenderContext } from './RenderContext.ts';
+import type { RenderContext } from './RenderContext.js';
 
 interface ObstacleManagerLike {
   obstacles: Array<{ x: number; y: number; width: number; height: number; type: string; color?: string; spritePath?: string; spriteFrameIndex?: number; [k: string]: unknown }>;
@@ -47,6 +47,46 @@ export class ObstacleLayerRenderer {
         ctx.strokeStyle = '#2a2018';
         ctx.lineWidth = Math.max(1, 1 / zoom);
         ctx.strokeRect(barX, barY, barWidth, barHeight);
+    }
+
+    /** Draw beehive shape at screen position (used standalone and when drawing on tree trunk). */
+    _drawBeehiveBody(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, w: number, h: number, zoom: number): void {
+        const hiveCx = screenX + w / 2;
+        const hiveCy = screenY + h / 2;
+        const rx = w * 0.45;
+        const ry = h * 0.4;
+        ctx.fillStyle = '#5c4a28';
+        ctx.strokeStyle = '#3d3018';
+        ctx.lineWidth = Math.max(1, 2 / zoom);
+        ctx.beginPath();
+        ctx.ellipse(hiveCx, hiveCy - h * 0.05, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#8b6914';
+        ctx.strokeStyle = '#6b5010';
+        ctx.beginPath();
+        ctx.ellipse(hiveCx, hiveCy - h * 0.05, rx * 0.88, ry * 0.88, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        const r = Math.min(rx, ry) * 0.28;
+        for (let i = 0; i < 2; i++) {
+            for (let j = 0; j < 2; j++) {
+                const hx = hiveCx + (j - 0.5) * rx * 0.7;
+                const hy = hiveCy - h * 0.05 + (i - 0.5) * ry * 0.6;
+                ctx.beginPath();
+                ctx.arc(hx, hy, r, 0, Math.PI * 2);
+                ctx.fillStyle = '#c9a227';
+                ctx.fill();
+                ctx.strokeStyle = '#8b6914';
+                ctx.stroke();
+            }
+        }
+        ctx.fillStyle = '#5c4a28';
+        ctx.beginPath();
+        ctx.ellipse(hiveCx, hiveCy + ry * 0.5, w * 0.12, h * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#3d3018';
+        ctx.stroke();
     }
 
     _drawObstacleBody(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, camera: RenderContext['camera'], zoom: number, obstacle: ObstacleShape, obstacleManager: ObstacleManagerLike, useEnvironmentSprites: boolean): void {
@@ -204,78 +244,6 @@ export class ObstacleLayerRenderer {
             ctx.lineWidth = Math.max(1, 1.5 / zoom);
             ctx.beginPath();
             ctx.ellipse(openCx, openCy, openRadiusX, openRadiusY, 0, Math.PI, 0);
-            ctx.stroke();
-            return;
-        }
-
-        // Well: stone ring, dark shaft, peaked roof, crank
-        if (obstacle.type === 'well') {
-            const lw = Math.max(1, 2 / zoom);
-            const cx = screenX + w / 2;
-            const ringY = screenY + h * 0.28;
-            const ringRx = w * 0.4;
-            const ringRy = h * 0.18;
-
-            // Stone ring (outer) – front rim
-            ctx.fillStyle = '#6b6358';
-            ctx.strokeStyle = '#4a453e';
-            ctx.lineWidth = lw;
-            ctx.beginPath();
-            ctx.ellipse(cx, ringY, ringRx, ringRy, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            // Stone ring inner edge (darker)
-            ctx.strokeStyle = '#3d3832';
-            ctx.lineWidth = Math.max(1, 1.5 / zoom);
-            ctx.beginPath();
-            ctx.ellipse(cx, ringY, ringRx * 0.72, ringRy * 0.75, 0, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Dark shaft (water hole)
-            ctx.fillStyle = '#1a1820';
-            ctx.beginPath();
-            ctx.ellipse(cx, ringY + h * 0.02, ringRx * 0.58, ringRy * 0.9, 0, 0, Math.PI * 2);
-            ctx.fill();
-            // Slight highlight at top of water
-            ctx.fillStyle = 'rgba(60, 70, 90, 0.5)';
-            ctx.beginPath();
-            ctx.ellipse(cx, ringY - h * 0.02, ringRx * 0.35, ringRy * 0.25, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Roof: two posts + peaked roof
-            const roofLeft = screenX + w * 0.2;
-            const roofRight = screenX + w * 0.8;
-            const roofBottom = screenY + h * 0.22;
-            const roofTop = screenY + h * 0.1;
-            const postW = Math.max(2, w * 0.08);
-            ctx.fillStyle = '#5a5048';
-            ctx.fillRect(roofLeft, ringY - ringRy - h * 0.02, postW, ringRy + h * 0.12);
-            ctx.fillRect(roofRight - postW, ringY - ringRy - h * 0.02, postW, ringRy + h * 0.12);
-            ctx.fillStyle = '#4a4238';
-            ctx.strokeStyle = '#3a332c';
-            ctx.lineWidth = lw;
-            ctx.beginPath();
-            ctx.moveTo(roofLeft + postW / 2, roofBottom);
-            ctx.lineTo(cx, roofTop);
-            ctx.lineTo(roofRight - postW / 2, roofBottom);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            // Crank (small circle + bar)
-            const crankCx = cx + ringRx * 0.55;
-            const crankCy = ringY - ringRy * 0.4;
-            ctx.fillStyle = '#6b5b4f';
-            ctx.strokeStyle = '#4a4038';
-            ctx.lineWidth = lw;
-            ctx.beginPath();
-            ctx.ellipse(crankCx, crankCy, w * 0.08, h * 0.06, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(crankCx - w * 0.1, crankCy);
-            ctx.lineTo(crankCx + w * 0.06, crankCy);
             ctx.stroke();
             return;
         }
@@ -472,6 +440,7 @@ export class ObstacleLayerRenderer {
         }
         const color = obstacle.color || '#555';
         if (obstacle.type === 'tree') {
+            // Trunk and canopy (beehives drawn separately as depth-sorted items so they appear on trunk)
             ctx.fillStyle = '#4a2c1a';
             ctx.fillRect(screenX + w * 0.4, screenY + h * 0.6, w * 0.2, h * 0.4);
             ctx.fillStyle = '#2d5016';
@@ -499,42 +468,7 @@ export class ObstacleLayerRenderer {
             ctx.lineTo(topX + w * 0.38, topY - h * 0.12);
             ctx.stroke();
         } else if (obstacle.type === 'beehive') {
-            const hiveCx = screenX + w / 2;
-            const hiveCy = screenY + h / 2;
-            const rx = w * 0.45;
-            const ry = h * 0.4;
-            ctx.fillStyle = '#5c4a28';
-            ctx.strokeStyle = '#3d3018';
-            ctx.lineWidth = Math.max(1, 2 / zoom);
-            ctx.beginPath();
-            ctx.ellipse(hiveCx, hiveCy - h * 0.05, rx, ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = '#8b6914';
-            ctx.strokeStyle = '#6b5010';
-            ctx.beginPath();
-            ctx.ellipse(hiveCx, hiveCy - h * 0.05, rx * 0.88, ry * 0.88, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            const r = Math.min(rx, ry) * 0.28;
-            for (let i = 0; i < 2; i++) {
-                for (let j = 0; j < 2; j++) {
-                    const hx = hiveCx + (j - 0.5) * rx * 0.7;
-                    const hy = hiveCy - h * 0.05 + (i - 0.5) * ry * 0.6;
-                    ctx.beginPath();
-                    ctx.arc(hx, hy, r, 0, Math.PI * 2);
-                    ctx.fillStyle = '#c9a227';
-                    ctx.fill();
-                    ctx.strokeStyle = '#8b6914';
-                    ctx.stroke();
-                }
-            }
-            ctx.fillStyle = '#5c4a28';
-            ctx.beginPath();
-            ctx.ellipse(hiveCx, hiveCy + ry * 0.5, w * 0.12, h * 0.2, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#3d3018';
-            ctx.stroke();
+            this._drawBeehiveBody(ctx, screenX, screenY, w, h, zoom);
         } else if (obstacle.type === 'mushroom') {
             ctx.fillStyle = '#2a221c';
             if (obstacle.leafless) {
@@ -616,21 +550,101 @@ export class ObstacleLayerRenderer {
             ctx.fillStyle = 'rgba(80, 20, 25, 0.6)';
             ctx.fillRect(screenX + w * 0.25, screenY, w * 0.5, h * 0.15);
         } else if (obstacle.type === 'brazier') {
-            ctx.fillStyle = '#3d2518';
-            ctx.fillRect(screenX + w * 0.2, screenY + h * 0.5, w * 0.6, h * 0.5);
+            // Pillar-style brazier: base, stem, bowl, then large fire on top
+            const baseH = h * 0.12;
+            const stemW = w * 0.4;
+            const stemH = h * 0.42;
+            const bowlDepth = h * 0.14;
+            const bowlTopW = w * 0.88;
+            const bowlBottomW = w * 0.72;
+            const bottomY = screenY + h;
+            const baseTop = bottomY - baseH;
+            const stemTop = baseTop - stemH;
+            const bowlTop = stemTop - bowlDepth;
+
+            // Base (dark stone)
+            ctx.fillStyle = '#3d3630';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(screenX, baseTop, w, baseH, 2);
+            } else {
+                ctx.rect(screenX, baseTop, w, baseH);
+            }
+            ctx.fill();
+            ctx.strokeStyle = '#2a2520';
+            ctx.lineWidth = Math.max(1, 1.5 / zoom);
+            ctx.stroke();
+
+            // Stem (pillar column)
+            const stemX = cx - stemW / 2;
+            ctx.fillStyle = '#4a4038';
+            ctx.fillRect(stemX, stemTop, stemW, stemH);
+            ctx.strokeStyle = '#35302a';
+            ctx.lineWidth = Math.max(1, 1 / zoom);
+            ctx.strokeRect(stemX, stemTop, stemW, stemH);
+            ctx.fillStyle = '#5a5048';
+            ctx.fillRect(stemX + stemW * 0.1, stemTop, stemW * 0.15, stemH);
+
+            // Bowl (trapezoid basin)
             ctx.fillStyle = '#5c3020';
             ctx.beginPath();
-            ctx.ellipse(cx, screenY + h * 0.35, w * 0.35, h * 0.25, 0, 0, Math.PI * 2);
+            ctx.moveTo(cx - bowlTopW / 2, bowlTop);
+            ctx.lineTo(cx + bowlTopW / 2, bowlTop);
+            ctx.lineTo(cx + bowlBottomW / 2, bowlTop + bowlDepth);
+            ctx.lineTo(cx - bowlBottomW / 2, bowlTop + bowlDepth);
+            ctx.closePath();
             ctx.fill();
-            const t = performance.now() * 0.003;
-            const glow = 0.7 + 0.3 * Math.sin(t);
-            ctx.fillStyle = `rgba(255, 120, 40, ${0.4 * glow})`;
+            ctx.strokeStyle = '#3d2518';
+            ctx.stroke();
+            ctx.fillStyle = '#4a2818';
             ctx.beginPath();
-            ctx.ellipse(cx, screenY + h * 0.3, w * 0.25, h * 0.2, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx, bowlTop + bowlDepth * 0.5, w * 0.28, bowlDepth * 0.6, 0, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = `rgba(255, 180, 80, ${0.6 * glow})`;
+
+            // Large fire: outer glow + core flame (animated)
+            const t = performance.now() * 0.002;
+            const sway = Math.sin(t) * (w * 0.04);
+            const glow = 0.72 + 0.28 * Math.sin(t * 1.3);
+            const flameCenterY = bowlTop + 2;
+            const flameH = h * 0.52;
+            const flameW = w * 0.32;
+
+            const glowGrad = ctx.createRadialGradient(
+                cx + sway, flameCenterY, 0,
+                cx + sway, flameCenterY, flameH * 1.15
+            );
+            glowGrad.addColorStop(0, `rgba(255, 180, 60, ${0.65 * glow})`);
+            glowGrad.addColorStop(0.35, `rgba(220, 100, 30, ${0.3 * glow})`);
+            glowGrad.addColorStop(0.7, 'rgba(180, 50, 10, 0.08)');
+            glowGrad.addColorStop(1, 'rgba(140, 30, 5, 0)');
+            ctx.fillStyle = glowGrad;
             ctx.beginPath();
-            ctx.ellipse(cx, screenY + h * 0.28, w * 0.12, h * 0.1, 0, 0, Math.PI * 2);
+            ctx.ellipse(cx + sway, flameCenterY, flameW, flameH, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            const coreGrad = ctx.createLinearGradient(cx, flameCenterY - flameH, cx, flameCenterY + flameH * 0.5);
+            coreGrad.addColorStop(0, '#fff8b0');
+            coreGrad.addColorStop(0.25, '#ffcc40');
+            coreGrad.addColorStop(0.55, '#e07020');
+            coreGrad.addColorStop(1, '#802010');
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.moveTo(cx + sway, flameCenterY - flameH * 0.82);
+            ctx.bezierCurveTo(
+                cx + flameW * 0.35 + sway, flameCenterY - flameH * 0.1,
+                cx + flameW * 0.28 + sway, flameCenterY + flameH * 0.5,
+                cx + sway, flameCenterY + flameH * 0.22
+            );
+            ctx.bezierCurveTo(
+                cx - flameW * 0.28 + sway, flameCenterY + flameH * 0.5,
+                cx - flameW * 0.35 + sway, flameCenterY - flameH * 0.1,
+                cx + sway, flameCenterY - flameH * 0.82
+            );
+            ctx.fill();
+
+            ctx.fillStyle = `rgba(255, 255, 220, ${0.88 * glow})`;
+            ctx.beginPath();
+            ctx.ellipse(cx + sway, flameCenterY - flameH * 0.45, flameW * 0.2, flameH * 0.22, 0, 0, Math.PI * 2);
             ctx.fill();
         } else if (obstacle.type === 'lavaRock') {
             ctx.fillStyle = obstacle.color || '#4a2520';
@@ -663,7 +677,7 @@ export class ObstacleLayerRenderer {
         if (!obstacleManager) return;
         const zoom = camera.zoom;
         const useEnvironmentSprites = !settings || settings.useEnvironmentSprites !== false;
-        const depthSortTypes = ['tree', 'deadTree', 'beehive', 'bush', 'rock', 'elderTrunk', 'pillar', 'brokenPillar', 'column', 'statueBase', 'arch'];
+        const depthSortTypes = ['tree', 'deadTree', 'beehive', 'bush', 'rock', 'elderTrunk', 'pillar', 'brokenPillar', 'column', 'statueBase', 'arch', 'brazier'];
 
         // View bounds in world space (with margin so we don't clip at edges)
         const margin = 80;

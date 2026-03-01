@@ -1,5 +1,5 @@
 // Single weapon class: parses config via WeaponBehavior and delegates all methods.
-import { WeaponBehavior } from './weaponBehavior.ts';
+import { WeaponBehavior } from './weaponBehavior.js';
 import type {
     ParseWeaponConfigResult,
     StageConfigInput,
@@ -8,7 +8,7 @@ import type {
     ResolveAttackResult,
     StagePropsResult,
     ChargeReleaseResult,
-} from './weaponBehavior.ts';
+} from './weaponBehavior.js';
 
 export type WeaponConfigInput = Parameters<typeof WeaponBehavior.parseWeaponConfig>[0] & {
     isRanged?: boolean;

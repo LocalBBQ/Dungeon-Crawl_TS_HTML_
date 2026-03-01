@@ -32,7 +32,7 @@ export const SceneTilesForest: Record<string, { width: number; height: number; o
             ]
         },
 
-        /** Lumber mill: shed, wood cluster, log pile (barrels), fence, well, rubble. */
+        /** Lumber mill: shed, wood cluster, log pile (barrels), fence, rubble. */
         lumberMill: {
             perimeterFence: { spacing: 36, size: 28 },
             width: 1200,
@@ -64,8 +64,7 @@ export const SceneTilesForest: Record<string, { width: number; height: number; o
                 { type: 'fence', x: 160, y: 501, width: 36, height: 36 },
                 { type: 'fence', x: 199, y: 501, width: 36, height: 36 },
                 { type: 'fence', x: 40, y: 380, width: 36, height: 36 },
-                { type: 'fence', x: 40, y: 418, width: 36, height: 36 },
-                { type: 'well', x: 640, y: 560, width: 90, height: 90 }
+                { type: 'fence', x: 40, y: 418, width: 36, height: 36 }
             ],
             gatherables: [
                 { type: 'ore', x: 560, y: 320, width: 40, height: 40 },
@@ -141,7 +140,7 @@ export const SceneTilesForest: Record<string, { width: number; height: number; o
             ]
         },
 
-        /** Orchard edge: sparse trees in rows, bushes, well. */
+        /** Orchard edge: sparse trees in rows, bushes. */
         orchardEdge: {
             width: 1200,
             height: 1200,
@@ -156,24 +155,22 @@ export const SceneTilesForest: Record<string, { width: number; height: number; o
                 { type: 'tree', x: 640, y: 520, width: 96, height: 96 },
                 { type: 'bush', x: 220, y: 320, width: 50, height: 50 },
                 { type: 'bush', x: 400, y: 350, width: 48, height: 48 },
-                { type: 'bush', x: 580, y: 480, width: 52, height: 52 },
-                { type: 'well', x: 380, y: 360, width: 90, height: 90 }
+                { type: 'bush', x: 580, y: 480, width: 52, height: 52 }
             ]
         },
 
-        /** Crossroads: minimal obstacles, well or rock as landmark. */
+        /** Crossroads: minimal obstacles, rock as landmark. */
         crossroads: {
             width: 1200,
             height: 1200,
             obstacles: [
                 { type: 'tree', x: 60, y: 80, width: 90, height: 90 },
                 { type: 'tree', x: 660, y: 660, width: 85, height: 85 },
-                { type: 'rock', x: 360, y: 360, width: 70, height: 70 },
-                { type: 'well', x: 640, y: 80, width: 88, height: 88 }
+                { type: 'rock', x: 360, y: 360, width: 70, height: 70 }
             ]
         },
 
-        /** Small farm: shed, well, fence pen, barrels, bushes (garden), a couple trees. Bandits with daggers only (no goblins). */
+        /** Small farm: shed, fence pen, barrels, bushes (garden), a couple trees. Bandits with daggers only (no goblins). */
         smallFarm: {
             spawn: { type: 'pack', count: 1, enemyTypes: ['bandit'] },
             perimeterFence: { spacing: 36, size: 28 },
@@ -181,7 +178,6 @@ export const SceneTilesForest: Record<string, { width: number; height: number; o
             height: 1200,
             obstacles: [
                 { type: 'shed', x: 80, y: 280, width: 180, height: 180 },
-                { type: 'well', x: 520, y: 320, width: 88, height: 88 },
                 { type: 'barrel', x: 300, y: 420, width: 52, height: 52 },
                 { type: 'barrel', x: 340, y: 440, width: 48, height: 48 },
                 { type: 'barrel', x: 440, y: 520, width: 50, height: 50 },
@@ -268,8 +264,7 @@ export const SceneTilesForest: Record<string, { width: number; height: number; o
                 { type: 'rock', x: 140, y: 480, width: 62, height: 62 },
                 { type: 'fence', x: 460, y: 500, width: 36, height: 36 },
                 { type: 'fence', x: 496, y: 500, width: 36, height: 36 },
-                { type: 'fence', x: 532, y: 500, width: 36, height: 36 },
-                { type: 'well', x: 100, y: 560, width: 88, height: 88 }
+                { type: 'fence', x: 532, y: 500, width: 36, height: 36 }
             ]
         },
 

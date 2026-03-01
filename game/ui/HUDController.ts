@@ -1,9 +1,10 @@
 /**
  * HUD and inventory panel updates: health/stamina orbs, inventory screen, player portrait, equipment chest overlay.
  */
+import type { Entity } from '../entities/Entity.js';
 import type { EntityShape } from '../types/entity.js';
 import type { ArmorSlotId, InventorySlot, PlayingStateShape } from '../state/PlayingState.js';
-import { getSlotKey, getActiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, isWhetstoneSlot, isWeaponInstance } from '../state/PlayingState.js';
+import { getSlotKey, getActiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, isWhetstoneSlot, isWeaponInstance, isGoldSlot } from '../state/PlayingState.js';
 import { WHETSTONE_REPAIR_PERCENT } from '../config/lootConfig.js';
 import { swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
 import { getArmor } from '../armor/armorConfigs.js';
@@ -17,7 +18,7 @@ import {
     unequipToInventory
 } from '../state/InventoryActions.js';
 import { Health } from '../components/Health.js';
-import { Rally } from '../components/Rally.ts';
+import { Rally } from '../components/Rally.js';
 import { Stamina } from '../components/Stamina.js';
 import { Combat } from '../components/Combat.js';
 import { PlayerHealing } from '../components/PlayerHealing.js';
@@ -27,9 +28,11 @@ import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { CHEST_WEAPON_ORDER, getWeaponDisplayName, getWeaponSymbol } from './InventoryChestCanvas.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export interface SystemsLike {
     get(name: string): unknown;
+    eventBus?: { emit(event: string, payload?: unknown): void };
 }
 
 export interface EntitiesLike {
@@ -378,11 +381,13 @@ export class HUDController {
                 this.applyWeaponToSlot(key, slot);
                 this.refreshChestGridEquippedState();
                 this.refreshChestEquipmentLabels();
+                this.ctx.systems.eventBus?.emit(EventTypes.UI_BUTTON_CLICK);
             }
         } else if (backBtn) {
             this.ctx.playingState.chestOpen = false;
             this.ctx.playingState.chestUseCooldown = 0;
             this.setChestOverlayVisible(false);
+            this.ctx.systems.eventBus?.emit(EventTypes.UI_BUTTON_CLICK);
         }
     }
 
@@ -510,7 +515,6 @@ export class HUDController {
         const offhandEl = document.getElementById('inventory-equip-offhand');
         const healChargesEl = document.getElementById('inventory-stat-heal');
         const killsEl = document.getElementById('inventory-stat-kills');
-        const goldEl = document.getElementById('inventory-stat-gold');
         if (healthEl && health) {
             const rallyAmount = rally && rally.rallyPool > 0 ? Math.floor(rally.rallyPool) : 0;
             healthEl.textContent = rallyAmount > 0
@@ -532,7 +536,6 @@ export class HUDController {
             damageEl.textContent = String(dmg);
         }
         if (killsEl) killsEl.textContent = String(this.ctx.playingState.killsThisLife);
-        if (goldEl) goldEl.textContent = String(this.ctx.playingState.gold);
 
         this.refreshInventoryEquipmentLabels();
         this.refreshArmorLabels();
@@ -599,6 +602,11 @@ export class HUDController {
                 const tooltip = `Drag onto a weapon to restore sharpness. Restores ${repairAmount} durability.`;
                 slot.title = item.count > 1 ? `Whetstone ×${item.count} — ${tooltip}` : `Whetstone — ${tooltip}`;
                 slot.draggable = true;
+            } else if (isGoldSlot(item)) {
+                slot.removeAttribute('data-weapon-key');
+                slot.textContent = '◎';
+                slot.title = item.count > 1 ? `Gold ×${item.count}` : 'Gold';
+                slot.draggable = false;
             } else if (key && Weapons[key]) {
                 slot.setAttribute('data-weapon-key', key);
                 slot.textContent = getWeaponSymbol(key);

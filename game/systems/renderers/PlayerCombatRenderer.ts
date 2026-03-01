@@ -1,8 +1,8 @@
 // Player combat visuals (attack arc, sword, mace, crossbow, shield). Procedural drawing only.
 // Animation (anticipation, easing, follow-through) applies to all melee weapon types:
 // sword, greatsword, mace, and spin attacks — all use getSweepProgress + getAnticipationPullBack.
-import { Utils } from '../../utils/Utils.ts';
-import { isBlockable } from '../../weapons/weaponBehavior.ts';
+import { Utils } from '../../utils/Utils.js';
+import { isBlockable } from '../../weapons/weaponBehavior.js';
 
 export const PlayerCombatRenderer = {
     SWEEP_SPEED: 1,
@@ -36,17 +36,18 @@ export const PlayerCombatRenderer = {
 
     /** Resolve a visual constant: weapon.attackVisual override if present (camelCase or UPPER_SNAKE), else renderer default. */
     v(combat: unknown, key: string): number {
-        const visual = combat && combat.weapon && combat.weapon.attackVisual;
+        const c = combat as { weapon?: { attackVisual?: Record<string, unknown> } };
+        const visual = c && c.weapon && c.weapon.attackVisual;
         if (!visual) return this[key];
         const parts = key.split('_');
         const camel = parts[0].toLowerCase() + parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('');
         const value = visual[camel] !== undefined && visual[camel] !== null ? visual[camel] : visual[key];
-        return value !== undefined && value !== null ? value : this[key];
+        return (value !== undefined && value !== null ? value : this[key]) as number;
     },
 
     /** Resolve weapon metal color: if weapon has color use it (and darkened stroke), else return defaults. */
     weaponMetalColors(combat: unknown, defaultFill: string, defaultStroke: string): { fill: string; stroke: string } {
-        const w = combat?.weapon;
+        const w = (combat as { weapon?: { color?: string } })?.weapon;
         const hex = w?.color;
         if (!hex || typeof hex !== 'string') return { fill: defaultFill, stroke: defaultStroke };
         const m = hex.match(/^#?([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
@@ -59,8 +60,9 @@ export const PlayerCombatRenderer = {
 
     /** Raw linear progress 0..1 over the attack duration. */
     getRawProgress(combat: unknown): number {
-        const duration = combat.attackDuration > 0 ? combat.attackDuration : 0.001;
-        return Math.min(1, Math.max(0, (combat.attackTimer || 0) / duration));
+        const c = combat as { attackDuration?: number; attackTimer?: number };
+        const duration = (c.attackDuration != null && c.attackDuration > 0) ? c.attackDuration : 0.001;
+        return Math.min(1, Math.max(0, (c.attackTimer || 0) / duration));
     },
 
     /** Visual sweep progress: anticipation then snappy ease-out (hitbox/arc use this, no overshoot). */
@@ -394,7 +396,7 @@ export const PlayerCombatRenderer = {
      * Shared by player (e.g. dagger, sword; off-hand shield when equipped) and goblin. options.style === 'goblin' draws a Goblin Shiv (jagged, rusty).
      * part: 'handle' = pommel + grip only; 'blade' = guard + blade only; 'all' = full (default).
      */
-    drawDaggerAt(ctx, gripX, gripY, angle, baseLength, camera, options = {}) {
+    drawDaggerAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { style?: string; part?: string; weaponColor?: string } = {}) {
         if (options.style === 'goblin') {
             this._drawGoblinShivAt(ctx, gripX, gripY, angle, baseLength, camera, options);
             return;
@@ -463,7 +465,7 @@ export const PlayerCombatRenderer = {
     },
 
     /** Goblin Shiv: short jagged blade, rusty metal, wrapped bone/leather grip. */
-    _drawGoblinShivAt(ctx, gripX, gripY, angle, baseLength, camera, options = {}) {
+    _drawGoblinShivAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { part?: string } = {}) {
         const part = options.part || 'all';
         const swordLength = baseLength * camera.zoom;
         const scale = camera.zoom;
@@ -538,7 +540,7 @@ export const PlayerCombatRenderer = {
      * Blessed Winds: slender curved blade, ornate wind-themed guard and pommel, warm grip.
      * part: 'handle' = pommel + grip; 'blade' = guard + blade; 'all' = full.
      */
-    drawBlessedWindsAt(ctx, gripX, gripY, angle, baseLength, camera, options = {}) {
+    drawBlessedWindsAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { part?: string } = {}) {
         const part = options.part || 'all';
         const z = camera.zoom;
         const swordLength = baseLength * z * 1.05;
@@ -656,22 +658,23 @@ export const PlayerCombatRenderer = {
     /**
      * part: 'handle' = pommel + grip only (draw under helmet); 'blade' = guard + blade only (draw over); 'all' = full sword (default).
      */
-    drawSword(ctx, screenX, screenY, transform, movement, combat, camera, options = {}) {
+    drawSword(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, transform: unknown, movement: unknown, combat: unknown, camera: { zoom: number }, options: { part?: string } = {}) {
         const part = options.part || 'all';
         if (!movement || !combat || !transform) return;
+        const c = combat as { weapon?: { twoHanded?: boolean; baseRange?: number; weaponLength?: number; name?: string; color?: string }; attackRange?: number };
         const grip = this.getSwordGrip(screenX, screenY, transform, movement, combat, camera);
         if (!grip) return;
         const { gripX, gripY, swordAngle } = grip;
-        const twoHanded = combat.weapon && combat.weapon.twoHanded;
-        const defaultRange = combat.weapon ? combat.weapon.baseRange : 100;
-        const baseLength = (combat.weapon && combat.weapon.weaponLength != null) ? combat.weapon.weaponLength : (combat.attackRange ?? defaultRange) * 0.48;
+        const twoHanded = c.weapon && c.weapon.twoHanded;
+        const defaultRange = c.weapon ? c.weapon.baseRange : 100;
+        const baseLength = (c.weapon && c.weapon.weaponLength != null) ? c.weapon.weaponLength! : (c.attackRange ?? defaultRange) * 0.48;
 
-        if (combat.weapon && combat.weapon.name === 'Blessed Winds') {
+        if (c.weapon && c.weapon.name === 'Blessed Winds') {
             this.drawBlessedWindsAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part });
             return;
         }
         if (!twoHanded) {
-            this.drawDaggerAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part, weaponColor: combat.weapon?.color });
+            this.drawDaggerAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part, weaponColor: c.weapon?.color });
             return;
         }
 

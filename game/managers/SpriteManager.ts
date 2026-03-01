@@ -1,5 +1,5 @@
 // Sprite Manager - handles loading and caching of sprite sheets
-import { GameConfig } from '../config/GameConfig.ts';
+import { GameConfig } from '../config/GameConfig.js';
 
 /** 8-direction frame set: directions[dirIndex][frameIndex] = image. Dir order: E, NE, N, NW, W, SW, S, SE. */
 export interface MultiDirFrameSet {
@@ -39,10 +39,10 @@ export class SpriteManager {
         }
 
         if (this.loadingPromises.has(path)) {
-            return this.loadingPromises.get(path);
+            return this.loadingPromises.get(path)!;
         }
 
-        const promise = new Promise((resolve, reject) => {
+        const promise = new Promise<HTMLImageElement>((resolve, reject) => {
             const img = new Image();
             img.onload = () => {
                 this.sprites.set(path, img);

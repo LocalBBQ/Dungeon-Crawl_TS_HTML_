@@ -3,13 +3,13 @@
  * Biomes from game/config/sceneTiles/*.
  * getTile(tileId) supports namespaced ids (theme.tileName) or bare id (resolves against forest).
  */
-import { SceneTilesForest } from './sceneTiles/ForestTiles.ts';
-import { SceneTilesCursedWilds } from './sceneTiles/CursedWildsTiles.ts';
-import { SceneTilesDemonApproach } from './sceneTiles/DemonApproachTiles.ts';
-import { SceneTilesFort } from './sceneTiles/FortTiles.ts';
-import { SceneTilesDungeon } from './sceneTiles/DungeonTiles.ts';
-import { SceneTilesDelve } from './sceneTiles/DelveTiles.ts';
-import { SceneTilesElderWoods } from './sceneTiles/ElderWoodsTiles.ts';
+import { SceneTilesForest } from './sceneTiles/ForestTiles.js';
+import { SceneTilesCursedWilds } from './sceneTiles/CursedWildsTiles.js';
+import { SceneTilesDemonApproach } from './sceneTiles/DemonApproachTiles.js';
+import { SceneTilesFort } from './sceneTiles/FortTiles.js';
+import { SceneTilesDungeon } from './sceneTiles/DungeonTiles.js';
+import { SceneTilesDelve } from './sceneTiles/DelveTiles.js';
+import { SceneTilesElderWoods } from './sceneTiles/ElderWoodsTiles.js';
 
 export interface SceneTileDef {
   width?: number;

@@ -1,15 +1,17 @@
 // Render System - orchestrates layer renderers.
-import { WorldLayerRenderer } from './renderers/WorldLayerRenderer.ts';
-import { ObstacleLayerRenderer } from './renderers/ObstacleLayerRenderer.ts';
-import { PortalRenderer } from './renderers/PortalRenderer.ts';
-import { BoardRenderer } from './renderers/BoardRenderer.ts';
-import { ChestRenderer } from './renderers/ChestRenderer.ts';
-import { ShopkeeperRenderer } from './renderers/ShopkeeperRenderer.ts';
-import { RerollStationRenderer } from './renderers/RerollStationRenderer.ts';
-import { EntityLayerRenderer } from './renderers/EntityLayerRenderer.ts';
-import { MinimapRenderer } from './renderers/MinimapRenderer.ts';
-import { createRenderContext } from './renderers/RenderContext.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import { WorldLayerRenderer } from './renderers/WorldLayerRenderer.js';
+import { ObstacleLayerRenderer } from './renderers/ObstacleLayerRenderer.js';
+import { PortalRenderer } from './renderers/PortalRenderer.js';
+import { BoardRenderer } from './renderers/BoardRenderer.js';
+import { ChestRenderer } from './renderers/ChestRenderer.js';
+import { ShopkeeperRenderer } from './renderers/ShopkeeperRenderer.js';
+import { RerollStationRenderer } from './renderers/RerollStationRenderer.js';
+import { EntityLayerRenderer } from './renderers/EntityLayerRenderer.js';
+import { MinimapRenderer } from './renderers/MinimapRenderer.js';
+import { createRenderContext } from './renderers/RenderContext.js';
+import type { SystemManager } from '../core/SystemManager.js';
+import type { EntityShape } from '../types/entity.js';
+import type { CameraShape } from '../types/camera.js';
 
 export class RenderSystem {
     canvas: HTMLCanvasElement;
@@ -73,6 +75,10 @@ export class RenderSystem {
         this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal: showPrompt, promptLines, isStairs, channelProgress });
     }
 
+    renderRecallPortal(recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean }, camera: { x: number; y: number; zoom: number }, playerNearRecallPortal: boolean, channelProgress: number, promptLines?: string[]) {
+        this.portalRenderer.renderRecallPortal(this._getContext(camera), { recallPortal, playerNearRecallPortal, channelProgress, promptLines });
+    }
+
     renderCaveEntrancePrompt(worldRect: { x: number; y: number; width: number; height: number }, camera, channelProgress?: number) {
         this.portalRenderer.renderPromptAtRect(this._getContext(camera), { worldRect, promptLines: ['E Enter'], channelProgress: channelProgress ?? 0 });
     }
@@ -107,14 +113,14 @@ export class RenderSystem {
     }
 
     /** Draw entities and depth-sort obstacles (trees, etc.) interleaved by Y so layering respects player and enemies. */
-    renderEntities(entities, camera, obstacleManager = null, currentLevel = 1) {
+    renderEntities(entities: unknown, camera: { x: number; y: number; zoom: number }, obstacleManager: unknown = null, currentLevel = 1): void {
         const context = this._getContext(camera);
-        const data = { entities };
+        const data: { entities: unknown; obstacleManager?: unknown; obstacleLayerRenderer?: unknown } = { entities };
         if (obstacleManager) {
             data.obstacleManager = obstacleManager;
             data.obstacleLayerRenderer = this.obstacleLayer;
         }
-        this.entityLayer.render(context, data);
+        this.entityLayer.render(context, data as { entities?: EntityShape[]; obstacleManager?: { obstacles: unknown[] }; obstacleLayerRenderer?: ObstacleLayerRenderer });
     }
 
     renderMinimap(camera, entityManager, worldWidth, worldHeight, portal = null, currentLevel = 1, activeQuest = null, questSurviveStartTime?: number) {
@@ -133,8 +139,9 @@ export class RenderSystem {
     renderOverlay(ctx: CanvasRenderingContext2D, camera: { x: number; y: number; zoom: number }): void {
         if (!this.systems) return;
         const typed = this.systems.getTyped();
-        if (typed.projectiles) typed.projectiles.render(ctx, camera);
-        if (typed.pickups) typed.pickups.render(ctx, camera);
-        if (typed.damageNumbers) typed.damageNumbers.render(ctx, camera);
+        const cam = camera as CameraShape;
+        if (typed.projectiles) typed.projectiles.render(ctx, cam);
+        if (typed.pickups) typed.pickups.render(ctx, cam);
+        if (typed.damageNumbers) typed.damageNumbers.render(ctx, cam);
     }
   }

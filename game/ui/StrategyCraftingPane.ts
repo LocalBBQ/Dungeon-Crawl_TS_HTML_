@@ -2,7 +2,7 @@
  * Strategy Crafting pane: left-sliding DOM panel showing recipes and current input buffer.
  */
 import type { StrategyDirection, StrategyRecipeDef } from '../config/strategyCraftingConfig.js';
-import { STRATEGY_RECIPES, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
+import { STRATEGY_RECIPES, getStrategyRecipe, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import {
   INVENTORY_SLOT_COUNT,
@@ -22,6 +22,8 @@ const PANE_ID = 'strategy-crafting-pane';
 const LIST_ID = 'strategy-crafting-list';
 const BUFFER_ID = 'strategy-crafting-buffer';
 const BUFFER_WRAP_ID = 'strategy-crafting-buffer-wrap';
+const NOTIFICATION_ID = 'strategy-crafting-notification';
+const NOTIFICATION_DURATION_MS = 2500;
 
 function countHerbs(ps: PlayingStateShape): number {
   if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return 0;
@@ -62,6 +64,19 @@ const SUCCESS_FLASH_MS = 600;
 /** Recipe id that just succeeded; used to highlight the row until successRecipeIdUntil. */
 let successRecipeId: string | null = null;
 let successRecipeIdUntil = 0;
+let successFlashTimeoutId: number | undefined;
+
+/** Clear green confirmation state (buffer + recipe highlight) and any pending timeout. */
+function clearStrategyCraftSuccessState(): void {
+  if (successFlashTimeoutId != null) {
+    window.clearTimeout(successFlashTimeoutId);
+    successFlashTimeoutId = undefined;
+  }
+  successRecipeId = null;
+  successRecipeIdUntil = 0;
+  const bufferWrap = document.getElementById(BUFFER_WRAP_ID);
+  if (bufferWrap) bufferWrap.classList.remove('strategy-crafting-buffer-success');
+}
 
 function directionToSymbol(d: StrategyDirection): string {
   return DIRECTION_SYMBOLS[d] ?? d;
@@ -72,6 +87,17 @@ const DRAG_STORAGE_KEY = 'strategyCraftingPanePosition';
 export function setStrategyCraftingPaneVisible(visible: boolean): void {
   const el = document.getElementById(PANE_ID);
   if (el) el.classList.toggle('strategy-crafting-pane-open', visible);
+  if (!visible) {
+    clearStrategyCraftSuccessState();
+    const notif = document.getElementById(NOTIFICATION_ID);
+    if (notif) {
+      notif.classList.remove('strategy-crafting-notification-visible');
+      notif.textContent = '';
+      const t = (notif as HTMLElement & { _notificationTimeout?: number })._notificationTimeout;
+      if (t != null) window.clearTimeout(t);
+      (notif as HTMLElement & { _notificationTimeout?: number })._notificationTimeout = undefined;
+    }
+  }
 }
 
 /**
@@ -146,19 +172,39 @@ export function initStrategyCraftingPaneDraggable(): void {
 }
 
 /**
+ * Show an outcome notification (success or failure) for strategy crafting.
+ * Message is shown in the pane for NOTIFICATION_DURATION_MS, then cleared.
+ */
+export function showStrategyCraftNotification(message: string, type: 'success' | 'failure'): void {
+  const el = document.getElementById(NOTIFICATION_ID);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `strategy-crafting-notification strategy-crafting-notification-${type}`;
+  el.classList.add('strategy-crafting-notification-visible');
+  clearTimeout((el as HTMLElement & { _notificationTimeout?: number })._notificationTimeout);
+  (el as HTMLElement & { _notificationTimeout?: number })._notificationTimeout = window.setTimeout(() => {
+    el.classList.remove('strategy-crafting-notification-visible');
+    (el as HTMLElement & { _notificationTimeout?: number })._notificationTimeout = undefined;
+  }, NOTIFICATION_DURATION_MS);
+}
+
+/**
  * Show visual confirmation that a recipe was crafted successfully:
- * flash the matched recipe row and the input buffer area, then clear after a short delay.
+ * flash the matched recipe row and the input buffer area, then show outcome notification.
  */
 export function showRecipeSuccess(recipeId: string): void {
+  clearStrategyCraftSuccessState();
   successRecipeId = recipeId;
   successRecipeIdUntil = Date.now() + SUCCESS_FLASH_MS;
   const bufferWrap = document.getElementById(BUFFER_WRAP_ID);
   if (bufferWrap) bufferWrap.classList.add('strategy-crafting-buffer-success');
-  window.setTimeout(() => {
-    if (bufferWrap) bufferWrap.classList.remove('strategy-crafting-buffer-success');
-    successRecipeId = null;
-    successRecipeIdUntil = 0;
+  successFlashTimeoutId = window.setTimeout(() => {
+    clearStrategyCraftSuccessState();
+    successFlashTimeoutId = undefined;
   }, SUCCESS_FLASH_MS);
+  const recipe = getStrategyRecipe(recipeId);
+  const label = recipe?.label ?? recipeId;
+  showStrategyCraftNotification(`${label} succeeded`, 'success');
 }
 
 export function updateStrategyCraftingPane(

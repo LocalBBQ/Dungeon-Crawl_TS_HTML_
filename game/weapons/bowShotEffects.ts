@@ -3,12 +3,13 @@
  * Default effect: level N fires N arrows (slight spread). Other effects can be slotted in
  * (e.g. damage scaling, piercing, spread angle).
  */
-import { Utils } from '../utils/Utils.ts';
+import { Utils } from '../utils/Utils.js';
 
 export interface ProjectileManagerLike {
-  createProjectile(
+  createProjectile?(
     x: number, y: number, angle: number, speed: number, damage: number, range: number,
-    owner: unknown, ownerType: 'player' | 'enemy', stunBuildup?: number
+    owner: unknown, ownerType: 'player' | 'enemy', stunBuildup?: number,
+    ...rest: unknown[]
   ): unknown;
 }
 

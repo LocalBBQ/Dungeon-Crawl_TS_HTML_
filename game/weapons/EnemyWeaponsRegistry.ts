@@ -1,6 +1,6 @@
 // Enemy weapon references and resolver. Shared weapons (e.g. Dagger) live in Weapons.
-import { Utils } from '../utils/Utils.ts';
-import { Weapons } from './WeaponsRegistry.ts';
+import { Utils } from '../utils/Utils.js';
+import { Weapons } from './WeaponsRegistry.js';
 import { ChieftainClubWeaponInstance, GoblinDaggerWeaponInstance } from './weaponConfigs.js';
 
 export interface EnemyWeaponLike {
@@ -10,10 +10,16 @@ export interface EnemyWeaponLike {
     noMelee?: boolean;
     cooldown?: number;
     comboWindow?: number;
+    baseRange?: number;
+    baseDamage?: number;
+    baseArcDegrees?: number;
+    maxComboStage?: number;
     getHeavySmashProperties?(): unknown;
     getChargeReleaseProperties?(): unknown;
     getComboStageProperties?(stage: number): unknown;
     getDashAttackProperties?(): unknown;
+    getResolvedAttack?(stage: number): { range: number; damage: number; arc: number; [k: string]: unknown } | null;
+    dashAttack?: unknown;
 }
 
 const demonClaw: EnemyWeaponLike = {
@@ -97,10 +103,12 @@ const dragonClaw: EnemyWeaponLike = {
     }
 };
 
-export const EnemyWeapons: Record<string, EnemyWeaponLike> & {
+export type EnemyWeaponsRegistryType = Record<string, EnemyWeaponLike> & {
     resolveWeapon(weaponId: string): EnemyWeaponLike | null;
     getGoblinWeapon(): EnemyWeaponLike | null;
-} = {
+};
+
+export const EnemyWeapons = {
     chieftainClub: ChieftainClubWeaponInstance,
     maceClub: ChieftainClubWeaponInstance,
     goblinDagger: GoblinDaggerWeaponInstance,
@@ -129,4 +137,4 @@ export const EnemyWeapons: Record<string, EnemyWeaponLike> & {
         if (EnemyWeapons.goblinDagger) return EnemyWeapons.goblinDagger;
         return (Weapons as Record<string, EnemyWeaponLike>)['dagger_rusty'] ?? null;
     }
-};
+} as unknown as EnemyWeaponsRegistryType;

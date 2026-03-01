@@ -45,14 +45,13 @@ export const SceneTilesElderWoods: Record<string, { width: number; height: numbe
     ],
   },
 
-  /** Path between trunks: two big trunks with open path, well. */
+  /** Path between trunks: two big trunks with open path. */
   pathBetweenTrunks: {
     width: 1200,
     height: 1200,
     obstacles: [
       { type: 'elderTrunk', x: 60, y: 200, width: 270, height: 270 },
       { type: 'elderTrunk', x: 470, y: 330, width: 260, height: 260 },
-      { type: 'well', x: 427, y: 427, width: 60, height: 60 },
       { type: 'tree', x: 320, y: 120, width: 65, height: 65 },
       { type: 'tree', x: 680, y: 560, width: 68, height: 68 },
       { type: 'bush', x: 340, y: 340, width: 34, height: 34 },
@@ -95,7 +94,6 @@ export const SceneTilesElderWoods: Record<string, { width: number; height: numbe
       { type: 'elderTrunk', x: 260, y: 260, width: 280, height: 280 },
       { type: 'tree', x: 40, y: 53, width: 60, height: 60 },
       { type: 'tree', x: 440, y: 587, width: 57, height: 57 },
-      { type: 'well', x: 427, y: 53, width: 59, height: 59 },
     ],
   },
 
@@ -114,7 +112,6 @@ export const SceneTilesElderWoods: Record<string, { width: number; height: numbe
       { type: 'tree', x: 320, y: 253, width: 72, height: 72 },
       { type: 'bush', x: 147, y: 213, width: 33, height: 33 },
       { type: 'bush', x: 267, y: 347, width: 32, height: 32 },
-      { type: 'well', x: 253, y: 360, width: 60, height: 60 },
     ],
     gatherables: [
       { type: 'herb', x: 267, y: 360, width: 32, height: 32 },

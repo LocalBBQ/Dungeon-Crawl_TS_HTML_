@@ -1,13 +1,13 @@
 // Base Movement component - shared functionality for all entities
 import type { Component } from '../types/component.js';
 import type { SystemsMap } from '../types/systems.js';
-import { Transform } from './Transform.ts';
-import { Renderable } from './Renderable.ts';
-import { Combat } from './Combat.ts';
-import { StatusEffects } from './StatusEffects.ts';
-import { Health } from './Health.ts';
-import { Utils } from '../utils/Utils.ts';
-import { GameConfig } from '../config/GameConfig.ts';
+import { Transform } from './Transform.js';
+import { Renderable } from './Renderable.js';
+import { Combat } from './Combat.js';
+import { StatusEffects } from './StatusEffects.js';
+import { Health } from './Health.js';
+import { Utils } from '../utils/Utils.js';
+import { GameConfig } from '../config/GameConfig.js';
 
 /** Entity with id and getComponent for movement/collision. */
 interface MovementEntity {
@@ -310,6 +310,15 @@ export class Movement implements Component {
     this.stuckTimer = 0;
     this.attackTarget = null;
   }
+
+  /** Optional: implemented by PlayerMovement for dodge (Space). */
+  performDodge?(_directionX: number, _directionY: number): boolean;
+  /** Optional: implemented by PlayerMovement for sprint. */
+  setSprinting?(_value: boolean): void;
+  /** Optional: implemented by PlayerMovement to clear attack target. */
+  clearAttackTarget?(): void;
+  /** Optional: implemented by enemy Movement for lunge attacks. */
+  startLunge?(_targetX?: number, _targetY?: number, _config?: unknown): void;
 
   applyKnockback(forceX: number, forceY: number, force = 200): void {
     let effectiveForce = force;

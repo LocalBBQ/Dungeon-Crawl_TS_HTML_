@@ -1,14 +1,14 @@
 // Entity layer: orchestrator. Delegates to EntitySpriteRenderer, EnemyEntityRenderer, PlayerEntityRenderer.
-import { Transform } from '../../components/Transform.ts';
-import { Renderable } from '../../components/Renderable.ts';
-import { Sprite } from '../../components/Sprite.ts';
-import type { RenderContext } from './RenderContext.ts';
-import type { EntityShape } from '../../types/entity.ts';
-import { PlayerEntityRenderer } from './PlayerEntityRenderer.ts';
-import { EnemyEntityRenderer } from './EnemyEntityRenderer.ts';
-import { EntitySpriteRenderer } from './EntitySpriteRenderer.ts';
-import type { ObstacleLayerRenderer } from './ObstacleLayerRenderer.ts';
-import { AI } from '../../components/AI.ts';
+import { Transform } from '../../components/Transform.js';
+import { Renderable } from '../../components/Renderable.js';
+import { Sprite } from '../../components/Sprite.js';
+import type { RenderContext } from './RenderContext.js';
+import type { EntityShape } from '../../types/entity.js';
+import { PlayerEntityRenderer } from './PlayerEntityRenderer.js';
+import { EnemyEntityRenderer } from './EnemyEntityRenderer.js';
+import { EntitySpriteRenderer } from './EntitySpriteRenderer.js';
+import type { ObstacleLayerRenderer } from './ObstacleLayerRenderer.js';
+import { AI } from '../../components/AI.js';
 
 export class EntityLayerRenderer {
     _spriteRenderer: InstanceType<typeof EntitySpriteRenderer> | null = null;
@@ -128,7 +128,7 @@ export class EntityLayerRenderer {
         const { entities, obstacleManager, obstacleLayerRenderer } = data;
         const { canvas, camera } = context;
         const zoom = camera.zoom;
-        const depthSortTypes = ['tree', 'deadTree', 'bush', 'rock', 'elderTrunk', 'pillar', 'brokenPillar', 'column', 'statueBase', 'arch'];
+        const depthSortTypes = ['tree', 'deadTree', 'beehive', 'bush', 'rock', 'elderTrunk', 'pillar', 'brokenPillar', 'column', 'statueBase', 'arch', 'brazier'];
 
         const margin = 80;
         const viewLeft = camera.x - margin;

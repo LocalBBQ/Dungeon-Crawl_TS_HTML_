@@ -1,6 +1,6 @@
 // Obstacle/Environment objects for collision
-import { Utils } from '../utils/Utils.ts';
-import { Transform } from '../components/Transform.ts';
+import { Utils } from '../utils/Utils.js';
+import { Transform } from '../components/Transform.js';
 
 interface EntityWithTransform {
   getComponent<T>(ctor: new (...args: unknown[]) => T): T | null;

@@ -1,9 +1,9 @@
 // Animation component - handles sprite animation
 import type { Component } from '../types/component.js';
 import type { SystemsMap } from '../types/systems.js';
-import { Movement } from './Movement.ts';
-import { Combat } from './Combat.ts';
-import { Health } from './Health.ts';
+import { Movement } from './Movement.js';
+import { Combat } from './Combat.js';
+import { Health } from './Health.js';
 
 export interface AnimationDef {
   frames?: number[];

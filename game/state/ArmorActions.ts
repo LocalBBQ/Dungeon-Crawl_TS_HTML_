@@ -61,7 +61,7 @@ export function equipArmorFromInventory(
 ): void {
   if (inventoryIndex < 0 || inventoryIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
   const item = ps.inventorySlots[inventoryIndex];
-  if (!item || item.durability <= 0) return;
+  if (!item || !('key' in item) || !('durability' in item) || item.durability <= 0) return;
   if (!canEquipArmorInSlot(item.key, slot)) return;
 
   const currentKey = getEquippedKey(ps, slot);
@@ -102,9 +102,10 @@ export function swapArmorWithInventory(
   const equipKey = getEquippedKey(ps, slot);
   const equipDur = getEquippedDurability(ps, slot);
 
-  if (invItem && (invItem.durability <= 0 || !canEquipArmorInSlot(invItem.key, slot))) return;
+  if (!invItem || !('key' in invItem) || !('durability' in invItem)) return;
+  if (invItem.durability <= 0 || !canEquipArmorInSlot(invItem.key, slot)) return;
 
-  setEquipped(ps, slot, invItem ? invItem.key : 'none', invItem ? invItem.durability : MAX_ARMOR_DURABILITY);
+  setEquipped(ps, slot, invItem.key, invItem.durability);
   ps.inventorySlots[inventoryIndex] =
     equipKey && equipKey !== 'none' ? { key: equipKey, durability: equipDur } : null;
 }

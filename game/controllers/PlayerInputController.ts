@@ -1,16 +1,16 @@
 // Handles all player-specific input bindings (mouse + keyboard)
-import { Movement } from '../components/Movement.ts';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Utils } from '../utils/Utils.ts';
-import { Transform } from '../components/Transform.ts';
-import { StatusEffects } from '../components/StatusEffects.ts';
-import { PlayerHealing } from '../components/PlayerHealing.ts';
-import { Combat } from '../components/Combat.ts';
-import { Stamina } from '../components/Stamina.ts';
-import { EventTypes } from '../core/EventTypes.ts';
-import { getBowChargeLevel, getBowShotLevelEffect } from '../weapons/bowShotEffects.ts';
-import type { EntityShape } from '../types/entity.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import { Movement } from '../components/Movement.js';
+import { GameConfig } from '../config/GameConfig.js';
+import { Utils } from '../utils/Utils.js';
+import { Transform } from '../components/Transform.js';
+import { StatusEffects } from '../components/StatusEffects.js';
+import { PlayerHealing } from '../components/PlayerHealing.js';
+import { Combat } from '../components/Combat.js';
+import { Stamina } from '../components/Stamina.js';
+import { EventTypes, type InputPointerPayload } from '../core/EventTypes.js';
+import { getBowChargeLevel, getBowShotLevelEffect } from '../weapons/bowShotEffects.js';
+import type { EntityShape } from '../types/entity.js';
+import type { SystemManager } from '../core/SystemManager.js';
 
 export interface GameLike {
     systems: SystemManager;
@@ -28,15 +28,21 @@ export interface GameLike {
     suppressDodgeUntil?: number;
     /** Use one potion from inventory and add one heal charge. Returns true if a potion was used. */
     tryUsePotionFromInventory?(): boolean;
+    /** Use one potion from the given toolbelt slot (0–3) and add one heal charge. Returns true if a potion was used. */
+    tryUsePotionFromToolbeltSlot?(toolbeltIndex: number): boolean;
     /** Swap active weapon set (R key). Call sync after. */
     trySwapWeaponSet?(): void;
+    crossbowReloadProgress?: number;
+    crossbowPerfectReloadNext?: boolean;
+    crossbowReloadInProgress?: boolean;
+    playerProjectileCooldown?: number;
     [key: string]: unknown;
 }
 
 export class PlayerInputController {
     game: GameLike;
     systems: SystemManager;
-    eventBus: { on(name: string, fn: (data?: unknown) => void): void };
+    eventBus: { on(name: string, fn: (data?: unknown) => void): void; emit?(event: string, data?: unknown): void };
     player: EntityShape | null;
     isChargingAttack: boolean;
     chargeTargetX: number;
@@ -106,7 +112,9 @@ export class PlayerInputController {
         const inputSystem = this.systems.get('input');
 
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
-            if (key !== 'q' && key !== 'Q') return;
+            const isHealKey = key === 'q' || key === 'Q';
+            const toolbeltKey = key === '1' || key === '2' || key === '3' || key === '4';
+            if (!isHealKey && !toolbeltKey) return;
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
             if (this.game.chestOpen || this.game.boardOpen || this.game.shopOpen) return;
             const player = this.player;
@@ -117,6 +125,15 @@ export class PlayerInputController {
 
             const healing = player.getComponent(PlayerHealing);
             if (!healing) return;
+
+            if (toolbeltKey) {
+                const toolbeltIndex = parseInt(key, 10) - 1;
+                if (this.game.tryUsePotionFromToolbeltSlot?.(toolbeltIndex)) {
+                    healing.startDrinking();
+                }
+                return;
+            }
+
             if (healing.charges <= 0 && this.game.tryUsePotionFromInventory) {
                 this.game.tryUsePotionFromInventory();
             }
@@ -128,19 +145,20 @@ export class PlayerInputController {
         const cameraSystem = this.systems.get('camera');
 
         // Handle mouse down - Start charging attack (or block attack when blocking)
-        this.eventBus.on(EventTypes.INPUT_MOUSEDOWN, (data) => {
+        this.eventBus.on(EventTypes.INPUT_MOUSEDOWN, (data: unknown) => {
+            const d = data as InputPointerPayload;
             // Only allow attack input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
             if (this.game.chestOpen || this.game.boardOpen || this.game.shopOpen) return;
             // Click was on inventory/chest/shop UI (e.g. weapon slot) — do not start attack
             if (this.game.pointerDownConsumedByUI) return;
             const player = this.player;
-            if (!player || !cameraSystem) return;
+            if (!player || !cameraSystem?.screenToWorld) return;
             // In range of a gatherable: click starts gather, don't start attack
             if (this.game.playerInGatherableRange) return;
 
             const combat = player.getComponent(Combat);
-            const worldPos = cameraSystem.screenToWorld(data.x, data.y);
+            const worldPos = cameraSystem.screenToWorld(d.x, d.y);
             
             // Can't act while stunned
             const statusEffects = player.getComponent(StatusEffects);
@@ -168,7 +186,8 @@ export class PlayerInputController {
         });
         
         // Handle mouse up - Release attack (normal or charged)
-        this.eventBus.on(EventTypes.INPUT_MOUSEUP, (data) => {
+        this.eventBus.on(EventTypes.INPUT_MOUSEUP, (data: unknown) => {
+            const d = data as InputPointerPayload;
             // Only allow attack input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
             if (this.game.chestOpen || this.game.boardOpen || this.game.shopOpen) return;
@@ -178,13 +197,13 @@ export class PlayerInputController {
                 return;
             }
             const player = this.player;
-            if (!player || !cameraSystem) return;
+            if (!player || !cameraSystem?.screenToWorld) return;
 
             const transform = player.getComponent(Transform);
             const movement = player.getComponent(Movement);
             const combat = player.getComponent(Combat);
             const stamina = player.getComponent(Stamina);
-            const worldPos = cameraSystem.screenToWorld(data.x, data.y);
+            const worldPos = cameraSystem.screenToWorld(d.x, d.y);
 
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
@@ -215,9 +234,9 @@ export class PlayerInputController {
             if (this.processedReleaseForPressId === this.attackPressId) return;
             
             // Use payload charge when present; else if we were charging use our own charge duration (second event often has payload 0)
-            let chargeDuration = (data.chargeDuration != null && data.chargeDuration > 0)
-                ? data.chargeDuration
-                : (this.isChargingAttack ? data.chargeDuration : 0);
+            let chargeDuration = (d.chargeDuration != null && d.chargeDuration > 0)
+                ? d.chargeDuration
+                : (this.isChargingAttack ? d.chargeDuration : 0);
             const hadChargeStartTime = this.chargeStartTime != null && this.chargeStartTime > 0;
             if (chargeDuration === 0 && hadChargeStartTime) {
                 chargeDuration = (performance.now() - this.chargeStartTime) / 1000;
@@ -248,7 +267,7 @@ export class PlayerInputController {
                     // Crossbow: left-click fires when loaded
                     const projectileManager = this.systems.get('projectiles');
                     if (this.game.crossbowReloadProgress >= 1 && stamina.currentStamina >= crossbowConfig.staminaCost && projectileManager && transform && movement) {
-                        const worldPos = cameraSystem.screenToWorld(data.x, data.y);
+                        const worldPos = cameraSystem.screenToWorld(d.x, d.y);
                         const angle = Utils.angleTo(transform.x, transform.y, worldPos.x, worldPos.y);
                         let damage = crossbowConfig.damage;
                         if (this.game.crossbowPerfectReloadNext) {
@@ -324,10 +343,10 @@ export class PlayerInputController {
                 // Attack input while attacking is buffered and fires when current attack ends (no direction change and no restart of current animation)
                 if (combat.isAttacking) {
                     this.processedReleaseForPressId = this.attackPressId;
-                    combat.attack(worldPos.x, worldPos.y, chargeDuration, data.shiftKey && weapon.dashAttack ? { useDashAttack: true } : {});
+                    combat.attack(worldPos.x, worldPos.y, chargeDuration, d.shiftKey && weapon.dashAttack ? { useDashAttack: true } : {});
                     return;
                 }
-                const useDashAttack = data.shiftKey && weapon.dashAttack;
+                const useDashAttack = d.shiftKey && weapon.dashAttack;
                 const staminaCost = combat.playerAttack.getNextAttackStaminaCost(
                     useDashAttack ? 0 : chargeDuration,
                     useDashAttack ? { useDashAttack: true } : {},
@@ -353,7 +372,7 @@ export class PlayerInputController {
                     const dashProps = weapon.getDashAttackProperties();
                     if (dashProps) {
                         combat.attack(worldPos.x, worldPos.y, 0, { useDashAttack: true });
-                        this.eventBus.emit(EventTypes.PLAYER_DASH_ATTACK);
+                        this.eventBus.emit?.(EventTypes.PLAYER_DASH_ATTACK);
                     }
                 } else {
                     combat.attack(worldPos.x, worldPos.y, chargeDuration);
@@ -364,7 +383,8 @@ export class PlayerInputController {
 
     bindBlockControls() {
         // Handle right click - Block (buffer input if attacking so block starts when attack ends)
-        this.eventBus.on(EventTypes.INPUT_RIGHTCLICK, (data) => {
+        this.eventBus.on(EventTypes.INPUT_RIGHTCLICK, (data: unknown) => {
+            const d = data as InputPointerPayload;
             // Only allow block input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
             if (this.game.chestOpen || this.game.boardOpen || this.game.shopOpen) return;
@@ -384,9 +404,9 @@ export class PlayerInputController {
             const transform = player.getComponent(Transform);
             const cameraSystem = this.systems.get('camera');
             
-            if (!combat || !combat.isPlayer || !cameraSystem) return;
+            if (!combat || !combat.isPlayer || !cameraSystem?.screenToWorld) return;
             
-            const worldPos = cameraSystem.screenToWorld(data.x, data.y);
+            const worldPos = cameraSystem.screenToWorld(d.x, d.y);
             const facingAngle = transform ? Utils.angleTo(transform.x, transform.y, worldPos.x, worldPos.y) : 0;
             
             if (combat.isAttacking) {
@@ -478,25 +498,26 @@ export class PlayerInputController {
 
             // Generic projectile (when not crossbow and no swap)
             if (transform && movement && stamina && projectileManager) {
-                const projectileConfig = GameConfig.player.projectile;
+                const projectileConfig = GameConfig.player.projectile as { enabled?: boolean; staminaCost?: number; speed?: number; damage?: number; range?: number; stunBuildup?: number; cooldown?: number } | undefined;
                 if (!projectileConfig || !projectileConfig.enabled) return;
 
-                if (this.game.playerProjectileCooldown <= 0 && stamina.currentStamina >= projectileConfig.staminaCost) {
-                    const worldPos = cameraSystem.screenToWorld(inputSystem.mouseX, inputSystem.mouseY);
+                if (this.game.playerProjectileCooldown <= 0 && stamina.currentStamina >= (projectileConfig.staminaCost ?? 0)) {
+                    const worldPos = cameraSystem.screenToWorld?.(inputSystem.mouseX ?? 0, inputSystem.mouseY ?? 0);
+                    if (!worldPos) return;
                     const angle = Utils.angleTo(transform.x, transform.y, worldPos.x, worldPos.y);
-                    projectileManager.createProjectile(
+                    projectileManager.createProjectile?.(
                         transform.x,
                         transform.y,
                         angle,
-                        projectileConfig.speed,
-                        projectileConfig.damage,
-                        projectileConfig.range,
+                        projectileConfig.speed ?? 0,
+                        projectileConfig.damage ?? 0,
+                        projectileConfig.range ?? 0,
                         player,
                         'player',
                         projectileConfig.stunBuildup ?? 0
                     );
-                    stamina.currentStamina -= projectileConfig.staminaCost;
-                    this.game.playerProjectileCooldown = projectileConfig.cooldown;
+                    stamina.currentStamina -= projectileConfig.staminaCost ?? 0;
+                    this.game.playerProjectileCooldown = projectileConfig.cooldown ?? 0;
                 }
             }
         });
@@ -539,8 +560,9 @@ export class PlayerInputController {
                 if (inputSystem.isKeyPressed('d')) dodgeX += 1;
                 
                 // Perform dodge and consume stamina
-                if (movement.performDodge(dodgeX, dodgeY)) {
+                if (movement.performDodge?.(dodgeX, dodgeY)) {
                     stamina.currentStamina -= GameConfig.player.dodge.staminaCost;
+                    this.eventBus.emit?.(EventTypes.PLAYER_DODGE);
                 }
             }
         });
@@ -567,7 +589,7 @@ export class PlayerInputController {
             const movement = player.getComponent(Movement);
             const stamina = player.getComponent(Stamina);
             if (movement && stamina && stamina.currentStamina > 0) {
-                movement.setSprinting(true);
+                movement.setSprinting?.(true);
                 
                 // If already moving with WASD, update velocity with sprint speed
                 let moveX = 0;
@@ -599,7 +621,7 @@ export class PlayerInputController {
             
             // Always stop sprinting on release
             if (movement) {
-                movement.setSprinting(false);
+                movement.setSprinting?.(false);
                 
                 // If still moving with WASD, update velocity back to normal speed
                 let moveX = 0;
@@ -624,8 +646,8 @@ export class PlayerInputController {
         const inputSystem = this.systems.get('input');
 
         // Handle WASD movement
-        this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
-            if (!['w', 'a', 's', 'd'].includes(key)) return;
+        this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key: unknown) => {
+            if (!['w', 'a', 's', 'd'].includes(key as string)) return;
 
             // Only allow movement input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;
@@ -647,7 +669,7 @@ export class PlayerInputController {
                     return;
                 }
                 movement.cancelPath();
-                movement.clearAttackTarget(); // Clear attack target when manually moving
+                movement.clearAttackTarget?.(); // Clear attack target when manually moving
                 
                 // Set velocity based on keys
                 let moveX = 0;
@@ -664,8 +686,8 @@ export class PlayerInputController {
         });
         
         // Handle WASD key release
-        this.eventBus.on(EventTypes.INPUT_KEYUP, (key) => {
-            if (!['w', 'a', 's', 'd'].includes(key)) return;
+        this.eventBus.on(EventTypes.INPUT_KEYUP, (key: unknown) => {
+            if (!['w', 'a', 's', 'd'].includes(key as string)) return;
 
             // Only allow movement input while actively playing (combat levels or hub)
             if (!this.game.screenManager || !(this.game.screenManager.isScreen('playing') || this.game.screenManager.isScreen('hub'))) return;

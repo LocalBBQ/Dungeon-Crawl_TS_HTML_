@@ -1,11 +1,11 @@
 // Health component
 import type { Component } from '../types/component.js';
-import { Transform } from './Transform.ts';
-import { EventTypes } from '../core/EventTypes.ts';
+import { Transform } from './Transform.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 interface HealthEntity {
   id: string;
-  systems?: { eventBus?: { emit(event: string, payload: unknown): void } };
+  systems?: { eventBus?: { emit(event: string, payload: unknown): void; emitTyped?(event: string, payload: unknown): void } };
   getComponent<T>(c: new (...args: unknown[]) => T): T | null;
   onHealthChanged?(current: number, max: number): void;
 }

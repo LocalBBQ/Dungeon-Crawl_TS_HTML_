@@ -1,7 +1,7 @@
 // Player healing: charge-based, 2s drink then rapid regen; 50% move speed while active
 import type { Component } from '../types/component.js';
-import { GameConfig } from '../config/GameConfig.ts';
-import { Health } from './Health.ts';
+import { GameConfig } from '../config/GameConfig.js';
+import { Health } from './Health.js';
 
 type HealingPhase = 'idle' | 'drinking' | 'regening';
 

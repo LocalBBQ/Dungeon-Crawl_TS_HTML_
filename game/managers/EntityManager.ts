@@ -1,5 +1,5 @@
 // Entity Manager - manages all game entities
-import type { SystemManager } from '../core/SystemManager.ts';
+import type { SystemManager } from '../core/SystemManager.js';
 import type { EntityShape } from '../types/entity.js';
 
 export class EntityManager {

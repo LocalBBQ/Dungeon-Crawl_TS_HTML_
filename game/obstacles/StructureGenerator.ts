@@ -1,6 +1,6 @@
 // Structure Generator - creates complex patterns like houses, wood clusters, etc.
-import { Utils } from '../utils/Utils.ts';
-import type { ObjectFactory, CreatedObject } from './ObjectFactory.ts';
+import { Utils } from '../utils/Utils.js';
+import type { ObjectFactory, CreatedObject } from './ObjectFactory.js';
 
 interface ObstacleManagerWithFactory {
   factory: ObjectFactory;
@@ -173,12 +173,6 @@ export class StructureGenerator {
         return objects;
     }
 
-    // Generate a well
-    generateWell(centerX, centerY, size = 45) {
-        const well = this.factory.createObject(centerX, centerY, 'well', size);
-        return [well];
-    }
-
     // Generate a fence segment
     generateFenceSegment(startX, startY, endX, endY, spacing = 20) {
         const fencePosts = [];
@@ -301,14 +295,6 @@ export class StructureGenerator {
         // Add a central firepit (gathering area)
         const firepitObjects = this.generateFirepit(centerX, centerY, 120);
         structures.push(...firepitObjects);
-        
-        // Add a well (water source) - offset from center
-        const wellAngle = Math.random() * Math.PI * 2;
-        const wellDistance = radius * 0.4;
-        const wellX = centerX + Math.cos(wellAngle) * wellDistance;
-        const wellY = centerY + Math.sin(wellAngle) * wellDistance;
-        const wellObjects = this.generateWell(wellX, wellY);
-        structures.push(...wellObjects);
         
         // Add some storage areas (barrels/crates) near houses
         const storageCount = Math.floor(houseCount * 0.7);

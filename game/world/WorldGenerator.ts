@@ -2,9 +2,9 @@
  * World generation: populate obstacles via a placer (e.g. ObstacleManager).
  * All generate* logic lives here; placer provides addObstacle, wouldOverlap, factory, config.
  */
-import { Utils } from '../utils/Utils.ts';
-import { StructureGenerator } from '../obstacles/StructureGenerator.ts';
-import type { ObjectFactory } from '../obstacles/ObjectFactory.ts';
+import { Utils } from '../utils/Utils.js';
+import { StructureGenerator } from '../obstacles/StructureGenerator.js';
+import type { ObjectFactory } from '../obstacles/ObjectFactory.js';
 
 export interface IWorldGenPlacer {
     config: { world: { tileSize: number } };
@@ -74,7 +74,6 @@ export class WorldGenerator {
             if (structures.settlements?.enabled) this.generateSettlements(placer, worldWidth, worldHeight, structures.settlements.count ?? 2);
             if (structures.firepits?.enabled) this.generateFirepits(placer, worldWidth, worldHeight, structures.firepits.count ?? 3);
             if (structures.sheds?.enabled) this.generateSheds(placer, worldWidth, worldHeight, structures.sheds.count ?? 4);
-            if (structures.wells?.enabled) this.generateWells(placer, worldWidth, worldHeight, structures.wells.count ?? 2);
             if (structures.ruins?.enabled) {
                 const r = structures.ruins as Record<string, number | undefined>;
                 if (r.rubblePiles != null) this.generateRubblePiles(placer, worldWidth, worldHeight, r.rubblePiles);
@@ -352,23 +351,6 @@ export class WorldGenerator {
                 const shedObjects = generator.generateShed(x, y, shedSize);
                 shedObjects.forEach(obj => placer.addObstacle(obj.x, obj.y, obj.width, obj.height, obj.type, obj.spritePath));
                 shedsPlaced++;
-            }
-        }
-    }
-
-    private generateWells(placer: IWorldGenPlacer, worldWidth: number, worldHeight: number, count = 2): void {
-        const excludeArea = { x: worldWidth / 2, y: worldHeight / 2, radius: 250 };
-        const generator = new StructureGenerator(placer);
-        let wellsPlaced = 0, attempts = 0, maxAttempts = count * 5;
-        while (wellsPlaced < count && attempts < maxAttempts) {
-            attempts++;
-            const x = Utils.randomInt(50, worldWidth - 50);
-            const y = Utils.randomInt(50, worldHeight - 50);
-            if (Utils.distance(x, y, excludeArea.x, excludeArea.y) < excludeArea.radius) continue;
-            if (!placer.wouldOverlap(x - 25, y - 25, 50, 50)) {
-                const wellObjects = generator.generateWell(x, y);
-                wellObjects.forEach(obj => placer.addObstacle(obj.x, obj.y, obj.width, obj.height, obj.type, obj.spritePath));
-                wellsPlaced++;
             }
         }
     }

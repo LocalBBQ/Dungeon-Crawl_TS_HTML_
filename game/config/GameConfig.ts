@@ -134,6 +134,8 @@ const GameConfig: GameConfigShape = {
     shopkeeper: { x: 1240, y: 900, width: 56, height: 56 },
     rerollStation: { x: 700, y: 340, width: 64, height: 64 },
     questPortal: { x: 760, y: 520, width: 80, height: 80 },
+    /** Blue portal in hub to re-enter the quest that was just left (when returning from a level). */
+    reenterPortal: { x: 860, y: 520, width: 80, height: 80 },
     trainingDummy: { x: 480, y: 920 },
     theme: {
       ground: { r: 42, g: 52, b: 38, variation: 8, texture: 'grass' },
@@ -167,7 +169,6 @@ const GameConfig: GameConfigShape = {
       { type: 'column', x: 820, y: 460, width: 38, height: 38 },
       { type: 'statueBase', x: 580, y: 320, width: 52, height: 52 },
       { type: 'statueBase', x: 918, y: 320, width: 52, height: 52 },
-      { type: 'well', x: 1080, y: 280, width: 48, height: 48 },
       { type: 'brazier', x: 340, y: 840, width: 38, height: 38 },
       { type: 'brazier', x: 1220, y: 840, width: 38, height: 38 },
       { type: 'barrel', x: 1180, y: 870 },
@@ -555,7 +556,6 @@ const GameConfig: GameConfigShape = {
       settlements: { enabled: true, count: 1 },
       firepits: { enabled: true, count: 2 },
       sheds: { enabled: true, count: 2 },
-      wells: { enabled: true, count: 1 },
       ruins: {
         enabled: true,
         rubblePiles: 12,

@@ -10,16 +10,18 @@ export const EnemyCombatRenderer = {
 
     /** Visual progress for wind-up drawing (0..1). Eased so the warning intensifies in the last portion. */
     getWindUpVisualProgress(combat: unknown): number {
-        if (!combat || !combat.isWindingUp) return 0;
-        const raw = combat.windUpProgress;
+        const c = combat as { isWindingUp?: boolean; windUpProgress?: number };
+        if (!c || !c.isWindingUp) return 0;
+        const raw = c.windUpProgress ?? 0;
         return this.easeInCubic(raw);
     },
 
     /** Danger phase 0..1 in the last DANGER_RATIO of wind-up — for "about to strike" highlight (staging). */
     DANGER_RATIO: 0.25,
     getWindUpDangerPhase(combat: unknown): number {
-        if (!combat || !combat.isWindingUp) return 0;
-        const raw = combat.windUpProgress;
+        const c = combat as { isWindingUp?: boolean; windUpProgress?: number };
+        if (!c || !c.isWindingUp) return 0;
+        const raw = c.windUpProgress ?? 0;
         if (raw < 1 - this.DANGER_RATIO) return 0;
         return (raw - (1 - this.DANGER_RATIO)) / this.DANGER_RATIO;
     }

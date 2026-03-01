@@ -1,5 +1,5 @@
 // Renders portal (or stairs in delve) and interaction prompt. data: { portal, playerNearPortal, isStairs? }
-import type { RenderContext } from './RenderContext.ts';
+import type { RenderContext } from './RenderContext.js';
 
 interface PortalLike {
   x: number;
@@ -110,6 +110,86 @@ export class PortalRenderer {
         }
     }
 
+    /** Draw blue recall portal (player-spawned in level, or reenter portal in hub); E returns to Sanctuary or re-enters quest. */
+    renderRecallPortal(
+        context: RenderContext,
+        data: {
+            recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean };
+            playerNearRecallPortal: boolean;
+            channelProgress: number;
+            promptLines?: string[];
+        }
+    ): void {
+        const { ctx, canvas, camera } = context;
+        const { recallPortal, playerNearRecallPortal, channelProgress = 0, promptLines: customPromptLines } = data;
+        if (!recallPortal?.spawned) return;
+        const screenX = camera.toScreenX(recallPortal.x);
+        const screenY = camera.toScreenY(recallPortal.y);
+        const w = recallPortal.width * camera.zoom;
+        const h = recallPortal.height * camera.zoom;
+        if (screenX + w < 0 || screenX > canvas.width || screenY + h < 0 || screenY > canvas.height) return;
+        const cx = screenX + w / 2;
+        const cy = screenY + h / 2;
+
+        const time = performance.now() * 0.002;
+        const pulse = 0.85 + 0.15 * Math.sin(time);
+        const r = Math.min(w, h) * 0.45 * pulse;
+        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        gradient.addColorStop(0, 'rgba(80, 140, 255, 0.9)');
+        gradient.addColorStop(0.5, 'rgba(40, 100, 220, 0.6)');
+        gradient.addColorStop(1, 'rgba(20, 60, 160, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r, r * 1.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(120, 170, 255, 0.8)';
+        ctx.lineWidth = 3 / camera.zoom;
+        ctx.stroke();
+
+        if (playerNearRecallPortal) {
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const padding = 12;
+            const lineHeight = 24;
+            const lines = customPromptLines && customPromptLines.length > 0 ? customPromptLines : ['E Return to Sanctuary'];
+            const textMetrics = lines.map((t: string) => ctx.measureText(t));
+            const bgWidth = Math.max(...textMetrics.map((m: TextMetrics) => m.width)) + padding * 2;
+            const bgHeight = lines.length * lineHeight + padding;
+            const promptY = cy - h / 2 - 20 - (lines.length * lineHeight) / 2;
+            const bgX = cx - bgWidth / 2;
+            const bgY = promptY - padding;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+            ctx.strokeStyle = 'rgba(80, 140, 255, 0.9)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            lines.forEach((text: string, i: number) => {
+                const y = promptY + i * lineHeight;
+                ctx.fillText(text, cx + 1, y + 1);
+            });
+            ctx.fillStyle = '#e8dcc8';
+            lines.forEach((text: string, i: number) => {
+                const y = promptY + i * lineHeight;
+                ctx.fillText(text, cx, y);
+            });
+            if (channelProgress > 0) {
+                const barWidth = 120;
+                const barHeight = 8;
+                const barX = cx - barWidth / 2;
+                const barY = promptY + lines.length * lineHeight + padding + 6;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                ctx.strokeStyle = 'rgba(80, 140, 255, 0.9)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(barX, barY, barWidth, barHeight);
+                ctx.fillStyle = 'rgba(100, 160, 255, 0.95)';
+                ctx.fillRect(barX, barY, barWidth * Math.min(1, channelProgress), barHeight);
+            }
+        }
+    }
+
     /** Draw only the interaction prompt (no portal graphic) at a world rect, e.g. for cave entrance. */
     renderPromptAtRect(context: RenderContext, data: { worldRect: { x: number; y: number; width: number; height: number }; promptLines: string[]; channelProgress?: number }): void {
         const { ctx, canvas, camera } = context;
@@ -162,4 +242,5 @@ export class PortalRenderer {
             ctx.fillRect(barX, barY, barWidth * Math.min(1, channelProgress), barHeight);
         }
     }
+
 }

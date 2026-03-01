@@ -1,26 +1,29 @@
 // Sprite-sheet entity rendering: frame selection, draw frame, then effects (shadow, weapon overlay, bars).
 // Fallback when sprite not loaded: delegates to PlayerEntityRenderer or EnemyEntityRenderer.
-import { Movement } from '../../components/Movement.ts';
-import { Transform } from '../../components/Transform.ts';
-import { Sprite } from '../../components/Sprite.ts';
-import { Animation } from '../../components/Animation.ts';
-import { Combat } from '../../components/Combat.ts';
-import { Renderable } from '../../components/Renderable.ts';
-import { AI } from '../../components/AI.ts';
-import { SpriteUtils } from '../../utils/SpriteUtils.ts';
-import { Utils } from '../../utils/Utils.ts';
-import type { MultiDirFrameSet } from '../../managers/SpriteManager.ts';
-import { PlayerCombatRenderer } from './PlayerCombatRenderer.ts';
-import { EnemyEntityRenderer } from './EnemyEntityRenderer.ts';
-import { EntityEffectsRenderer } from './EntityEffectsRenderer.ts';
-import { PlayerEntityRenderer } from './PlayerEntityRenderer.ts';
-import type { RenderContext } from './RenderContext.ts';
-import type { EntityShape } from '../../types/entity.ts';
+import { Movement } from '../../components/Movement.js';
+import { Transform } from '../../components/Transform.js';
+import { Sprite } from '../../components/Sprite.js';
+import { Animation } from '../../components/Animation.js';
+import { Combat } from '../../components/Combat.js';
+import { Renderable } from '../../components/Renderable.js';
+import { AI } from '../../components/AI.js';
+import { SpriteUtils } from '../../utils/SpriteUtils.js';
+import { Utils } from '../../utils/Utils.js';
+import type { MultiDirFrameSet } from '../../managers/SpriteManager.js';
+import { PlayerCombatRenderer } from './PlayerCombatRenderer.js';
+import { EnemyEntityRenderer } from './EnemyEntityRenderer.js';
+import { EntityEffectsRenderer } from './EntityEffectsRenderer.js';
+import { PlayerEntityRenderer } from './PlayerEntityRenderer.js';
+import type { RenderContext } from './RenderContext.js';
+import type { EntityShape } from '../../types/entity.js';
+
+type SpriteManagerLike = { getSpriteSheet(key: string): unknown };
+type SpriteSheetLike = { image?: HTMLImageElement; rows?: number; cols?: number };
 
 export class EntitySpriteRenderer {
     render(context: RenderContext, entity: EntityShape, screenX: number, screenY: number): void {
         const { ctx, canvas, camera, systems, settings } = context;
-        const spriteManager = systems ? systems.get('sprites') : null;
+        const spriteManager = systems ? (systems.get('sprites') as SpriteManagerLike | null) : null;
         const transform = entity.getComponent(Transform);
         const sprite = entity.getComponent(Sprite);
         const animation = entity.getComponent(Animation);
@@ -36,15 +39,15 @@ export class EntitySpriteRenderer {
                 return;
             }
         }
-        let spriteSheet = sprite.getSpriteSheet(spriteManager, animation);
+        let spriteSheet = sprite.getSpriteSheet(spriteManager as SpriteManagerLike | null, animation) as SpriteSheetLike | null;
         const useSpinSheetForPlayer = !!(renderable && renderable.type === 'player' && combat && combat.isAttacking && combat.currentAttackAnimationKey === 'meleeSpin' && animation && animation.animations && animation.animations.meleeSpin);
         if (useSpinSheetForPlayer && spriteManager) {
-            const spinSheet = spriteManager.getSpriteSheet(animation.animations.meleeSpin.spriteSheetKey);
+            const spinSheet = spriteManager.getSpriteSheet(animation!.animations!.meleeSpin.spriteSheetKey) as SpriteSheetLike | null;
             if (spinSheet && spinSheet.image) spriteSheet = spinSheet;
         }
 
         const isMultiDirSet = spriteSheet && (spriteSheet as MultiDirFrameSet).type === 'multiDirFrames';
-        if (!spriteSheet || (!spriteSheet.image && !isMultiDirSet)) {
+        if (!spriteSheet || (!(spriteSheet as SpriteSheetLike).image && !isMultiDirSet)) {
             if (renderable) {
                 if (renderable.type === 'player') PlayerEntityRenderer.render(context, entity, screenX, screenY);
                 else if (renderable.type === 'enemy') EnemyEntityRenderer.render(context, entity, screenX, screenY);
@@ -151,7 +154,7 @@ export class EntitySpriteRenderer {
                 col = frameIndex;
             }
         } else if (animation && animation.currentAnimation) {
-            const anim = animation.animations[animation.currentAnimation];
+            const anim = animation.animations[animation.currentAnimation] as { frames?: unknown; useDirection?: boolean; useDirectionAsColumn?: boolean } | undefined;
             if (anim && anim.frames) {
                 const frameIndex = animation.getCurrentFrameIndex();
                 if (anim.useDirection && movement) {
@@ -165,9 +168,9 @@ export class EntitySpriteRenderer {
                         row = frameDir;
                         col = frameIndex;
                     }
-                } else if (spriteSheet.rows > 1) {
-                    row = Math.floor(frameIndex / spriteSheet.cols);
-                    col = frameIndex % spriteSheet.cols;
+                } else if ((spriteSheet as SpriteSheetLike).rows! > 1) {
+                    row = Math.floor(frameIndex / (spriteSheet as SpriteSheetLike).cols!);
+                    col = frameIndex % (spriteSheet as SpriteSheetLike).cols!;
                 } else {
                     col = frameIndex;
                 }
@@ -179,11 +182,12 @@ export class EntitySpriteRenderer {
         }
 
         if (spriteSheet) {
-            row = Math.max(0, Math.min(row, spriteSheet.rows - 1));
-            col = Math.max(0, Math.min(col, spriteSheet.cols - 1));
+            const sh = spriteSheet as SpriteSheetLike;
+            row = Math.max(0, Math.min(row, (sh.rows ?? 1) - 1));
+            col = Math.max(0, Math.min(col, (sh.cols ?? 1) - 1));
         }
 
-        const frameCoords = SpriteUtils.getFrameCoords(spriteSheet, row, col);
+        const frameCoords = SpriteUtils.getFrameCoords(spriteSheet as SpriteSheetLike, row, col);
         if (!frameCoords || frameCoords.sourceWidth <= 0 || frameCoords.sourceHeight <= 0) {
             if (!frameCoords) console.warn('No frame coordinates found for sprite sheet');
             return;
@@ -204,9 +208,10 @@ export class EntitySpriteRenderer {
         ctx.save();
         try {
             ctx.translate(drawX, drawY);
-            if (appliedMeleeSpin) {
+            if (appliedMeleeSpin && combat) {
                 const sweepProgress = PlayerCombatRenderer.getSweepProgress(combat);
-                const raw = combat.attackDuration > 0 ? Math.min(1, (combat.attackTimer || 0) / combat.attackDuration) : 0;
+                const c = combat as { attackDuration?: number; attackTimer?: number };
+                const raw = (c.attackDuration != null && c.attackDuration > 0) ? Math.min(1, (c.attackTimer || 0) / c.attackDuration) : 0;
                 const rotationBlend = raw < 0.08 ? Utils.easeInQuad(raw / 0.08) : 1;
                 ctx.rotate(sweepProgress * rotationBlend * Math.PI * 2);
             }
@@ -214,7 +219,7 @@ export class EntitySpriteRenderer {
             ctx.rotate(sprite.rotation);
             const oldImageSmoothing = ctx.imageSmoothingEnabled;
             ctx.imageSmoothingEnabled = false;
-            if (spriteSheet.cols > 1 && frameCoords.sourceWidth >= spriteSheet.image.width) {
+            if ((spriteSheet as SpriteSheetLike).cols! > 1 && frameCoords.sourceWidth >= (spriteSheet as SpriteSheetLike).image!.width) {
                 ctx.restore();
                 return;
             }
@@ -222,7 +227,7 @@ export class EntitySpriteRenderer {
             const sy = Math.floor(frameCoords.sourceY);
             const sWidth = Math.floor(frameCoords.sourceWidth);
             const sHeight = Math.floor(frameCoords.sourceHeight);
-            ctx.drawImage(spriteSheet.image, sx, sy, sWidth, sHeight, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+            ctx.drawImage((spriteSheet as SpriteSheetLike).image!, sx, sy, sWidth, sHeight, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
             ctx.imageSmoothingEnabled = oldImageSmoothing;
             if (sprite.tint) {
                 ctx.globalCompositeOperation = 'multiply';

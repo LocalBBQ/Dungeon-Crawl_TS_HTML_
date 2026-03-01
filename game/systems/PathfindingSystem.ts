@@ -1,6 +1,6 @@
 // Pathfinding System - A* implementation
-import { Utils } from '../utils/Utils.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
+import { Utils } from '../utils/Utils.js';
+import type { SystemManager } from '../core/SystemManager.js';
 
 interface ObstacleManagerLike {
   canMoveTo(x: number, y: number, w: number, h: number): boolean;

@@ -1,1 +1,1 @@
-{"compilerOptions":{"target":"ESNext","module":"ESNext","moduleResolution":"bundler","strict":false,"allowJs":false},"include":["src/**/*","game/**/*"]}
+{"compilerOptions":{"target":"ESNext","module":"ESNext","moduleResolution":"bundler","strict":false,"allowJs":false},"include":["src/**/*","game/**/*","vite-env.d.ts"]}

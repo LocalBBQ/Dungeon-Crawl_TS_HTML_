@@ -20,7 +20,10 @@ import type { PlayingState } from '../state/PlayingState.js';
  */
 export interface SystemsMap {
   get(name: string): unknown;
-  eventBus?: { emit(event: string, payload?: unknown): void };
+  eventBus?: {
+    emit(event: string, payload?: unknown): void;
+    emitTyped?(event: string, payload: unknown): void;
+  };
 }
 
 /**

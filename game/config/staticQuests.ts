@@ -2,7 +2,7 @@
  * Static quest definitions for Main Quest screen and biome unlock progression.
  * Static quests are Quest objects with id, name, objectiveType, objectiveParams, etc.
  */
-import type { Quest } from '../types/quest.ts';
+import type { Quest } from '../types/quest.js';
 
 export interface StaticQuestCompleteContext {
   getEnemiesKilledThisLevel(): number;

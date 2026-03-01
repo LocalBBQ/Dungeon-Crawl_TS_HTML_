@@ -107,7 +107,8 @@ export const EnemyEntityRenderer = {
         }
 
         const isGoblin = baseShape === 'goblin';
-        const weapon = combat?.weapon as { name?: string } | undefined;
+        type WeaponLike = { weaponLength?: number; visual?: string; name?: string };
+        const weapon = combat ? (combat as { weapon?: WeaponLike }).weapon : null;
         const isBanditWithDagger = baseShape === 'bandit' && weapon && String(weapon.name || '').toLowerCase().includes('dagger');
         let baseX, baseY;
         if (isGoblin) {
@@ -139,7 +140,6 @@ export const EnemyEntityRenderer = {
         }
 
         if (isGoblin) {
-            const weapon = combat && combat.weapon;
             const daggerLength = (weapon && weapon.weaponLength != null) ? weapon.weaponLength : 35;
             const style = (weapon && weapon.visual === 'goblinDagger') ? 'goblin' : undefined;
             PlayerCombatRenderer.drawDaggerAt(ctx, baseX, baseY, drawAngle, daggerLength, camera, style ? { style } : {});

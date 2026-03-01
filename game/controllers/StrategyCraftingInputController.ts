@@ -30,6 +30,10 @@ export interface StrategyCraftingInputControllerContext {
   onStrategyCraftingOpen?(): void;
   /** Called when a recipe is executed successfully (for visual confirmation). */
   onStrategyCraftSuccess?(recipeId: string): void;
+  /** Called when recipe matched but execution failed (e.g. not enough ingredients). */
+  onStrategyCraftFailed?(reason: string): void;
+  /** Called when the user enters a direction (WASD) while the pane is open. */
+  onStrategyCraftInput?(): void;
 }
 
 export class StrategyCraftingInputController {
@@ -62,6 +66,7 @@ export class StrategyCraftingInputController {
 
       const dir = WASD_TO_DIRECTION[key];
       if (dir && open) {
+        ctx.onStrategyCraftInput?.();
         this.buffer.push(dir);
         if (this.buffer.length > STRATEGY_BUFFER_MAX_LENGTH) {
           this.buffer.shift();
@@ -69,9 +74,12 @@ export class StrategyCraftingInputController {
         const matched = this.matchBuffer(ps);
         if (matched) {
           const context = ctx.getStrategyCraftingContext?.();
-          if (executeRecipe(ps, matched, context)) {
+          const result = executeRecipe(ps, matched, context);
+          if (result.success) {
             ctx.onStrategyCraftSuccess?.(matched);
             this.buffer = [];
+          } else {
+            ctx.onStrategyCraftFailed?.('reason' in result ? result.reason : 'Unknown error');
           }
         }
         return;

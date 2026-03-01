@@ -1,5 +1,5 @@
 // Event Bus for decoupled communication
-import type { EventPayloadMap } from './EventTypes.ts';
+import type { EventPayloadMap } from './EventTypes.js';
 
 export class EventBus {
   private listeners = new Map<string, ((data: unknown) => void)[]>();

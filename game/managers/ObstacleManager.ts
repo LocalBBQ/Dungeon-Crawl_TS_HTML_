@@ -1,29 +1,51 @@
 // ObstacleManager - uses Obstacle, ObjectFactory, StructureGenerator from game/obstacles/.
-import { Utils } from '../utils/Utils.ts';
-import { Obstacle } from '../obstacles/Obstacle.ts';
-import { ObjectFactory } from '../obstacles/ObjectFactory.ts';
-import { StructureGenerator } from '../obstacles/StructureGenerator.ts';
-import type { SystemManager } from '../core/SystemManager.ts';
-import { SceneTiles } from '../config/SceneTiles.ts';
-import { GameConfig } from '../config/GameConfig.ts';
+import { Utils } from '../utils/Utils.js';
+import { Obstacle } from '../obstacles/Obstacle.js';
+import { ObjectFactory } from '../obstacles/ObjectFactory.js';
+import { StructureGenerator } from '../obstacles/StructureGenerator.js';
+import type { SystemManager } from '../core/SystemManager.js';
+import { SceneTiles } from '../config/SceneTiles.js';
+import { GameConfig } from '../config/GameConfig.js';
 import type { GameConfigShape } from '../types/config.js';
-import { WorldGenerator } from '../world/WorldGenerator.ts';
-import { Combat } from '../components/Combat.ts';
-import type { SerializedLevelMap, SerializedObstacle } from '../state/PlayingState.js';
-import { Transform } from '../components/Transform.ts';
-import { Movement } from '../components/Movement.ts';
+import { WorldGenerator } from '../world/WorldGenerator.js';
+import { Combat } from '../components/Combat.js';
+import { Transform } from '../components/Transform.js';
+
+export interface SerializedObstacle {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    type: string;
+    spritePath?: string;
+    spriteFrameIndex?: number;
+    breakable?: boolean;
+    hp?: number;
+    maxHp?: number;
+    passable?: boolean;
+    targetLevel?: number;
+    returnLevel?: number;
+}
+
+export interface SerializedLevelMap {
+    obstacles: SerializedObstacle[];
+}
+import { Movement } from '../components/Movement.js';
+import { EventTypes } from '../core/EventTypes.js';
 
 export class ObstacleManager {
     obstacles: Obstacle[];
     loadedSprites: Map<string, HTMLImageElement>;
     factory: ObjectFactory;
-    exclusionZones: unknown[];
-    lastPlacedTiles: unknown[];
+    exclusionZones: { x: number; y: number; radius: number }[];
+    lastPlacedTiles: Array<{ tileId: string; originX: number; originY: number; tileSize?: number; rotation?: number }>;
     suggestedPlayerStart: { x: number; y: number } | null;
     /** When the last grid was 1x1 and centered, this is the offset (world position of tile top-left). Used for boss spawn. */
     last1x1Offset: { x: number; y: number } | null;
     systems: SystemManager | null;
-    private config: GameConfigShape = GameConfig;
+    private _config: GameConfigShape = GameConfig;
+    /** Exposed for IWorldGenPlacer (WorldGenerator). */
+    get config(): GameConfigShape { return this._config; }
     private worldGenerator: WorldGenerator;
     private _nextObstacleId = 0;
 
@@ -41,7 +63,7 @@ export class ObstacleManager {
     init(systems: SystemManager): void {
         this.systems = systems;
         const cfg = systems.get<GameConfigShape>('config');
-        if (cfg) this.config = cfg;
+        if (cfg) this._config = cfg;
         this.worldGenerator = new WorldGenerator();
     }
 
@@ -67,8 +89,8 @@ export class ObstacleManager {
         // Set breakable/hp from factory config if not already set
         if (obstacle.breakable == null || obstacle.hp == null) {
             const config = this.factory.getConfig(type);
-            if (config.breakable != null) obstacle.breakable = config.breakable;
-            if (config.hp != null) {
+            if (config && config.breakable != null) obstacle.breakable = config.breakable;
+            if (config && config.hp != null) {
                 obstacle.hp = config.hp;
                 obstacle.maxHp = config.hp;
             } else if (obstacle.breakable) {
@@ -198,6 +220,9 @@ export class ObstacleManager {
                     pm.spawnHoney(cx, cy);
                 }
             }
+            if (obstacle.type === 'bush') {
+                this.systems?.eventBus?.emit(EventTypes.BUSH_DESTROYED);
+            }
             const i = this.obstacles.indexOf(obstacle);
             if (i >= 0) this.obstacles.splice(i, 1);
         }
@@ -214,14 +239,14 @@ export class ObstacleManager {
         arcSensitivity: number,
         hitBreakables: Set<string>
     ): void {
-        const combat = player.getComponent(Combat);
-        const transform = player.getComponent(Transform);
-        const movement = player.getComponent(Movement);
+        const combat = player.getComponent(Combat) as (Combat & { isAttacking?: boolean; currentAttackIsCircular?: boolean; attackDuration?: number; attackTimer?: number; attackRange?: number; attackArc?: number; attackArcOffset?: number; currentAttackThrustWidth?: number; currentAttackIsThrust?: boolean; attackDamage?: number }) | null;
+        const transform = player.getComponent(Transform) as (Transform & { x: number; y: number }) | null;
+        const movement = player.getComponent(Movement) as (Movement & { facingAngle: number }) | null;
         if (!combat || !transform || !combat.isAttacking) return;
 
         const is360Attack = combat.currentAttackIsCircular;
         if (!is360Attack) {
-            const duration = combat.attackDuration > 0 ? combat.attackDuration : 0.001;
+            const duration = combat.attackDuration != null && combat.attackDuration > 0 ? combat.attackDuration : 0.001;
             const timer = combat.attackTimer != null ? combat.attackTimer : 0;
             const progress = timer / duration;
             if (progress < 0.25 || progress > 0.75) return;
@@ -295,7 +320,7 @@ export class ObstacleManager {
     }
 
     /** Returns 0.5 if the given entity rect overlaps a swamp pool, else 1. Used for player swamp slow. */
-    getSwampPoolSpeedMultiplier(centerX, centerY, width, height) {
+    getSwampPoolSpeedMultiplier(centerX: number, centerY: number, width: number, height: number): number {
         const left = centerX - width / 2;
         const top = centerY - height / 2;
         for (const obstacle of this.obstacles) {
@@ -306,7 +331,7 @@ export class ObstacleManager {
         return 1;
     }
 
-    wouldOverlap(x, y, width, height) {
+    wouldOverlap(x: number, y: number, width: number, height: number): boolean {
         for (const obstacle of this.obstacles) {
             if (obstacle.type === 'mushroom' || obstacle.passable) continue;
             if (Utils.rectCollision(
@@ -330,7 +355,7 @@ export class ObstacleManager {
         this.lastPlacedTiles = [];
         this.suggestedPlayerStart = null;
         this.last1x1Offset = null;
-        const gm = this.getGatherableManager();
+        const gm = this.getGatherableManager() as { clear?(): void } | null;
         if (gm && typeof gm.clear === 'function') gm.clear();
     }
 
@@ -339,7 +364,7 @@ export class ObstacleManager {
      * rotation: 0 = 0°, 1 = 90° CW, 2 = 180°, 3 = 270° CW.
      * @returns {{ x, y, width, height }}
      */
-    rotateObstacleInTile(x, y, width, height, tileSize, rotation) {
+    rotateObstacleInTile(x: number, y: number, width: number, height: number, tileSize: number, rotation: number): { x: number; y: number; width: number; height: number } {
         if (!rotation) return { x, y, width, height };
         const S = tileSize;
         switch (rotation) {
@@ -358,18 +383,18 @@ export class ObstacleManager {
      *   - spacing (default 32), size (default 28), gapSegments (default 2 = skip 2 segment slots per side for an opening)
      * @returns {Array<{x,y,width,height}>}
      */
-    getPerimeterFenceSegments(tileSize, options = {}) {
+    getPerimeterFenceSegments(tileSize: number, options: { spacing?: number; size?: number; gapSegments?: number } = {}): Array<{ x: number; y: number; width: number; height: number }> {
         const spacing = options.spacing != null ? options.spacing : 32;
         const size = options.size != null ? options.size : 28;
         const gapSegments = options.gapSegments != null ? options.gapSegments : 2;
         const gapHalfWidth = (gapSegments * spacing) / 2;
         const center = tileSize / 2;
-        const segments = [];
+        const segments: Array<{ x: number; y: number; width: number; height: number }> = [];
         const maxX = tileSize - size;
         const maxY = tileSize - size;
 
-        const skipTopBottom = (segX) => Math.abs(segX + size / 2 - center) < gapHalfWidth;
-        const skipLeftRight = (segY) => Math.abs(segY + size / 2 - center) < gapHalfWidth;
+        const skipTopBottom = (segX: number) => Math.abs(segX + size / 2 - center) < gapHalfWidth;
+        const skipLeftRight = (segY: number) => Math.abs(segY + size / 2 - center) < gapHalfWidth;
 
         for (let x = 0; x <= maxX; x += spacing) {
             if (!skipTopBottom(x)) {
@@ -458,8 +483,8 @@ export class ObstacleManager {
      * @param {string} tileId - e.g. 'forest.lumberMill', 'clearing'
      * @param {number} rotation - 0..3 for 0°, 90°, 180°, 270° CW
      */
-    placeSceneTile(originX, originY, tileId, rotation = 0) {
-        const tile = SceneTiles.getTile(tileId);
+    placeSceneTile(originX: number, originY: number, tileId: string, rotation = 0): void {
+        const tile = SceneTiles.getTile(tileId) as { width?: number; obstacles?: { x: number; y: number; width: number; height: number; type: string; spritePath?: string }[]; perimeterFence?: unknown; perimeterWall?: unknown; gatherables?: { x: number; y: number; width?: number; height?: number; type?: string }[] } | null;
         if (!tile) return;
         const tileSize = tile.width != null ? tile.width : SceneTiles.defaultTileSize;
         const scale = tileSize / ObstacleManager.DESIGN_TILE_SIZE;
@@ -485,7 +510,7 @@ export class ObstacleManager {
                     obs.type, spritePath, Object.keys(customProps).length ? customProps : null
                 );
                 if ((obs.type === 'rock' || obs.type === 'tree') && Math.random() < ObstacleManager.MUSHROOM_BY_ROCK_OR_TREE_CHANCE) {
-                    const gm = this.getGatherableManager();
+                    const gm = this.getGatherableManager() as { add?(x: number, y: number, w: number, h: number, type: string): void } | null;
                     if (gm && typeof gm.add === 'function') {
                         const margin = Math.min(r.width, r.height) * 0.4;
                         const offsetX = (Math.random() - 0.5) * 2 * margin;
@@ -500,13 +525,14 @@ export class ObstacleManager {
                     const hiveSize = 24 * scale;
                     const offsetX = (Math.random() - 0.5) * Math.min(r.width, r.height) * 0.3;
                     const hiveX = originX + r.x + r.width / 2 - hiveSize / 2 + offsetX;
-                    const hiveY = originY + r.y + r.height * 0.12;
+                    // Place on trunk (between trunk and canopy): ~55% down so it draws between trunk and leaves
+                    const hiveY = originY + r.y + r.height * 0.55;
                     this.addObstacle(hiveX, hiveY, hiveSize, hiveSize, 'beehive', null, { passable: true });
                 }
             }
         }
         if (tile.perimeterFence) {
-            const opts = typeof tile.perimeterFence === 'object' ? tile.perimeterFence : {};
+            const opts = (typeof tile.perimeterFence === 'object' ? tile.perimeterFence : {}) as { type?: string; spacing?: number; size?: number; gapSegments?: number };
             const fenceType = opts.type || 'fence';
             const fenceConfig = this.factory.getConfig(fenceType);
             const spritePath = fenceConfig && fenceConfig.defaultSpritePath || null;
@@ -523,7 +549,7 @@ export class ObstacleManager {
             }
         }
         if (tile.perimeterWall) {
-            const opts = typeof tile.perimeterWall === 'object' ? tile.perimeterWall : {};
+            const opts = (typeof tile.perimeterWall === 'object' ? tile.perimeterWall : {}) as { type?: string; spacing?: number; size?: number; gapSegments?: number };
             const wallType = opts.type || 'wall';
             const wallConfig = this.factory.getConfig(wallType);
             const spritePath = wallConfig && wallConfig.defaultSpritePath || null;
@@ -540,7 +566,7 @@ export class ObstacleManager {
             }
         }
         if (tile.gatherables && tile.gatherables.length) {
-            const gm = this.getGatherableManager();
+            const gm = this.getGatherableManager() as { add?(x: number, y: number, w: number, h: number, type: string): void } | null;
             if (gm) {
                 for (const g of tile.gatherables) {
                     const gx = g.x * scale;
@@ -575,11 +601,11 @@ export class ObstacleManager {
         if (is1x1) this.last1x1Offset = { x: offsetX, y: offsetY };
         let grid;
         if (layout.pool && layout.pool.length && layout.cols != null && layout.rows != null) {
-            grid = [];
-            const poolEntries = layout.pool.map(entry =>
+            grid = [] as string[][];
+            const poolEntries = layout.pool.map((entry: string | { id: string; weight?: number }) =>
                 typeof entry === 'string' ? { id: entry, weight: 1 } : { id: entry.id, weight: Math.max(0.1, entry.weight || 1) }
             );
-            const hasFence = (tileId) => {
+            const hasFence = (tileId: string) => {
                 const tile = SceneTiles.getTile(tileId);
                 return !!(tile && tile.perimeterFence);
             };
@@ -710,7 +736,7 @@ export class ObstacleManager {
         return null;
     }
 
-    getLastPlacedTiles() {
+    getLastPlacedTiles(): Array<{ tileId: string; originX: number; originY: number; tileSize?: number; rotation?: number }> {
         return this.lastPlacedTiles || [];
     }
 

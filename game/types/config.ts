@@ -54,7 +54,7 @@ export interface LevelConfig {
   /** Chance (0–1) for packs on this level to spawn as tier-3 (★★★) variants. Tier-3 maps use this. */
   enemyTier3Chance?: number;
   killsToUnlockPortal?: number;
-  theme?: { ground?: unknown; sky?: string; texture?: string };
+  theme?: { ground?: unknown; sky?: string; texture?: string; clearColor?: string };
   obstacles?: unknown;
   tileSize?: number;
   width?: number;
@@ -84,7 +84,7 @@ export interface GameConfigShape {
     pack?: { radius: number; minAllies: number; modifierChance: number };
     spawn?: { maxEnemies: number };
   };
-  packModifiers?: Record<string, { damageMultiplier?: number; healthMultiplier?: number; speedMultiplier?: number; color?: string; knockbackResist?: number; attackCooldownMultiplier?: number; stunBuildupPerHitMultiplier?: number }>;
+  packModifiers?: Record<string, { damageMultiplier?: number; healthMultiplier?: number; speedMultiplier?: number; color?: string; knockbackResist?: number; attackCooldownMultiplier?: number; stunBuildupPerHitMultiplier?: number; detectionRangeMultiplier?: number }>;
   portal?: { x: number; y: number; width: number; height: number; /** Seconds to hold E/B to complete portal/stairs use. */ channelTime?: number };
   hub?: {
     name?: string;
@@ -97,9 +97,12 @@ export interface GameConfigShape {
     shopkeeper?: { x: number; y: number; width: number; height: number };
     /** Spawn position for the quest portal when a quest is accepted (player enters to go to quest). */
     questPortal?: { x: number; y: number; width: number; height: number };
+    /** Blue portal in hub to re-enter the quest that was just left (when returning from a level). */
+    reenterPortal?: { x: number; y: number; width: number; height: number };
     /** Training dummy position (center or top-left). Spawned only in hub. */
     trainingDummy?: { x: number; y: number };
-    theme?: { ground?: unknown; sky?: string };
+    rerollStation?: { x: number; y: number; width: number; height: number };
+    theme?: { ground?: unknown; sky?: string; texture?: string; clearColor?: string };
     walls?: Array<{ x: number; y: number; width: number; height: number }>;
     fence?: unknown;
     wallColor?: string;

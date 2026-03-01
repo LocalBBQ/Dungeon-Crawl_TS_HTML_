@@ -2,7 +2,7 @@
  * Centralized state for the playing/hub phase. Single source of truth for portal,
  * board, chest, cooldowns, crossbow, inventory, etc.
  */
-import type { Quest } from '../types/quest.ts';
+import type { Quest } from '../types/quest.js';
 import { getDefaultUnlockedRecipeIds } from '../config/strategyCraftingConfig.js';
 
 export interface PortalState {
@@ -59,8 +59,11 @@ export type HoneyConsumable = { type: 'honey'; count: number };
 /** Stackable potion (consumable). */
 export type PotionConsumable = { type: 'potion'; count: number };
 
+/** Stackable gold (stored in inventory). */
+export type GoldConsumable = { type: 'gold'; count: number };
+
 /** One inventory bag slot: weapon instance, consumable, or empty. */
-export type InventorySlot = WeaponInstance | WhetstoneConsumable | HerbConsumable | MushroomConsumable | HoneyConsumable | PotionConsumable | null;
+export type InventorySlot = WeaponInstance | WhetstoneConsumable | HerbConsumable | MushroomConsumable | HoneyConsumable | PotionConsumable | GoldConsumable | null;
 
 /** Armor equipment slot id (head, chest, hands, feet). */
 export type ArmorSlotId = 'head' | 'chest' | 'hands' | 'feet';
@@ -98,8 +101,15 @@ export function isPotionSlot(slot: InventorySlot): slot is PotionConsumable {
   return slot != null && 'type' in slot && (slot as PotionConsumable).type === 'potion';
 }
 
+export function isGoldSlot(slot: InventorySlot): slot is GoldConsumable {
+  return slot != null && 'type' in slot && (slot as GoldConsumable).type === 'gold';
+}
+
 /** Player inventory: 18 slots (3×6 grid) holding weapons and/or armor. */
 export const INVENTORY_SLOT_COUNT = 18;
+
+/** Toolbelt: 4 quick-access slots for potions (extra inventory). */
+export const TOOLBELT_SLOT_COUNT = 4;
 
 /** Chest: 24 slots for weapons (and/or armor). */
 export const CHEST_SLOT_COUNT = 24;
@@ -112,6 +122,13 @@ export interface PlayingStateShape {
   portalChannelProgress: number;
   /** Which action is being channeled: 'e' = next area, 'b' = return to sanctuary; null when not channeling. */
   portalChannelAction: 'e' | 'b' | null;
+  /** 0..1 progress while holding B to spawn recall portal; 0 when not holding. */
+  recallChannelProgress: number;
+  /** Player-spawned blue portal (hold B 2.5s); E at portal returns to Sanctuary and keeps inventory. */
+  recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean } | null;
+  playerNearRecallPortal: boolean;
+  /** 0..1 channel progress while holding E at recall portal; 0 when not channeling. */
+  recallPortalChannelProgress: number;
   board: BoardState | null;
   boardOpen: boolean;
   boardUseCooldown: number;
@@ -149,7 +166,8 @@ export interface PlayingStateShape {
   playerProjectileCooldown: number;
   inventoryOpen: boolean;
   killsThisLife: number;
-  gold: number;
+  /** @deprecated Use getTotalGoldFromInventory; legacy value migrated into inventory on first read. */
+  gold?: number;
   lastHitEnemyId: string | null;
   playerInGatherableRange: boolean;
   equippedMainhandKey: string;
@@ -165,6 +183,8 @@ export interface PlayingStateShape {
   equippedOffhandSuffixId?: string;
   /** 24 slots: weapon instance or null. Starts empty; filled only by taking from chest. */
   inventorySlots: InventorySlot[];
+  /** Toolbelt: quick-access slots (e.g. potions). Extra inventory; 4 slots. */
+  toolbeltSlots: (PotionConsumable | null)[];
   /** Chest: 24 slots. Weapons (and optionally armor) stored here. */
   chestSlots: (WeaponInstance | null)[];
   /** Equipped armor: key per slot, 'none' when empty. */
@@ -211,6 +231,16 @@ export interface PlayingStateShape {
   savedSanctuaryStamina?: number;
   /** When entering level 12 from a cave entrance, set to return level (e.g. 1); portal then returns here instead of hub. */
   portalReturnLevel: number | null;
+  /** In hub: level to re-enter via blue portal (set when returning from a quest). */
+  hubReenterLevel: number | null;
+  /** In hub: quest to restore when re-entering (same quest that was left). */
+  hubReenterQuest: Quest | null;
+  /** In hub: delve floor to restore when re-entering a delve. */
+  hubReenterDelveFloor: number;
+  /** True when returning to hub via blue recall portal (E at blue); only then show blue re-enter portal in hub. Cleared in startGame(). */
+  returnedViaBlueRecall?: boolean;
+  playerNearReenterPortal: boolean;
+  reenterPortalChannelProgress: number;
   /** True when player overlaps a caveEntrance obstacle (level 1 etc). */
   playerNearCaveEntrance: boolean;
   /** World rect of the cave entrance the player is overlapping (for prompt position). */
@@ -244,6 +274,10 @@ export interface PlayingStateShape {
     shop?: { dx: number; dy: number };
     reroll?: { dx: number; dy: number };
   };
+  /** Serialized level map for return-from-cave; keyed by level id. */
+  serializedReturnLevelMap?: Record<string, unknown>;
+  /** True when ogre den exit portal has been spawned (cave sub-level). */
+  ogreDenExitSpawned?: boolean;
 }
 
 export type PlayerClass = 'warrior' | 'mage' | 'rogue';
@@ -277,10 +311,10 @@ export function getActiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnapsh
       offhandKey: ps.equippedOffhandKey2 ?? 'none',
       mainhandDurability: ps.equippedMainhandDurability2 ?? MAX_WEAPON_DURABILITY,
       offhandDurability: ps.equippedOffhandDurability2 ?? MAX_WEAPON_DURABILITY,
-      mainhandPrefixId: (ps as Record<string, unknown>).equippedMainhandPrefixId2 as string | undefined,
-      mainhandSuffixId: (ps as Record<string, unknown>).equippedMainhandSuffixId2 as string | undefined,
-      offhandPrefixId: (ps as Record<string, unknown>).equippedOffhandPrefixId2 as string | undefined,
-      offhandSuffixId: (ps as Record<string, unknown>).equippedOffhandSuffixId2 as string | undefined
+      mainhandPrefixId: (ps as unknown as Record<string, unknown>).equippedMainhandPrefixId2 as string | undefined,
+      mainhandSuffixId: (ps as unknown as Record<string, unknown>).equippedMainhandSuffixId2 as string | undefined,
+      offhandPrefixId: (ps as unknown as Record<string, unknown>).equippedOffhandPrefixId2 as string | undefined,
+      offhandSuffixId: (ps as unknown as Record<string, unknown>).equippedOffhandSuffixId2 as string | undefined
     };
   }
   return {
@@ -313,15 +347,15 @@ export function getInactiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnap
     offhandKey: ps.equippedOffhandKey2 ?? 'none',
     mainhandDurability: ps.equippedMainhandDurability2 ?? MAX_WEAPON_DURABILITY,
     offhandDurability: ps.equippedOffhandDurability2 ?? MAX_WEAPON_DURABILITY,
-    mainhandPrefixId: (ps as Record<string, unknown>).equippedMainhandPrefixId2 as string | undefined,
-    mainhandSuffixId: (ps as Record<string, unknown>).equippedMainhandSuffixId2 as string | undefined,
-    offhandPrefixId: (ps as Record<string, unknown>).equippedOffhandPrefixId2 as string | undefined,
-    offhandSuffixId: (ps as Record<string, unknown>).equippedOffhandSuffixId2 as string | undefined
+    mainhandPrefixId: (ps as unknown as Record<string, unknown>).equippedMainhandPrefixId2 as string | undefined,
+    mainhandSuffixId: (ps as unknown as Record<string, unknown>).equippedMainhandSuffixId2 as string | undefined,
+    offhandPrefixId: (ps as unknown as Record<string, unknown>).equippedOffhandPrefixId2 as string | undefined,
+    offhandSuffixId: (ps as unknown as Record<string, unknown>).equippedOffhandSuffixId2 as string | undefined
   };
 }
 
 export function setActiveWeaponSet(ps: PlayingStateShape, updates: Partial<ActiveWeaponSetSnapshot>): void {
-  const target = ps as Record<string, unknown>;
+  const target = ps as unknown as Record<string, unknown>;
   if (ps.activeWeaponSet === 1) {
     if (updates.mainhandKey !== undefined) target.equippedMainhandKey2 = updates.mainhandKey;
     if (updates.offhandKey !== undefined) target.equippedOffhandKey2 = updates.offhandKey;
@@ -344,7 +378,7 @@ export function setActiveWeaponSet(ps: PlayingStateShape, updates: Partial<Activ
 }
 
 export function swapActiveWeaponSet(ps: PlayingStateShape): void {
-  (ps as Record<string, unknown>).activeWeaponSet = ps.activeWeaponSet === 1 ? 0 : 1;
+  (ps as unknown as Record<string, unknown>).activeWeaponSet = ps.activeWeaponSet === 1 ? 0 : 1;
 }
 
 /** Initial chest weapon keys (one of each base at Rusty tier; shield at Wooden tier). */
@@ -383,6 +417,10 @@ const defaultPlayingState = (
     playerNearPortal: false,
     portalChannelProgress: 0,
     portalChannelAction: null,
+    recallChannelProgress: 0,
+    recallPortal: null,
+    playerNearRecallPortal: false,
+    recallPortalChannelProgress: 0,
     board: null,
     boardOpen: false,
     boardUseCooldown: 0,
@@ -410,7 +448,6 @@ const defaultPlayingState = (
     playerProjectileCooldown: 0,
     inventoryOpen: false,
     killsThisLife: 0,
-    gold: 10000,
     lastHitEnemyId: null,
     playerInGatherableRange: false,
     equippedMainhandKey: set1.mainhand,
@@ -423,7 +460,12 @@ const defaultPlayingState = (
     equippedMainhandDurability2: MAX_WEAPON_DURABILITY,
     equippedOffhandDurability2: MAX_WEAPON_DURABILITY,
     playerClass: playerClass ?? undefined,
-    inventorySlots: Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[],
+    inventorySlots: (() => {
+      const slots = Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[];
+      slots[0] = { type: 'gold', count: 10000 };
+      return slots;
+    })(),
+    toolbeltSlots: Array(TOOLBELT_SLOT_COUNT).fill(null) as (PotionConsumable | null)[],
     chestSlots: chestSlots.map((i) => i ? { key: i.key, durability: i.durability, prefixId: i.prefixId, suffixId: i.suffixId } : null),
     equippedArmorHeadKey: 'none',
     equippedArmorChestKey: 'none',
@@ -449,6 +491,11 @@ const defaultPlayingState = (
     hubSelectedMainQuestIndex: 0,
     screenBeforePause: null,
     portalReturnLevel: null,
+    hubReenterLevel: null,
+    hubReenterQuest: null,
+    hubReenterDelveFloor: 0,
+    playerNearReenterPortal: false,
+    reenterPortalChannelProgress: 0,
     playerNearCaveEntrance: false,
     caveEntranceRect: null,
     caveEntranceChannelProgress: 0,
@@ -467,6 +514,10 @@ export class PlayingState implements PlayingStateShape {
   playerNearPortal = false;
   portalChannelProgress = 0;
   portalChannelAction: 'e' | 'b' | null = null;
+  recallChannelProgress = 0;
+  recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean } | null = null;
+  playerNearRecallPortal = false;
+  recallPortalChannelProgress = 0;
   board: BoardState | null = null;
   boardOpen = false;
   boardUseCooldown = 0;
@@ -494,14 +545,18 @@ export class PlayingState implements PlayingStateShape {
   playerProjectileCooldown = 0;
   inventoryOpen = false;
   killsThisLife = 0;
-  gold = 10000;
   lastHitEnemyId: string | null = null;
   playerInGatherableRange = false;
   equippedMainhandKey: string;
   equippedOffhandKey: string;
   equippedMainhandDurability = MAX_WEAPON_DURABILITY;
   equippedOffhandDurability = MAX_WEAPON_DURABILITY;
-  inventorySlots: InventorySlot[] = Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[];
+  inventorySlots: InventorySlot[] = (() => {
+    const slots = Array(INVENTORY_SLOT_COUNT).fill(null) as InventorySlot[];
+    slots[0] = { type: 'gold', count: 10000 };
+    return slots;
+  })();
+  toolbeltSlots: (PotionConsumable | null)[] = Array(TOOLBELT_SLOT_COUNT).fill(null);
   chestSlots: (WeaponInstance | null)[] = getInitialChestWeapons();
   equippedArmorHeadKey = 'none';
   equippedArmorChestKey = 'none';
@@ -533,6 +588,11 @@ export class PlayingState implements PlayingStateShape {
   shopExpandedArmor?: Record<string, boolean>;
   shopExpandedCategories?: Record<string, boolean>;
   portalReturnLevel: number | null = null;
+  hubReenterLevel: number | null = null;
+  hubReenterQuest: Quest | null = null;
+  hubReenterDelveFloor = 0;
+  playerNearReenterPortal = false;
+  reenterPortalChannelProgress = 0;
   playerNearCaveEntrance = false;
   caveEntranceRect: { x: number; y: number; width: number; height: number } | null = null;
   caveEntranceChannelProgress = 0;

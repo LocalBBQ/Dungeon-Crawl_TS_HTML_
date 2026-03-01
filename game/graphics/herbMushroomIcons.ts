@@ -101,6 +101,30 @@ export function drawPotionIcon(ctx: CanvasRenderingContext2D, cx: number, cy: nu
     ctx.restore();
 }
 
+/** Gold icon: coin shape with golden fill (inventory currency). */
+export function drawGoldIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    ctx.save();
+    const s = size;
+    const r = s * 0.42;
+    // Coin body
+    ctx.fillStyle = '#c9a227';
+    ctx.strokeStyle = '#8b6914';
+    ctx.lineWidth = Math.max(1, s / 14);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Inner circle (face of coin)
+    ctx.fillStyle = '#e8d060';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.65, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#b8922a';
+    ctx.lineWidth = Math.max(1, s / 20);
+    ctx.stroke();
+    ctx.restore();
+}
+
 /** Honey icon: honeycomb shape with golden fill (for beehive gatherable and inventory). */
 export function drawHoneyIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
     ctx.save();

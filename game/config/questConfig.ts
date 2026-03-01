@@ -1,11 +1,24 @@
 /**
  * Quest board config: difficulties and fixed quest list (procedural-ready).
  */
-import { GameConfig } from './GameConfig.ts';
-import type { DifficultyDef, Quest, QuestObjectiveType, QuestObjectiveParams } from '../types/quest.ts';
+import { GameConfig } from './GameConfig.js';
+import type { DifficultyDef, Quest, QuestObjectiveType, QuestObjectiveParams } from '../types/quest.js';
 
 /** Level id for the delve (dungeon descent) mode. Single level, multiple floors. */
+
 export const DELVE_LEVEL = 10;
+
+/** Canonical obstacles config for delve: underground only, 1x1 scene tile (delve.dirt). Use when regenerating or advancing delve floors. */
+export const DELVE_OBSTACLES_CONFIG = {
+  border: { spacing: 40, type: 'rock' as const },
+  useSceneTiles: true,
+  sceneTileLayout: {
+    tileSize: 1200,
+    cols: 1,
+    rows: 1,
+    pool: [{ id: 'delve.dirt', weight: 1 }],
+  },
+};
 
 /** Level id for the dragon arena (boss-only). Portal returns to hub. */
 export const DRAGON_ARENA_LEVEL = 11;

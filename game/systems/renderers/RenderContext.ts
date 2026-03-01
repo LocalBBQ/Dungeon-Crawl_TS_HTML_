@@ -1,6 +1,6 @@
 // Factory for render context passed to layer renderers.
-import type { CameraShape } from '../../types/camera.ts';
-import type { SystemManager } from '../../core/SystemManager.ts';
+import type { CameraShape } from '../../types/camera.js';
+import type { SystemManager } from '../../core/SystemManager.js';
 
 export interface RenderContext {
   ctx: CanvasRenderingContext2D;

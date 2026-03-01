@@ -1,17 +1,20 @@
 // Player procedural rendering: path, body (helmet, pauldrons), weapons (via PlayerCombatRenderer), vial, bars, reload, charge meter.
-import { Movement } from '../../components/Movement.ts';
-import { GameConfig } from '../../config/GameConfig.ts';
-import { Utils } from '../../utils/Utils.ts';
-import { Transform } from '../../components/Transform.ts';
-import { Combat } from '../../components/Combat.ts';
-import { Health } from '../../components/Health.ts';
-import { Renderable } from '../../components/Renderable.ts';
-import { PlayerHealing } from '../../components/PlayerHealing.ts';
-import { Stamina } from '../../components/Stamina.ts';
-import { PlayerCombatRenderer } from './PlayerCombatRenderer.ts';
-import { getBowChargeLevel } from '../../weapons/bowShotEffects.ts';
-import type { RenderContext } from './RenderContext.ts';
-import type { EntityShape } from '../../types/entity.ts';
+import { Movement } from '../../components/Movement.js';
+import { GameConfig } from '../../config/GameConfig.js';
+import { Utils } from '../../utils/Utils.js';
+import { Transform } from '../../components/Transform.js';
+import { Combat } from '../../components/Combat.js';
+import { Health } from '../../components/Health.js';
+import { Renderable } from '../../components/Renderable.js';
+import { PlayerHealing } from '../../components/PlayerHealing.js';
+import { Stamina } from '../../components/Stamina.js';
+import { PlayerCombatRenderer } from './PlayerCombatRenderer.js';
+import { EntityEffectsRenderer } from './EntityEffectsRenderer.js';
+import { getBowChargeLevel } from '../../weapons/bowShotEffects.js';
+import type { RenderContext } from './RenderContext.js';
+import type { EntityShape } from '../../types/entity.js';
+
+type WeaponLike = { name?: string; isRanged?: boolean; isBow?: boolean; isStaff?: boolean; chargeAttack?: { minChargeTime?: number; maxChargeTime?: number } };
 
 function getBowChargeLevelForRender(
     inputSystem: { isCharging?: boolean; getChargeDuration?: () => number } | null,
@@ -39,10 +42,11 @@ export const PlayerEntityRenderer = {
         const healing = entity.getComponent(PlayerHealing);
         const showWeapon = !healing || !healing.isHealing;
         const inputSystem = systems ? systems.get('input') : null;
-        const weapon = combat && combat.attackHandler ? combat.attackHandler.weapon : (combat && combat.playerAttack ? combat.playerAttack.weapon : null);
-        const isRanged = weapon && (weapon as { isRanged?: boolean }).isRanged === true;
-        const isBow = isRanged && (weapon as { isBow?: boolean }).isBow === true;
-        const isStaff = weapon && ((weapon as { isStaff?: boolean }).isStaff === true || (weapon.name && String(weapon.name).toLowerCase().includes('staff')));
+        const weapon = (combat && combat.attackHandler ? combat.attackHandler.weapon : (combat && combat.playerAttack ? combat.playerAttack.weapon : null)) as WeaponLike | null;
+        const inputLike = inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null;
+        const isRanged = weapon && weapon.isRanged === true;
+        const isBow = isRanged && weapon.isBow === true;
+        const isStaff = weapon && (weapon.isStaff === true || (weapon.name && String(weapon.name).toLowerCase().includes('staff')));
         const isCrossbow = isRanged && !isBow && !isStaff;
         const isMace = weapon && weapon.name && String(weapon.name).toLowerCase().includes('mace');
 
@@ -83,7 +87,7 @@ export const PlayerEntityRenderer = {
             if (weapon && showWeapon && !isRanged && !isMace && !isStaff) {
                 PlayerCombatRenderer.drawSword(ctx, screenX, screenY, transform, movement, combat, camera, { part: 'handle' });
             }
-            const isDodging = movement && movement.isDodging;
+            const isDodging = movement && (movement as Movement & { isDodging?: boolean }).isDodging;
             const w = transform.width * camera.zoom;
             const h = transform.height * camera.zoom;
             if (isDodging) ctx.globalAlpha = 0.6;
@@ -198,7 +202,7 @@ export const PlayerEntityRenderer = {
             ctx.globalAlpha = 1.0;
             if (weapon && showWeapon) {
                 if (isBow) {
-                    const bowChargeLevel = getBowChargeLevelForRender(inputSystem, GameConfig.player?.bow);
+                    const bowChargeLevel = getBowChargeLevelForRender(inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null, (GameConfig.player as { bow?: { chargeLevel1: number; chargeLevel2: number; chargeLevel3: number } })?.bow);
                     PlayerCombatRenderer.drawBow(ctx, screenX, screenY, transform, movement, combat, camera, bowChargeLevel);
                 } else if (isRanged && !isStaff) {
                     PlayerCombatRenderer.drawCrossbow(ctx, screenX, screenY, transform, movement, combat, camera);
@@ -231,36 +235,10 @@ export const PlayerEntityRenderer = {
             ctx.restore();
         }
 
-        if (typeof EntityEffectsRenderer !== 'undefined') {
-            EntityEffectsRenderer.drawHealingVial(context, entity, screenX, screenY);
-        }
+        EntityEffectsRenderer.drawHealingVial(context, entity, screenX, screenY);
         if (health) {
-            if (typeof EntityEffectsRenderer !== 'undefined') {
-                EntityEffectsRenderer.renderBarsAndEffects(context, entity, screenX, screenY, { isPlayer: true });
-            } else {
-                const barWidth = 40 * camera.zoom;
-                const barHeight = 5 * camera.zoom;
-                const barX = screenX - barWidth / 2;
-                const barY = screenY - (transform.height + 10) * camera.zoom;
-                ctx.fillStyle = '#333';
-                ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = health.percent > 0.5 ? '#44ff44' : health.percent > 0.25 ? '#ffff44' : '#ff4444';
-                ctx.fillRect(barX, barY, barWidth * health.percent, barHeight);
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 1 / camera.zoom;
-                ctx.strokeRect(barX, barY, barWidth, barHeight);
-                const stamina = entity.getComponent(Stamina);
-                if (stamina) {
-                    const gap = 3 * camera.zoom;
-                    const staminaBarY = barY + barHeight + gap;
-                    ctx.fillStyle = '#1a2520';
-                    ctx.fillRect(barX, staminaBarY, barWidth, 4 * camera.zoom);
-                    ctx.strokeStyle = '#2a3a32';
-                    ctx.strokeRect(barX, staminaBarY, barWidth, 4 * camera.zoom);
-                    ctx.fillStyle = '#2a7050';
-                    ctx.fillRect(barX, staminaBarY, barWidth * stamina.percent, 4 * camera.zoom);
-                }
-            }
+            EntityEffectsRenderer.renderBarsAndEffects(context, entity, screenX, screenY, { isPlayer: true });
+        }
             const crossbowConfig = typeof GameConfig !== 'undefined' && GameConfig.player && GameConfig.player.crossbow ? GameConfig.player.crossbow : null;
             if (isCrossbow && crossbowConfig) {
                 const barWidth = 40 * camera.zoom;
@@ -275,7 +253,7 @@ export const PlayerEntityRenderer = {
                 ctx.strokeStyle = '#3d2817';
                 ctx.lineWidth = 1 / camera.zoom;
                 ctx.strokeRect(barX, barsBottomY, barWidth, reloadBarHeight);
-                const progress = Math.min(1, entity.crossbowReloadProgress ?? 1);
+                const progress = Math.min(1, (entity as EntityShape & { crossbowReloadProgress?: number }).crossbowReloadProgress ?? 1);
                 ctx.fillStyle = 'rgba(180, 220, 100, 0.4)';
                 ctx.fillRect(barX + barWidth * crossbowConfig.perfectWindowStart, barsBottomY, barWidth * (crossbowConfig.perfectWindowEnd - crossbowConfig.perfectWindowStart), reloadBarHeight);
                 ctx.strokeStyle = 'rgba(200, 255, 120, 0.6)';
@@ -283,10 +261,9 @@ export const PlayerEntityRenderer = {
                 ctx.fillStyle = '#4a6040';
                 ctx.fillRect(barX, barsBottomY, barWidth * progress, reloadBarHeight);
             }
-        }
         const bowConfig = (GameConfig.player as { bow?: { chargeLevel1: number; chargeLevel2: number; chargeLevel3: number } })?.bow;
-        if (isBow && inputSystem?.isCharging && bowConfig && transform) {
-            const chargeDuration = inputSystem.getChargeDuration();
+        if (isBow && (inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null)?.isCharging && bowConfig && transform) {
+            const chargeDuration = (inputSystem as { getChargeDuration?: () => number }).getChargeDuration?.() ?? 0;
             const barWidth = 40 * camera.zoom;
             const barHeight = 4 * camera.zoom;
             const barX = screenX - barWidth / 2;
@@ -313,8 +290,8 @@ export const PlayerEntityRenderer = {
             ctx.fillRect(barX, barY, barWidth * fillRatio, barHeight);
         }
         const chargeAttackConfig = combat && weapon && weapon.chargeAttack ? weapon.chargeAttack : null;
-        if (inputSystem && inputSystem.isCharging && chargeAttackConfig && transform) {
-            const chargeDuration = inputSystem.getChargeDuration();
+        if (inputLike && inputLike.isCharging && chargeAttackConfig && transform) {
+            const chargeDuration = inputLike.getChargeDuration?.() ?? 0;
             const maxChargeTime = chargeAttackConfig.maxChargeTime;
             const minChargeTime = chargeAttackConfig.minChargeTime;
             if (chargeDuration >= minChargeTime) {
@@ -341,7 +318,7 @@ export const PlayerEntityRenderer = {
     },
 
     /** Called from EntitySpriteRenderer when player uses sprite path: draw weapon, attack arc, reload bar, charge meter. */
-    drawWeaponAndMetersForSpritePath(context, entity, screenX, screenY) {
+    drawWeaponAndMetersForSpritePath(context: RenderContext, entity: EntityShape, screenX: number, screenY: number): void {
         const { ctx, camera, systems, settings } = context;
         const inputSystem = systems ? systems.get('input') : null;
         const showPlayerHitboxIndicators = settings && settings.showPlayerHitboxIndicators !== false;
@@ -350,10 +327,10 @@ export const PlayerEntityRenderer = {
         const movement = entity.getComponent(Movement);
         const healing = entity.getComponent(PlayerHealing);
         const stamina = entity.getComponent(Stamina);
-        const weapon = combat && combat.attackHandler ? combat.attackHandler.weapon : (combat && combat.playerAttack ? combat.playerAttack.weapon : null);
-        const isRanged = weapon && (weapon as { isRanged?: boolean }).isRanged === true;
-        const isBow = isRanged && (weapon as { isBow?: boolean }).isBow === true;
-        const isStaff = weapon && ((weapon as { isStaff?: boolean }).isStaff === true || (weapon.name && String(weapon.name).toLowerCase().includes('staff')));
+        const weapon = (combat && combat.attackHandler ? combat.attackHandler.weapon : (combat && combat.playerAttack ? combat.playerAttack.weapon : null)) as WeaponLike | null;
+        const isRanged = weapon && weapon.isRanged === true;
+        const isBow = isRanged && weapon.isBow === true;
+        const isStaff = weapon && (weapon.isStaff === true || (weapon.name && String(weapon.name).toLowerCase().includes('staff')));
         const isCrossbow = isRanged && !isBow && !isStaff;
         const isMace = weapon && weapon.name && String(weapon.name).toLowerCase().includes('mace');
         const showWeapon = !healing || !healing.isHealing;
@@ -372,7 +349,7 @@ export const PlayerEntityRenderer = {
                         PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement, camera, { comboColors: false });
                     }
                     if (isBow && combat && movement && transform) {
-                        const bowChargeLevel = getBowChargeLevelForRender(inputSystem, GameConfig.player?.bow);
+                        const bowChargeLevel = getBowChargeLevelForRender(inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null, (GameConfig.player as { bow?: { chargeLevel1: number; chargeLevel2: number; chargeLevel3: number } })?.bow);
                         PlayerCombatRenderer.drawBow(ctx, screenX, screenY, transform, movement, combat, camera, bowChargeLevel);
                     } else if (isRanged && !isStaff && combat && movement && transform) {
                         PlayerCombatRenderer.drawCrossbow(ctx, screenX, screenY, transform, movement, combat, camera);
@@ -394,7 +371,7 @@ export const PlayerEntityRenderer = {
                     PlayerCombatRenderer.drawAttackArc(ctx, screenX, screenY, combat, movement, camera, { comboColors: false });
                 }
                 if (isBow && combat && movement && transform) {
-                    const bowChargeLevel = getBowChargeLevelForRender(inputSystem, GameConfig.player?.bow);
+                    const bowChargeLevel = getBowChargeLevelForRender(inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null, (GameConfig.player as { bow?: { chargeLevel1: number; chargeLevel2: number; chargeLevel3: number } })?.bow);
                     PlayerCombatRenderer.drawBow(ctx, screenX, screenY, transform, movement, combat, camera, bowChargeLevel);
                 } else if (isRanged && !isStaff && combat && movement && transform) {
                     PlayerCombatRenderer.drawCrossbow(ctx, screenX, screenY, transform, movement, combat, camera);
@@ -425,7 +402,7 @@ export const PlayerEntityRenderer = {
             ctx.strokeStyle = '#3d2817';
             ctx.lineWidth = 1 / camera.zoom;
             ctx.strokeRect(pBarX, reloadBarY, pBarWidth, reloadBarHeight);
-            const progress = Math.min(1, entity.crossbowReloadProgress ?? 1);
+            const progress = Math.min(1, (entity as EntityShape & { crossbowReloadProgress?: number }).crossbowReloadProgress ?? 1);
             ctx.fillStyle = 'rgba(180, 220, 100, 0.4)';
             ctx.fillRect(pBarX + pBarWidth * crossbowConfig.perfectWindowStart, reloadBarY, pBarWidth * (crossbowConfig.perfectWindowEnd - crossbowConfig.perfectWindowStart), reloadBarHeight);
             ctx.strokeStyle = 'rgba(200, 255, 120, 0.6)';
@@ -434,8 +411,8 @@ export const PlayerEntityRenderer = {
             ctx.fillRect(pBarX, reloadBarY, pBarWidth * progress, reloadBarHeight);
         }
         const bowConfig = (GameConfig.player as { bow?: { chargeLevel1: number; chargeLevel2: number; chargeLevel3: number } })?.bow;
-        if (isBow && inputSystem?.isCharging && bowConfig && transform) {
-            const chargeDuration = inputSystem.getChargeDuration();
+        if (isBow && (inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null)?.isCharging && bowConfig && transform) {
+            const chargeDuration = (inputSystem as { getChargeDuration?: () => number }).getChargeDuration?.() ?? 0;
             const barWidth = 40 * camera.zoom;
             const barHeight = 4 * camera.zoom;
             const barX = screenX - barWidth / 2;
@@ -461,8 +438,9 @@ export const PlayerEntityRenderer = {
             ctx.fillRect(barX, barY, barWidth * fillRatio, barHeight);
         }
         const chargeAttackConfig = combat && weapon && weapon.chargeAttack ? weapon.chargeAttack : null;
-        if (inputSystem && inputSystem.isCharging && transform && chargeAttackConfig) {
-            const chargeDuration = inputSystem.getChargeDuration();
+        const inputLikeLocal = inputSystem as { isCharging?: boolean; getChargeDuration?: () => number } | null;
+        if (inputLikeLocal && inputLikeLocal.isCharging && transform && chargeAttackConfig) {
+            const chargeDuration = inputLikeLocal.getChargeDuration?.() ?? 0;
             const maxChargeTime = chargeAttackConfig.maxChargeTime;
             const minChargeTime = chargeAttackConfig.minChargeTime;
             if (chargeDuration >= minChargeTime) {
