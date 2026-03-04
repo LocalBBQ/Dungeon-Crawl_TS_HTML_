@@ -99,10 +99,14 @@ export class StrategyCraftingInputController {
     });
   }
 
-  /** Match current buffer against any unlocked recipe. Returns recipe id or null. */
+  /** Match current buffer against strategies in the loadout only. Returns recipe id or null. */
   private matchBuffer(ps: PlayingStateShape): string | null {
+    const loadout = ps.strategyLoadoutSlotIds ?? [];
     const unlocked = migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []);
-    for (const recipeId of unlocked) {
+    for (let i = 0; i < loadout.length; i++) {
+      const recipeId = loadout[i];
+      if (recipeId == null) continue;
+      if (!unlocked.includes(recipeId)) continue;
       const recipe = getStrategyRecipe(recipeId);
       if (!recipe) continue;
       if (this.sequenceEqual(this.buffer, recipe.sequence)) return recipe.id;

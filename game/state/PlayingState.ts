@@ -3,7 +3,8 @@
  * board, chest, cooldowns, crossbow, inventory, etc.
  */
 import type { Quest } from '../types/quest.js';
-import { getDefaultUnlockedRecipeIds } from '../config/strategyCraftingConfig.js';
+import type { ItemRarity } from '../config/rarityConfig.js';
+import { getDefaultUnlockedRecipeIds, getDefaultStrategyLoadoutSlotIds, STRATEGY_LOADOUT_SLOT_COUNT } from '../config/strategyCraftingConfig.js';
 
 export interface PortalState {
   x: number;
@@ -36,13 +37,32 @@ export interface ShopState {
   height: number;
 }
 
-/** One weapon instance: key + durability + optional enchant prefix/suffix. Used for inventory slots and chest. */
+/** One weapon instance: key + durability + rarity + effect slots (filled or empty). Used for inventory slots and chest. */
 export type WeaponInstance = {
   key: string;
   durability: number;
-  prefixId?: string;
-  suffixId?: string;
+  /** Default 'common' when absent (backward compat). */
+  rarity?: ItemRarity;
+  /** Length 0 (common), 1 (magic), or 2 (rare/legendary). Each element is effect id or null. */
+  effectIds?: (string | null)[];
 };
+
+/** Legacy shape with prefix/suffix (for migration). */
+type LegacyWeaponInstance = WeaponInstance & { prefixId?: string; suffixId?: string };
+
+/** Normalize instance: derive rarity and effectIds from legacy prefixId/suffixId if present. */
+export function normalizeWeaponInstance(inst: LegacyWeaponInstance | WeaponInstance): WeaponInstance {
+  if (inst.rarity != null && inst.effectIds != null) {
+    return { key: inst.key, durability: inst.durability, rarity: inst.rarity, effectIds: inst.effectIds };
+  }
+  const leg = inst as LegacyWeaponInstance;
+  const p = leg.prefixId;
+  const s = leg.suffixId;
+  const ids = [p, s].filter((x): x is string => !!x);
+  const rarity: ItemRarity = ids.length >= 2 ? 'rare' : ids.length === 1 ? 'magic' : 'common';
+  const effectIds: (string | null)[] = rarity === 'common' ? [] : rarity === 'magic' ? [ids[0]!] : [ids[0]!, ids[1]!];
+  return { key: inst.key, durability: inst.durability, rarity, effectIds };
+}
 
 /** Stackable consumable in inventory (e.g. whetstone). */
 export type WhetstoneConsumable = { type: 'whetstone'; count: number };
@@ -62,8 +82,14 @@ export type PotionConsumable = { type: 'potion'; count: number };
 /** Stackable gold (stored in inventory). */
 export type GoldConsumable = { type: 'gold'; count: number };
 
+/** Stackable page (crafting ingredient for enchant scrolls). */
+export type PageConsumable = { type: 'page'; count: number };
+
+/** Stackable enchant scroll (use at reroll station to fill/reroll effect slots). */
+export type EnchantScrollConsumable = { type: 'enchantScroll'; count: number };
+
 /** One inventory bag slot: weapon instance, consumable, or empty. */
-export type InventorySlot = WeaponInstance | WhetstoneConsumable | HerbConsumable | MushroomConsumable | HoneyConsumable | PotionConsumable | GoldConsumable | null;
+export type InventorySlot = WeaponInstance | WhetstoneConsumable | HerbConsumable | MushroomConsumable | HoneyConsumable | PotionConsumable | GoldConsumable | PageConsumable | EnchantScrollConsumable | null;
 
 /** Armor equipment slot id (head, chest, hands, feet). */
 export type ArmorSlotId = 'head' | 'chest' | 'hands' | 'feet';
@@ -103,6 +129,14 @@ export function isPotionSlot(slot: InventorySlot): slot is PotionConsumable {
 
 export function isGoldSlot(slot: InventorySlot): slot is GoldConsumable {
   return slot != null && 'type' in slot && (slot as GoldConsumable).type === 'gold';
+}
+
+export function isPageSlot(slot: InventorySlot): slot is PageConsumable {
+  return slot != null && 'type' in slot && (slot as PageConsumable).type === 'page';
+}
+
+export function isEnchantScrollSlot(slot: InventorySlot): slot is EnchantScrollConsumable {
+  return slot != null && 'type' in slot && (slot as EnchantScrollConsumable).type === 'enchantScroll';
 }
 
 /** Player inventory: 18 slots (3×6 grid) holding weapons and/or armor. */
@@ -176,11 +210,11 @@ export interface PlayingStateShape {
   equippedMainhandDurability: number;
   /** Current durability for equipped offhand (0..MAX_WEAPON_DURABILITY). */
   equippedOffhandDurability: number;
-  /** Enchant prefix/suffix for equipped mainhand (synced when equipping). */
-  equippedMainhandPrefixId?: string;
-  equippedMainhandSuffixId?: string;
-  equippedOffhandPrefixId?: string;
-  equippedOffhandSuffixId?: string;
+  /** Effect slot ids for equipped mainhand/offhand (synced when equipping). */
+  equippedMainhandEffectIds?: (string | null)[];
+  equippedOffhandEffectIds?: (string | null)[];
+  equippedMainhandRarity?: ItemRarity;
+  equippedOffhandRarity?: ItemRarity;
   /** 24 slots: weapon instance or null. Starts empty; filled only by taking from chest. */
   inventorySlots: InventorySlot[];
   /** Toolbelt: quick-access slots (e.g. potions). Extra inventory; 4 slots. */
@@ -257,6 +291,8 @@ export interface PlayingStateShape {
   strategyCraftingOpen: boolean;
   /** Recipe ids the player has collected (unlocked). */
   unlockedStrategyRecipeIds: string[];
+  /** Strategy loadout: N slots. Only slotted strategy ids can be triggered by V+sequence. null = empty slot. */
+  strategyLoadoutSlotIds: (string | null)[];
   /** Selected recipe id in the Strategy Crafting pane. */
   selectedStrategyRecipeId: string | null;
   /** Player class chosen at new game (affects starting loadouts). */
@@ -268,11 +304,16 @@ export interface PlayingStateShape {
   equippedOffhandKey2?: string;
   equippedMainhandDurability2?: number;
   equippedOffhandDurability2?: number;
+  equippedMainhandEffectIds2?: (string | null)[];
+  equippedOffhandEffectIds2?: (string | null)[];
+  equippedMainhandRarity2?: ItemRarity;
+  equippedOffhandRarity2?: ItemRarity;
   /** Draggable UI panel offsets (dx, dy) from default position. Persisted so layout respects user drag. */
   uiPanelOffsets?: {
     inventory?: { dx: number; dy: number };
     shop?: { dx: number; dy: number };
     reroll?: { dx: number; dy: number };
+    strategyBook?: { dx: number; dy: number };
   };
   /** Serialized level map for return-from-cave; keyed by level id. */
   serializedReturnLevelMap?: Record<string, unknown>;
@@ -285,12 +326,12 @@ export type PlayerClass = 'warrior' | 'mage' | 'rogue';
 /** Default loadouts per class: Warrior = sword; Mage = staff; Rogue = dagger + bow in set 2. */
 export function getDefaultLoadoutsForClass(playerClass: PlayerClass): { set1: { mainhand: string; offhand: string }; set2: { mainhand: string; offhand: string } } {
   if (playerClass === 'warrior') {
-    return { set1: { mainhand: 'sword_rusty', offhand: 'none' }, set2: { mainhand: 'none', offhand: 'none' } };
+    return { set1: { mainhand: 'sword_bronze', offhand: 'none' }, set2: { mainhand: 'none', offhand: 'none' } };
   }
   if (playerClass === 'mage') {
     return { set1: { mainhand: 'staff_oak', offhand: 'none' }, set2: { mainhand: 'none', offhand: 'none' } };
   }
-  return { set1: { mainhand: 'dagger_rusty', offhand: 'none' }, set2: { mainhand: 'bow_oak', offhand: 'none' } }; // rogue
+  return { set1: { mainhand: 'dagger_bronze', offhand: 'none' }, set2: { mainhand: 'bow_oak', offhand: 'none' } }; // rogue
 }
 
 export interface ActiveWeaponSetSnapshot {
@@ -298,10 +339,10 @@ export interface ActiveWeaponSetSnapshot {
   offhandKey: string;
   mainhandDurability: number;
   offhandDurability: number;
-  mainhandPrefixId?: string;
-  mainhandSuffixId?: string;
-  offhandPrefixId?: string;
-  offhandSuffixId?: string;
+  mainhandEffectIds?: (string | null)[];
+  offhandEffectIds?: (string | null)[];
+  mainhandRarity?: ItemRarity;
+  offhandRarity?: ItemRarity;
 }
 
 export function getActiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnapshot {
@@ -311,10 +352,10 @@ export function getActiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnapsh
       offhandKey: ps.equippedOffhandKey2 ?? 'none',
       mainhandDurability: ps.equippedMainhandDurability2 ?? MAX_WEAPON_DURABILITY,
       offhandDurability: ps.equippedOffhandDurability2 ?? MAX_WEAPON_DURABILITY,
-      mainhandPrefixId: (ps as unknown as Record<string, unknown>).equippedMainhandPrefixId2 as string | undefined,
-      mainhandSuffixId: (ps as unknown as Record<string, unknown>).equippedMainhandSuffixId2 as string | undefined,
-      offhandPrefixId: (ps as unknown as Record<string, unknown>).equippedOffhandPrefixId2 as string | undefined,
-      offhandSuffixId: (ps as unknown as Record<string, unknown>).equippedOffhandSuffixId2 as string | undefined
+      mainhandEffectIds: (ps as unknown as Record<string, unknown>).equippedMainhandEffectIds2 as (string | null)[] | undefined,
+      offhandEffectIds: (ps as unknown as Record<string, unknown>).equippedOffhandEffectIds2 as (string | null)[] | undefined,
+      mainhandRarity: (ps as unknown as Record<string, unknown>).equippedMainhandRarity2 as ItemRarity | undefined,
+      offhandRarity: (ps as unknown as Record<string, unknown>).equippedOffhandRarity2 as ItemRarity | undefined
     };
   }
   return {
@@ -322,10 +363,10 @@ export function getActiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnapsh
     offhandKey: ps.equippedOffhandKey,
     mainhandDurability: ps.equippedMainhandDurability,
     offhandDurability: ps.equippedOffhandDurability,
-    mainhandPrefixId: ps.equippedMainhandPrefixId,
-    mainhandSuffixId: ps.equippedMainhandSuffixId,
-    offhandPrefixId: ps.equippedOffhandPrefixId,
-    offhandSuffixId: ps.equippedOffhandSuffixId
+    mainhandEffectIds: ps.equippedMainhandEffectIds,
+    offhandEffectIds: ps.equippedOffhandEffectIds,
+    mainhandRarity: ps.equippedMainhandRarity,
+    offhandRarity: ps.equippedOffhandRarity
   };
 }
 
@@ -336,10 +377,10 @@ export function getInactiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnap
       offhandKey: ps.equippedOffhandKey,
       mainhandDurability: ps.equippedMainhandDurability,
       offhandDurability: ps.equippedOffhandDurability,
-      mainhandPrefixId: ps.equippedMainhandPrefixId,
-      mainhandSuffixId: ps.equippedMainhandSuffixId,
-      offhandPrefixId: ps.equippedOffhandPrefixId,
-      offhandSuffixId: ps.equippedOffhandSuffixId
+      mainhandEffectIds: ps.equippedMainhandEffectIds,
+      offhandEffectIds: ps.equippedOffhandEffectIds,
+      mainhandRarity: ps.equippedMainhandRarity,
+      offhandRarity: ps.equippedOffhandRarity
     };
   }
   return {
@@ -347,10 +388,10 @@ export function getInactiveWeaponSet(ps: PlayingStateShape): ActiveWeaponSetSnap
     offhandKey: ps.equippedOffhandKey2 ?? 'none',
     mainhandDurability: ps.equippedMainhandDurability2 ?? MAX_WEAPON_DURABILITY,
     offhandDurability: ps.equippedOffhandDurability2 ?? MAX_WEAPON_DURABILITY,
-    mainhandPrefixId: (ps as unknown as Record<string, unknown>).equippedMainhandPrefixId2 as string | undefined,
-    mainhandSuffixId: (ps as unknown as Record<string, unknown>).equippedMainhandSuffixId2 as string | undefined,
-    offhandPrefixId: (ps as unknown as Record<string, unknown>).equippedOffhandPrefixId2 as string | undefined,
-    offhandSuffixId: (ps as unknown as Record<string, unknown>).equippedOffhandSuffixId2 as string | undefined
+    mainhandEffectIds: (ps as unknown as Record<string, unknown>).equippedMainhandEffectIds2 as (string | null)[] | undefined,
+    offhandEffectIds: (ps as unknown as Record<string, unknown>).equippedOffhandEffectIds2 as (string | null)[] | undefined,
+    mainhandRarity: (ps as unknown as Record<string, unknown>).equippedMainhandRarity2 as ItemRarity | undefined,
+    offhandRarity: (ps as unknown as Record<string, unknown>).equippedOffhandRarity2 as ItemRarity | undefined
   };
 }
 
@@ -361,19 +402,19 @@ export function setActiveWeaponSet(ps: PlayingStateShape, updates: Partial<Activ
     if (updates.offhandKey !== undefined) target.equippedOffhandKey2 = updates.offhandKey;
     if (updates.mainhandDurability !== undefined) target.equippedMainhandDurability2 = updates.mainhandDurability;
     if (updates.offhandDurability !== undefined) target.equippedOffhandDurability2 = updates.offhandDurability;
-    if (updates.mainhandPrefixId !== undefined) target.equippedMainhandPrefixId2 = updates.mainhandPrefixId;
-    if (updates.mainhandSuffixId !== undefined) target.equippedMainhandSuffixId2 = updates.mainhandSuffixId;
-    if (updates.offhandPrefixId !== undefined) target.equippedOffhandPrefixId2 = updates.offhandPrefixId;
-    if (updates.offhandSuffixId !== undefined) target.equippedOffhandSuffixId2 = updates.offhandSuffixId;
+    if (updates.mainhandEffectIds !== undefined) target.equippedMainhandEffectIds2 = updates.mainhandEffectIds;
+    if (updates.offhandEffectIds !== undefined) target.equippedOffhandEffectIds2 = updates.offhandEffectIds;
+    if (updates.mainhandRarity !== undefined) target.equippedMainhandRarity2 = updates.mainhandRarity;
+    if (updates.offhandRarity !== undefined) target.equippedOffhandRarity2 = updates.offhandRarity;
   } else {
     if (updates.mainhandKey !== undefined) ps.equippedMainhandKey = updates.mainhandKey;
     if (updates.offhandKey !== undefined) ps.equippedOffhandKey = updates.offhandKey;
     if (updates.mainhandDurability !== undefined) ps.equippedMainhandDurability = updates.mainhandDurability;
     if (updates.offhandDurability !== undefined) ps.equippedOffhandDurability = updates.offhandDurability;
-    if (updates.mainhandPrefixId !== undefined) ps.equippedMainhandPrefixId = updates.mainhandPrefixId;
-    if (updates.mainhandSuffixId !== undefined) ps.equippedMainhandSuffixId = updates.mainhandSuffixId;
-    if (updates.offhandPrefixId !== undefined) ps.equippedOffhandPrefixId = updates.offhandPrefixId;
-    if (updates.offhandSuffixId !== undefined) ps.equippedOffhandSuffixId = updates.offhandSuffixId;
+    if (updates.mainhandEffectIds !== undefined) ps.equippedMainhandEffectIds = updates.mainhandEffectIds;
+    if (updates.offhandEffectIds !== undefined) ps.equippedOffhandEffectIds = updates.offhandEffectIds;
+    if (updates.mainhandRarity !== undefined) ps.equippedMainhandRarity = updates.mainhandRarity;
+    if (updates.offhandRarity !== undefined) ps.equippedOffhandRarity = updates.offhandRarity;
   }
 }
 
@@ -381,17 +422,65 @@ export function swapActiveWeaponSet(ps: PlayingStateShape): void {
   (ps as unknown as Record<string, unknown>).activeWeaponSet = ps.activeWeaponSet === 1 ? 0 : 1;
 }
 
-/** Initial chest weapon keys (one of each base at Rusty tier; shield at Wooden tier). */
+/** Initial chest weapon keys (one of each base at Bronze tier; shield at Wooden tier). */
 const INITIAL_CHEST_WEAPON_KEYS = [
-  'sword_rusty', 'shield_wooden', 'defender_rusty', 'dagger_rusty', 'greatsword_rusty', 'crossbow_rusty', 'mace_rusty'
+  'sword_bronze', 'shield_wooden', 'defender_bronze', 'dagger_bronze', 'greatsword_bronze', 'crossbow', 'mace_bronze'
 ] as const;
 
-/** Initial chest contents: 24 slots, first 7 filled with one of each base weapon, rest empty. */
+/** Initial chest contents: 24 slots, first 7 filled with one of each base weapon (common, no effects), rest empty. */
 export function getInitialChestWeapons(): (WeaponInstance | null)[] {
-  const filled = INITIAL_CHEST_WEAPON_KEYS.map((key) => ({ key, durability: MAX_WEAPON_DURABILITY } as WeaponInstance));
+  const filled = INITIAL_CHEST_WEAPON_KEYS.map((key) => ({
+    key,
+    durability: MAX_WEAPON_DURABILITY,
+    rarity: 'common' as ItemRarity,
+    effectIds: [] as (string | null)[]
+  } satisfies WeaponInstance));
   const slots: (WeaponInstance | null)[] = Array(CHEST_SLOT_COUNT).fill(null);
   filled.forEach((w, i) => { slots[i] = w; });
   return slots;
+}
+
+/** Map old 8-tier / crossbow_rusty weapon keys to 4-tier keys. Used when loading saves. */
+export function migrateWeaponKeyToFourTiers(key: string): string {
+  if (!key || key === 'none') return key;
+  if (key === 'crossbow_rusty') return 'crossbow';
+  const i = key.indexOf('_');
+  if (i <= 0) return key;
+  const base = key.slice(0, i);
+  const mat = key.slice(i + 1);
+  const map: Record<string, string> = {
+    rusty: 'bronze',
+    iron: 'bronze',
+    mithril: 'steel',
+    rune: 'adamant',
+    bronze: 'bronze',
+    steel: 'steel',
+    adamant: 'adamant',
+    dragon: 'dragon'
+  };
+  const newMat = map[mat];
+  if (newMat) return `${base}_${newMat}`;
+  return key;
+}
+
+/** Run weapon key migration on loaded state (equipped, chest, inventory, reroll slot). */
+export function migratePlayingStateWeaponKeys(ps: PlayingStateShape): void {
+  const m = migrateWeaponKeyToFourTiers;
+  ps.equippedMainhandKey = m(ps.equippedMainhandKey);
+  ps.equippedOffhandKey = m(ps.equippedOffhandKey);
+  if (ps.equippedMainhandKey2 != null) ps.equippedMainhandKey2 = m(ps.equippedMainhandKey2);
+  if (ps.equippedOffhandKey2 != null) ps.equippedOffhandKey2 = m(ps.equippedOffhandKey2);
+  const chest = ps.chestSlots ?? [];
+  for (let i = 0; i < chest.length; i++) {
+    const item = chest[i];
+    if (item?.key) chest[i] = { ...item, key: m(item.key) };
+  }
+  const inv = ps.inventorySlots ?? [];
+  for (let i = 0; i < inv.length; i++) {
+    const slot = inv[i];
+    if (slot && isWeaponInstance(slot) && slot.key) inv[i] = { ...slot, key: m(slot.key) };
+  }
+  if (ps.rerollSlotItem?.key) ps.rerollSlotItem = { ...ps.rerollSlotItem, key: m(ps.rerollSlotItem.key) };
 }
 
 /** Max durability per weapon. Each confirmed hit costs 1. */
@@ -466,7 +555,7 @@ const defaultPlayingState = (
       return slots;
     })(),
     toolbeltSlots: Array(TOOLBELT_SLOT_COUNT).fill(null) as (PotionConsumable | null)[],
-    chestSlots: chestSlots.map((i) => i ? { key: i.key, durability: i.durability, prefixId: i.prefixId, suffixId: i.suffixId } : null),
+    chestSlots: chestSlots.map((i) => i ? normalizeWeaponInstance(i as LegacyWeaponInstance) : null),
     equippedArmorHeadKey: 'none',
     equippedArmorChestKey: 'none',
     equippedArmorHandsKey: 'none',
@@ -494,6 +583,7 @@ const defaultPlayingState = (
     hubReenterLevel: null,
     hubReenterQuest: null,
     hubReenterDelveFloor: 0,
+    returnedViaBlueRecall: false,
     playerNearReenterPortal: false,
     reenterPortalChannelProgress: 0,
     playerNearCaveEntrance: false,
@@ -504,6 +594,7 @@ const defaultPlayingState = (
     caveExitChannelProgress: 0,
     strategyCraftingOpen: false,
     unlockedStrategyRecipeIds: getDefaultUnlockedRecipeIds(),
+    strategyLoadoutSlotIds: getDefaultStrategyLoadoutSlotIds(getDefaultUnlockedRecipeIds()),
     selectedStrategyRecipeId: null
   };
 };
@@ -591,6 +682,7 @@ export class PlayingState implements PlayingStateShape {
   hubReenterLevel: number | null = null;
   hubReenterQuest: Quest | null = null;
   hubReenterDelveFloor = 0;
+  returnedViaBlueRecall: boolean = false;
   playerNearReenterPortal = false;
   reenterPortalChannelProgress = 0;
   playerNearCaveEntrance = false;
@@ -601,6 +693,7 @@ export class PlayingState implements PlayingStateShape {
   caveExitChannelProgress = 0;
   strategyCraftingOpen = false;
   unlockedStrategyRecipeIds: string[] = getDefaultUnlockedRecipeIds();
+  strategyLoadoutSlotIds: (string | null)[] = getDefaultStrategyLoadoutSlotIds(getDefaultUnlockedRecipeIds());
   selectedStrategyRecipeId: string | null = null;
   playerClass?: PlayerClass;
   activeWeaponSet: 0 | 1 = 0;

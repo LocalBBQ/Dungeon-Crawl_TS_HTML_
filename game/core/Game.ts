@@ -42,7 +42,7 @@ import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import type { GameRef, GameConfigShape } from '../types/index.js';
 import type { GameSystems } from '../types/systems.js';
-import { PlayingState, getActiveWeaponSet, swapActiveWeaponSet, type PlayerClass, type InventorySlot, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
+import { PlayingState, getActiveWeaponSet, swapActiveWeaponSet, migratePlayingStateWeaponKeys, type PlayerClass, type PlayingStateShape, type InventorySlot, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import {
     addHerbToInventory,
     addMushroomToInventory,
@@ -67,6 +67,7 @@ import { loadSave, saveToSlot, deleteSave as deleteSaveSlot } from './SaveManage
 import { ScreenController } from './ScreenController.js';
 import { PlayingStateController } from './PlayingStateController.js';
 import { StrategyCraftingInputController } from '../controllers/StrategyCraftingInputController.js';
+import { getDefaultStrategyLoadoutSlotIds, migrateUnlockedStrategyRecipeIds, STRATEGY_LOADOUT_SLOT_COUNT } from '../config/strategyCraftingConfig.js';
 import { setStrategyCraftingPaneVisible, updateStrategyCraftingPane, showRecipeSuccess, showStrategyCraftNotification, initStrategyCraftingPaneDraggable } from '../ui/StrategyCraftingPane.js';
 import { HUDController } from '../ui/HUDController.js';
 import { updateCrossbowReload } from '../utils/crossbowReload.js';
@@ -96,7 +97,7 @@ import {
 } from '../ui/RerollOverlay.js';
 import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_ZOOM_STEP } from '../systems/renderers/MinimapRenderer.js';
 import { SoundManager, SOUND_IDS } from '../audio/SoundManager.js';
-import { rerollEnchantSlot, moveToRerollSlot, moveFromRerollSlotTo, addWeaponToInventory, addWhetstoneToInventory, useWhetstoneOnWeapon, findFirstPotionToolbeltIndex, usePotionFromToolbelt, findFirstPotionSlotIndex, usePotionFromInventory } from '../state/InventoryActions.js';
+import { moveToRerollSlot, moveFromRerollSlotTo, addWeaponToInventory, addWhetstoneToInventory, addPageToInventory, useWhetstoneOnWeapon, findFirstPotionToolbeltIndex, usePotionFromToolbelt, findFirstPotionSlotIndex, usePotionFromInventory } from '../state/InventoryActions.js';
 import type { TooltipHover } from '../types/tooltip.js';
 
 export type { TooltipHover };
@@ -153,7 +154,7 @@ class Game {
             this.systems = null;
             this.config = GameConfig;
 
-            const defaultWeapon = this.config.player?.defaultWeapon ?? 'sword_rusty';
+            const defaultWeapon = this.config.player?.defaultWeapon ?? 'sword_bronze';
             const defaultOffhand = this.config.player?.defaultOffhand ?? 'none';
             this.playingState = new PlayingState(defaultWeapon, defaultOffhand);
             this.inventoryDragState = createDragState();
@@ -808,7 +809,7 @@ class Game {
                 if (recipeId === 'potion') this.soundManager.play(SOUND_IDS.POTION_COMPLETE_TOAST);
               },
             onStrategyCraftFailed: (reason) => showStrategyCraftNotification(reason, 'failure'),
-            onStrategyCraftInput: () => this.soundManager.play(SOUND_IDS.STRAT_CRAFT_CLICK),
+            onStrategyCraftInput: () => this.soundManager.play(SOUND_IDS.STRAT_CRAFT_CLICK, 0.04),
             getStrategyCraftingContext: () => ({
                 addHealCharge: () => {
                     const player = this.entities.get('player');
@@ -880,6 +881,10 @@ class Game {
                 const added = addWhetstoneToInventory(this.playingState);
                 if (added) this.refreshInventoryPanel();
                 return added;
+            };
+            pickupManager.onPageCollected = () => {
+                addPageToInventory(this.playingState);
+                this.refreshInventoryPanel();
             };
         }
 
@@ -1125,7 +1130,7 @@ class Game {
             return;
         }
         this.suppressDodgeUntil = Date.now() + 150;
-        const defaultWeapon = this.config.player?.defaultWeapon ?? 'sword_rusty';
+        const defaultWeapon = this.config.player?.defaultWeapon ?? 'sword_bronze';
         const defaultOffhand = this.config.player?.defaultOffhand ?? 'none';
         this.playingState.reset(defaultWeapon, defaultOffhand, selectedClass);
         this.screenManager.selectedStartLevel = 0;
@@ -1142,6 +1147,12 @@ class Game {
             if (Object.prototype.hasOwnProperty.call(data.playingState, key)) {
                 ps[key] = data.playingState[key];
             }
+        }
+        migratePlayingStateWeaponKeys(this.playingState);
+        const loadout = this.playingState.strategyLoadoutSlotIds;
+        if (!loadout || !Array.isArray(loadout) || loadout.length !== STRATEGY_LOADOUT_SLOT_COUNT) {
+            const unlocked = migrateUnlockedStrategyRecipeIds(this.playingState.unlockedStrategyRecipeIds ?? []);
+            this.playingState.strategyLoadoutSlotIds = getDefaultStrategyLoadoutSlotIds(unlocked);
         }
         if (data.playerHealth != null) this.playingState.savedSanctuaryHealth = data.playerHealth;
         if (data.playerStamina != null) this.playingState.savedSanctuaryStamina = data.playerStamina;
@@ -1189,12 +1200,13 @@ class Game {
             const stamina = player?.getComponent(Stamina);
             if (health != null) this.playingState.savedSanctuaryHealth = health.currentHealth;
             if (stamina != null) this.playingState.savedSanctuaryStamina = stamina.currentStamina;
-            if (this.playingState.returnedViaBlueRecall) {
+            const ps = this.playingState as PlayingStateShape;
+            if (ps.returnedViaBlueRecall) {
                 const currentLevel = enemyManager?.getCurrentLevel?.() ?? this.playingState.activeQuest?.level ?? 1;
                 this.playingState.hubReenterLevel = this.playingState.activeQuest?.level ?? currentLevel;
                 this.playingState.hubReenterQuest = this.playingState.activeQuest ? { ...this.playingState.activeQuest } : null;
                 this.playingState.hubReenterDelveFloor = this.playingState.activeQuest?.questType === 'delve' ? (this.playingState.delveFloor || 0) : 0;
-                this.playingState.returnedViaBlueRecall = false;
+                ps.returnedViaBlueRecall = false;
             } else {
                 this.playingState.hubReenterLevel = null;
                 this.playingState.hubReenterQuest = null;
@@ -1630,6 +1642,9 @@ class Game {
                     if (this.settings.showMinimap) {
                         renderSystem.renderMinimap(cameraSystem, this.entities, hubConfig.width, hubConfig.height, null, 0);
                     }
+                    // Draw stats HUD before panels so inventory/chest/shop/reroll sit on top
+                    const hubPlayer = this.entities.get('player');
+                    renderStatsHUD(this.ctx, this.canvas, hubPlayer, 0, { delveFloor: this.playingState.delveFloor, recallChannelProgress: this.playingState.recallChannelProgress, toolbeltSlots: this.playingState.toolbeltSlots });
                     if (this.playingState.boardOpen) {
                         const levelNames: Record<number, string> = this.config.levels
                             ? Object.fromEntries(
@@ -1661,21 +1676,18 @@ class Game {
                         renderRerollOverlay(this.ctx, this.canvas, this.playingState);
                     }
                     if (this.playingState.inventoryOpen) {
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover);
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover, { includeStrategyPanel: true });
                     }
                     if (this.playingState.strategyCraftingOpen && this.strategyCraftingInputController) {
                         updateStrategyCraftingPane(this.playingState, this.strategyCraftingInputController.getBuffer());
                     }
-                    if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone || this.inventoryDragState.dragConsumableType)) {
+                    if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone || this.inventoryDragState.dragConsumableType || this.inventoryDragState.dragStrategyId)) {
                         renderDragGhost(this.ctx, this.inventoryDragState);
                     }
                     this.hudController.setChestOverlayVisible(false);
                     if (this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls')) {
                         this.screenManager.render(this.settings);
                     }
-                    // Draw stats HUD last so orbs stay visible above inventory/chest/shop/reroll panels
-                    const hubPlayer = this.entities.get('player');
-                    renderStatsHUD(this.ctx, this.canvas, hubPlayer, 0, { delveFloor: this.playingState.delveFloor, recallChannelProgress: this.playingState.recallChannelProgress, toolbeltSlots: this.playingState.toolbeltSlots });
                 }
                 return;
             }
@@ -1761,30 +1773,28 @@ class Game {
                     if (this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls') || this.screenManager.isScreen('help')) {
                         this.screenManager.render(this.settings);
                     }
+                    // Draw stats HUD before inventory/strategy/drag so panels sit on top
+                    const inLevelContext = this.screenManager.isScreen('playing') ||
+                        ((this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls') || this.screenManager.isScreen('help')) && this.playingState.screenBeforePause === 'playing');
+                    if (inLevelContext) {
+                        const playerEntity = this.entities.get('player');
+                        try {
+                            renderStatsHUD(this.ctx, this.canvas, playerEntity, currentLevel, { delveFloor: this.playingState.delveFloor, recallChannelProgress: this.playingState.recallChannelProgress, toolbeltSlots: this.playingState.toolbeltSlots });
+                        } catch (hudError) {
+                            console.error('Stats HUD render error:', hudError);
+                        }
+                    }
                     if (this.playingState.inventoryOpen) {
-                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover);
+                        renderInventory(this.ctx, this.canvas, this.playingState, this.inventoryDragState, this.tooltipHover, { includeStrategyPanel: true });
                     }
                     if (this.playingState.strategyCraftingOpen && this.strategyCraftingInputController) {
                         updateStrategyCraftingPane(this.playingState, this.strategyCraftingInputController.getBuffer());
                     }
-                    if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone || this.inventoryDragState.dragConsumableType)) {
+                    if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone || this.inventoryDragState.dragConsumableType || this.inventoryDragState.dragStrategyId)) {
                         renderDragGhost(this.ctx, this.inventoryDragState);
                     }
                 } catch (uiError) {
                     console.error('Render UI error (minimap/tooltip/panels):', uiError);
-                }
-                // Always draw stats HUD when in level so it stays visible even if something above threw (e.g. during combat)
-                this.ctx.globalAlpha = 1;
-                this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-                const inLevelContext = this.screenManager.isScreen('playing') ||
-                    ((this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls') || this.screenManager.isScreen('help')) && this.playingState.screenBeforePause === 'playing');
-                if (inLevelContext) {
-                    const playerEntity = this.entities.get('player');
-                    try {
-                        renderStatsHUD(this.ctx, this.canvas, playerEntity, currentLevel, { delveFloor: this.playingState.delveFloor, recallChannelProgress: this.playingState.recallChannelProgress, toolbeltSlots: this.playingState.toolbeltSlots });
-                    } catch (hudError) {
-                        console.error('Stats HUD render error:', hudError);
-                    }
                 }
             }
         } catch (error) {

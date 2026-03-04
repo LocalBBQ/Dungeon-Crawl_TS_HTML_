@@ -27,7 +27,7 @@ import { WanderBehavior } from '../behaviors/WanderBehavior.js';
 import type { Quest } from '../types/quest.js';
 import { DELVE_LEVEL } from '../config/questConfig.js';
 import type { HitCategory } from '../types/combat.js';
-import { rollWeaponDrop, rollWhetstoneDrop } from '../config/lootConfig.js';
+import { rollWeaponDrop, rollWhetstoneDrop, rollPageDrop } from '../config/lootConfig.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getPlayerArmorReduction } from '../armor/armorConfigs.js';
 
@@ -890,7 +890,7 @@ export class EnemyManager {
                         pickupManager.spawnGold(cx, cy, goldDrop);
                     }
                 }
-                const typeConfigForLoot = ai?.enemyType ? (this.config.enemy.types[ai.enemyType] as { weaponDropChance?: number; weaponDropPoolId?: string; whetstoneDropChance?: number } | undefined) : undefined;
+                const typeConfigForLoot = ai?.enemyType ? (this.config.enemy.types[ai.enemyType] as { weaponDropChance?: number; weaponDropPoolId?: string; whetstoneDropChance?: number; pageDropChance?: number } | undefined) : undefined;
                 const weaponDropChance = typeConfigForLoot?.weaponDropChance ?? 0;
                 if (weaponDropChance > 0 && Math.random() < weaponDropChance && transform && this.systems) {
                     const instance = rollWeaponDrop(ai!.enemyType, typeConfigForLoot?.weaponDropPoolId);
@@ -910,6 +910,15 @@ export class EnemyManager {
                         const cx = transform.x + transform.width / 2;
                         const cy = transform.y + transform.height / 2;
                         pickupManager.spawnWhetstone(cx, cy);
+                    }
+                }
+                const pageDropChance = typeConfigForLoot?.pageDropChance ?? 0;
+                if (rollPageDrop(pageDropChance) && transform && this.systems) {
+                    const pickupManager = this.systems.get<{ spawnPage(x: number, y: number): void }>('pickups');
+                    if (pickupManager) {
+                        const cx = transform.x + transform.width / 2;
+                        const cy = transform.y + transform.height / 2;
+                        pickupManager.spawnPage(cx, cy);
                     }
                 }
                 if (this.systems && this.systems.eventBus && transform) {

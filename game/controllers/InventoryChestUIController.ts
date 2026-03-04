@@ -4,7 +4,8 @@
  */
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getActiveWeaponSet, setActiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
-import { getInventoryLayout, getChestLayout, getShopLayout, hitTestInventory, hitTestChest, hitTestShop, ensureInventoryInitialized, type DragState, HEADER_H, SHOP_HEADER_HEIGHT } from '../ui/InventoryChestCanvas.js';
+import { getInventoryLayout, getChestLayout, getShopLayout, hitTestInventory, hitTestChest, hitTestShop, getTabOverlayLayout, hitTestTabOverlay, ensureInventoryInitialized, type DragState, HEADER_H, SHOP_HEADER_HEIGHT } from '../ui/InventoryChestCanvas.js';
+import { migrateUnlockedStrategyRecipeIds, STRATEGY_LOADOUT_SLOT_COUNT } from '../config/strategyCraftingConfig.js';
 import { hitTestToolbelt } from '../ui/StatsHUDCanvas.js';
 import type { TooltipHover } from '../types/tooltip.js';
 import { getRerollOverlayLayout, hitTestRerollOverlay, REROLL_HEADER_H } from '../ui/RerollOverlay.js';
@@ -23,7 +24,8 @@ import {
     swapEquipmentWithEquipment,
     swapEquipmentWithInventory,
     swapInventorySlots,
-    rerollEnchantSlot,
+    fillOrRerollSlot,
+    useEnchantScrollOnRerollSlot,
     moveToRerollSlot,
     moveFromRerollSlotTo,
     useWhetstoneOnWeapon,
@@ -70,9 +72,10 @@ export class InventoryChestUIController {
             if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + SHOP_HEADER_HEIGHT) return 'shop';
         }
         if (ps.inventoryOpen || ps.chestOpen) {
-            const layout = getInventoryLayout(g.canvas, { panelOffset: ps.uiPanelOffsets?.inventory, includeChestGrid: ps.rerollStationOpen });
-            const p = layout.panel;
-            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + HEADER_H) return 'inventory';
+            const tabLayout = getTabOverlayLayout(g.canvas, ps.uiPanelOffsets?.strategyBook);
+            const invOffset = ps.uiPanelOffsets?.inventory ?? { dx: 0, dy: 0 };
+            const rightPanel = { ...tabLayout.rightPanelRect, x: tabLayout.rightPanelRect.x + invOffset.dx, y: tabLayout.rightPanelRect.y + invOffset.dy };
+            if (x >= rightPanel.x && x <= rightPanel.x + rightPanel.w && y >= rightPanel.y && y <= rightPanel.y + HEADER_H) return 'inventory';
         }
         return null;
     }
@@ -81,9 +84,12 @@ export class InventoryChestUIController {
         const g = this.ctx;
         if (g.playingState.chestOpen) return true;
         if (g.playingState.inventoryOpen) {
-            const layout = getInventoryLayout(g.canvas, { panelOffset: g.playingState.uiPanelOffsets?.inventory });
-            const p = layout.panel;
-            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return true;
+            const tabLayout = getTabOverlayLayout(g.canvas, g.playingState.uiPanelOffsets?.strategyBook);
+            const left = tabLayout.leftPanel;
+            const invOffset = g.playingState.uiPanelOffsets?.inventory ?? { dx: 0, dy: 0 };
+            const right = { ...tabLayout.rightPanelRect, x: tabLayout.rightPanelRect.x + invOffset.dx, y: tabLayout.rightPanelRect.y + invOffset.dy };
+            if (x >= left.x && x <= left.x + left.w && y >= left.y && y <= left.y + left.h) return true;
+            if (x >= right.x && x <= right.x + right.w && y >= right.y && y <= right.y + right.h) return true;
         }
         if (g.playingState.shopOpen) {
             const layout = getShopLayout(
@@ -113,7 +119,8 @@ export class InventoryChestUIController {
                 return true;
             }
             if (hit?.type === 'reroll' && ps.rerollSlotItem?.key) {
-                rerollEnchantSlot(ps, hit.action);
+                const usedScroll = useEnchantScrollOnRerollSlot(ps, hit.slotIndex);
+                if (!usedScroll) fillOrRerollSlot(ps, hit.slotIndex);
                 g.refreshInventoryPanel();
                 return true;
             }
@@ -258,8 +265,11 @@ export class InventoryChestUIController {
             return true;
         }
         if (ps.inventoryOpen) {
-            const layout = getInventoryLayout(g.canvas, { panelOffset: ps.uiPanelOffsets?.inventory });
-            const hit = hitTestInventory(x, y, ps, layout);
+            const tabLayout = getTabOverlayLayout(g.canvas, ps.uiPanelOffsets?.strategyBook);
+            const invOffset = ps.uiPanelOffsets?.inventory ?? { dx: 0, dy: 0 };
+            const rightPanel = { ...tabLayout.rightPanelRect, x: tabLayout.rightPanelRect.x + invOffset.dx, y: tabLayout.rightPanelRect.y + invOffset.dy };
+            const invLayout = getInventoryLayout(g.canvas, { overridePanel: rightPanel });
+            const hit = hitTestInventory(x, y, ps, invLayout);
             if (hit?.type === 'close') {
                 ps.inventoryOpen = false;
                 g.setTooltipHover(null);
@@ -346,6 +356,39 @@ export class InventoryChestUIController {
         }
         ensureInventoryInitialized(ps);
         const ds = g.inventoryDragState;
+        if (ps.inventoryOpen) {
+            const tabLayout = getTabOverlayLayout(g.canvas, ps.uiPanelOffsets?.strategyBook);
+            const tabHit = hitTestTabOverlay(x, y, ps, tabLayout);
+            if (tabHit?.type === 'strategy-book-entry') {
+                const unlocked = migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []);
+                if (unlocked.includes(tabHit.recipeId)) {
+                    ds.isDragging = true;
+                    ds.dragStrategyId = tabHit.recipeId;
+                    ds.sourceStrategyLoadoutIndex = undefined;
+                    ds.weaponKey = '';
+                    ds.sourceSlotIndex = -1;
+                    ds.sourceContext = 'inventory';
+                    ds.pointerX = x;
+                    ds.pointerY = y;
+                    return true;
+                }
+            }
+            if (tabHit?.type === 'strategy-loadout-slot') {
+                const loadout = ps.strategyLoadoutSlotIds ?? [];
+                const slotId = loadout[tabHit.index] ?? null;
+                if (slotId) {
+                    ds.isDragging = true;
+                    ds.dragStrategyId = slotId;
+                    ds.sourceStrategyLoadoutIndex = tabHit.index;
+                    ds.weaponKey = '';
+                    ds.sourceSlotIndex = -1;
+                    ds.sourceContext = 'inventory';
+                    ds.pointerX = x;
+                    ds.pointerY = y;
+                    return true;
+                }
+            }
+        }
         if (ps.rerollStationOpen && ps.rerollSlotItem?.key) {
             const rerollLayout = getRerollOverlayLayout(g.canvas, ps);
             const rerollHit = hitTestRerollOverlay(x, y, ps, rerollLayout);
@@ -360,8 +403,12 @@ export class InventoryChestUIController {
                 return true;
             }
         }
-        const invLayout = ps.rerollStationOpen ? getInventoryLayout(g.canvas, { includeChestGrid: true, panelOffset: ps.uiPanelOffsets?.inventory }) : getInventoryLayout(g.canvas, { panelOffset: ps.uiPanelOffsets?.inventory });
-        const invHit = hitTestInventory(x, y, ps, invLayout, ps.rerollStationOpen ? (ps.chestSlots ?? []) : undefined);
+        const invLayoutForPointer = ps.inventoryOpen
+            ? (() => { const t = getTabOverlayLayout(g.canvas, ps.uiPanelOffsets?.strategyBook); const o = ps.uiPanelOffsets?.inventory ?? { dx: 0, dy: 0 }; return getInventoryLayout(g.canvas, { overridePanel: { ...t.rightPanelRect, x: t.rightPanelRect.x + o.dx, y: t.rightPanelRect.y + o.dy } }); })()
+            : ps.rerollStationOpen
+                ? getInventoryLayout(g.canvas, { includeChestGrid: true, panelOffset: ps.uiPanelOffsets?.inventory })
+                : getInventoryLayout(g.canvas, { panelOffset: ps.uiPanelOffsets?.inventory });
+        const invHit = hitTestInventory(x, y, ps, invLayoutForPointer, ps.rerollStationOpen ? (ps.chestSlots ?? []) : undefined);
         if (invHit?.type === 'chest-slot' && invHit.key) {
             ds.isDragging = true;
             ds.weaponKey = invHit.key;
@@ -371,7 +418,7 @@ export class InventoryChestUIController {
             ds.pointerY = y;
             return true;
         }
-        if (invHit?.type === 'inventory-slot' && (invHit.weaponKey || invHit.itemType === 'whetstone' || invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion' || invHit.itemType === 'gold')) {
+        if (invHit?.type === 'inventory-slot' && (invHit.weaponKey || invHit.itemType === 'whetstone' || invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion' || invHit.itemType === 'gold' || invHit.itemType === 'page' || invHit.itemType === 'enchantScroll')) {
             if (invHit.itemType === 'whetstone') {
                 ds.isDragging = true;
                 ds.sourceSlotIndex = invHit.index;
@@ -382,7 +429,7 @@ export class InventoryChestUIController {
                 ds.pointerY = y;
                 return true;
             }
-            if (invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion' || invHit.itemType === 'gold') {
+            if (invHit.itemType === 'herb' || invHit.itemType === 'mushroom' || invHit.itemType === 'honey' || invHit.itemType === 'potion' || invHit.itemType === 'gold' || invHit.itemType === 'page' || invHit.itemType === 'enchantScroll') {
                 ds.isDragging = true;
                 ds.sourceSlotIndex = invHit.index;
                 ds.sourceContext = 'inventory';
@@ -509,7 +556,7 @@ export class InventoryChestUIController {
         if (invHit?.type === 'chest-slot' && invHit.key) {
             const chestSlots = ps.chestSlots ?? [];
             const instance = chestSlots[invHit.index];
-            g.setTooltipHover(instance ? { type: 'weapon', weaponKey: invHit.key, x, y, durability: instance.durability, prefixId: instance.prefixId, suffixId: instance.suffixId } : { type: 'weapon', weaponKey: invHit.key, x, y });
+            g.setTooltipHover(instance ? { type: 'weapon', weaponKey: invHit.key, x, y, durability: instance.durability, rarity: instance.rarity, effectIds: instance.effectIds } : { type: 'weapon', weaponKey: invHit.key, x, y });
             return;
         }
         if (invHit?.type === 'inventory-slot' && invHit.itemType === 'whetstone') {
@@ -548,22 +595,34 @@ export class InventoryChestUIController {
             g.setTooltipHover({ type: 'gold', x, y, count });
             return;
         }
+        if (invHit?.type === 'inventory-slot' && invHit.itemType === 'page') {
+            const slot = ps.inventorySlots?.[invHit.index];
+            const count = slot && 'count' in slot ? slot.count : 1;
+            g.setTooltipHover({ type: 'page', x, y, count });
+            return;
+        }
+        if (invHit?.type === 'inventory-slot' && invHit.itemType === 'enchantScroll') {
+            const slot = ps.inventorySlots?.[invHit.index];
+            const count = slot && 'count' in slot ? slot.count : 1;
+            g.setTooltipHover({ type: 'enchantScroll', x, y, count });
+            return;
+        }
         if (invHit?.type === 'inventory-slot' && invHit.weaponKey) {
             if (getArmor(invHit.weaponKey)) {
                 g.setTooltipHover({ type: 'armor', armorKey: invHit.weaponKey, x, y, durability: invHit.durability });
                 return;
             }
-            g.setTooltipHover({ type: 'weapon', weaponKey: invHit.weaponKey, x, y, durability: invHit.durability, prefixId: invHit.prefixId, suffixId: invHit.suffixId });
+            g.setTooltipHover({ type: 'weapon', weaponKey: invHit.weaponKey, x, y, durability: invHit.durability, rarity: invHit.rarity, effectIds: invHit.effectIds });
             return;
         }
         if (invHit?.type === 'equipment') {
             const activeTooltip = getActiveWeaponSet(ps);
             const key = invHit.slot === 'mainhand' ? activeTooltip.mainhandKey : activeTooltip.offhandKey;
             if (key && key !== 'none') {
-                const prefixId = invHit.slot === 'mainhand' ? activeTooltip.mainhandPrefixId : activeTooltip.offhandPrefixId;
-                const suffixId = invHit.slot === 'mainhand' ? activeTooltip.mainhandSuffixId : activeTooltip.offhandSuffixId;
+                const rarity = invHit.slot === 'mainhand' ? activeTooltip.mainhandRarity : activeTooltip.offhandRarity;
+                const effectIds = invHit.slot === 'mainhand' ? activeTooltip.mainhandEffectIds : activeTooltip.offhandEffectIds;
                 const durability = invHit.slot === 'mainhand' ? activeTooltip.mainhandDurability : activeTooltip.offhandDurability;
-                g.setTooltipHover({ type: 'weapon', weaponKey: key, x, y, durability, prefixId, suffixId });
+                g.setTooltipHover({ type: 'weapon', weaponKey: key, x, y, durability, rarity, effectIds });
                 return;
             }
         }
@@ -573,7 +632,7 @@ export class InventoryChestUIController {
             const hit = hitTestChest(x, y, layout, chestSlots);
             if (hit?.type === 'weapon-slot' && hit.key) {
                 const instance = chestSlots[hit.index];
-                g.setTooltipHover({ type: 'weapon', weaponKey: hit.key, x, y, durability: instance?.durability, prefixId: instance?.prefixId, suffixId: instance?.suffixId });
+                g.setTooltipHover({ type: 'weapon', weaponKey: hit.key, x, y, durability: instance?.durability, rarity: instance?.rarity, effectIds: instance?.effectIds });
                 return;
             }
         }
@@ -598,6 +657,8 @@ export class InventoryChestUIController {
         const dragDurability = ds.durability;
         const wasWhetstone = ds.isWhetstone === true;
         const wasPotionDrag = ds.dragConsumableType === 'potion';
+        const dragStrategyId = ds.dragStrategyId;
+        const sourceStrategyLoadoutIndex = ds.sourceStrategyLoadoutIndex;
         ds.isDragging = false;
         ds.weaponKey = '';
         ds.armorKey = undefined;
@@ -607,8 +668,32 @@ export class InventoryChestUIController {
         ds.sourceSlotIndex = -1;
         ds.isWhetstone = false;
         ds.dragConsumableType = undefined;
+        ds.dragStrategyId = undefined;
+        ds.sourceStrategyLoadoutIndex = undefined;
 
         const ps = g.playingState;
+
+        if (dragStrategyId && ps.inventoryOpen) {
+            const tabLayout = getTabOverlayLayout(g.canvas, ps.uiPanelOffsets?.strategyBook);
+            const tabHit = hitTestTabOverlay(x, y, ps, tabLayout);
+            if (tabHit?.type === 'strategy-loadout-slot' && tabHit.index >= 0 && tabHit.index < STRATEGY_LOADOUT_SLOT_COUNT) {
+                let loadout = ps.strategyLoadoutSlotIds ?? [];
+                if (loadout.length !== STRATEGY_LOADOUT_SLOT_COUNT) {
+                    loadout = [...loadout];
+                    while (loadout.length < STRATEGY_LOADOUT_SLOT_COUNT) loadout.push(null);
+                    ps.strategyLoadoutSlotIds = loadout;
+                } else {
+                    loadout = [...loadout];
+                }
+                loadout[tabHit.index] = dragStrategyId;
+                if (sourceStrategyLoadoutIndex !== undefined && sourceStrategyLoadoutIndex >= 0 && sourceStrategyLoadoutIndex < STRATEGY_LOADOUT_SLOT_COUNT && sourceStrategyLoadoutIndex !== tabHit.index) {
+                    loadout[sourceStrategyLoadoutIndex] = null;
+                }
+                ps.strategyLoadoutSlotIds = loadout;
+                g.refreshInventoryPanel();
+                return true;
+            }
+        }
         const sync = g.syncCombat;
 
         const tbIdx = hitTestToolbelt(x, y, g.canvas);

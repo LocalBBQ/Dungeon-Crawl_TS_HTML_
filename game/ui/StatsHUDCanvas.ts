@@ -1,6 +1,6 @@
 /**
  * Canvas-rendered stats HUD (health/stamina orbs, stun, toolbelt, recall portal).
- * Drawn last in the game render loop so orbs stay visible above inventory/chest/shop/reroll panels.
+ * Drawn before inventory/chest/shop/reroll panels so those panels appear on top and are not blocked.
  */
 import type { EntityShape } from '../types/entity.js';
 import type { PotionConsumable } from '../state/PlayingState.js';
@@ -52,7 +52,7 @@ export interface StatsHUDData {
 }
 
 /**
- * Render the stats HUD on the game canvas. Call after world/entities and all UI panels so orbs render on top.
+ * Render the stats HUD on the game canvas. Call before inventory/chest/shop/reroll panels so those panels draw on top.
  * Uses same visual style as the original DOM HUD (orbs, bottom bar, stun, heal charges).
  */
 export function renderStatsHUD(

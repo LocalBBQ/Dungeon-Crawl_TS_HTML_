@@ -5,7 +5,7 @@
 import type { PlayingStateShape } from './PlayingState.js';
 import { INVENTORY_SLOT_COUNT, isHerbSlot, isMushroomSlot, isWhetstoneSlot } from './PlayingState.js';
 import { getStrategyRecipe, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
-import { addPotionToInventory, useWhetstoneOnWeapon } from './InventoryActions.js';
+import { addPotionToInventory, addEnchantScrollToInventory, useWhetstoneOnWeapon, countPages, consumePages } from './InventoryActions.js';
 
 export type ExecuteRecipeResult =
   | { success: true }
@@ -84,17 +84,23 @@ export function executeRecipe(
   if (out.type === 'craft') {
     const herbNeed = out.consumes.herb ?? 0;
     const mushroomNeed = out.consumes.mushroom ?? 0;
+    const pageNeed = out.consumes.page ?? 0;
     const hasHerb = countHerbs(ps) >= herbNeed;
     const hasMushroom = countMushrooms(ps) >= mushroomNeed;
-    if (!hasHerb && !hasMushroom) return { success: false, reason: 'Not enough herbs and mushrooms' };
-    if (!hasHerb) return { success: false, reason: 'Not enough herbs' };
-    if (!hasMushroom) return { success: false, reason: 'Not enough mushrooms' };
+    const hasPages = countPages(ps) >= pageNeed;
+    if (!hasHerb && !hasMushroom && !hasPages) return { success: false, reason: 'Not enough ingredients' };
+    if (herbNeed > 0 && !hasHerb) return { success: false, reason: 'Not enough herbs' };
+    if (mushroomNeed > 0 && !hasMushroom) return { success: false, reason: 'Not enough mushrooms' };
+    if (pageNeed > 0 && !hasPages) return { success: false, reason: 'Not enough pages' };
     consumeHerbs(ps, herbNeed);
     consumeMushrooms(ps, mushroomNeed);
+    if (pageNeed > 0) consumePages(ps, pageNeed);
     if (out.produces === 'healCharge' && context?.addHealCharge) {
       context.addHealCharge();
     } else if (out.produces === 'potion') {
       if (!addPotionToInventory(ps)) return { success: false, reason: 'Inventory full' };
+    } else if (out.produces === 'enchantScroll') {
+      if (!addEnchantScrollToInventory(ps)) return { success: false, reason: 'Inventory full' };
     }
     return { success: true };
   }

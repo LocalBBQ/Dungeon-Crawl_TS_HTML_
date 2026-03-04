@@ -123,11 +123,11 @@ export const EnemyWeapons = {
         const weapons = Weapons as Record<string, EnemyWeaponLike>;
         const w = weapons[weaponId];
         if (w) return w;
-        // Player registry uses tiered keys (e.g. mace_rusty); enemies use base id and get rusty tier
-        if (weaponId === 'mace') return weapons['mace_rusty'] ?? null;
-        if (weaponId === 'dagger') return weapons['dagger_rusty'] ?? null;
-        if (weaponId === 'sword') return weapons['sword_rusty'] ?? null;
-        if (weaponId === 'greatsword') return weapons['greatsword_rusty'] ?? null;
+        // Player registry uses tiered keys (e.g. mace_bronze); enemies use base id and get bronze tier
+        if (weaponId === 'mace') return weapons['mace_bronze'] ?? null;
+        if (weaponId === 'dagger') return weapons['dagger_bronze'] ?? null;
+        if (weaponId === 'sword') return weapons['sword_bronze'] ?? null;
+        if (weaponId === 'greatsword') return weapons['greatsword_bronze'] ?? null;
         const e = EnemyWeapons[weaponId];
         if (e && typeof e === 'object') return e;
         return null;
@@ -135,6 +135,6 @@ export const EnemyWeapons = {
 
     getGoblinWeapon(): EnemyWeaponLike | null {
         if (EnemyWeapons.goblinDagger) return EnemyWeapons.goblinDagger;
-        return (Weapons as Record<string, EnemyWeaponLike>)['dagger_rusty'] ?? null;
+        return (Weapons as Record<string, EnemyWeaponLike>)['dagger_bronze'] ?? null;
     }
 } as unknown as EnemyWeaponsRegistryType;

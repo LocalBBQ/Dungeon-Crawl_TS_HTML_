@@ -8,7 +8,8 @@ import {
   INVENTORY_SLOT_COUNT,
   isHerbSlot,
   isMushroomSlot,
-  isWhetstoneSlot
+  isWhetstoneSlot,
+  isPageSlot
 } from '../state/PlayingState.js';
 
 const DIRECTION_SYMBOLS: Record<StrategyDirection, string> = {
@@ -37,6 +38,10 @@ function countWhetstones(ps: PlayingStateShape): number {
   if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return 0;
   return ps.inventorySlots.reduce((sum, s) => (isWhetstoneSlot(s) ? sum + s.count : sum), 0);
 }
+function countPages(ps: PlayingStateShape): number {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return 0;
+  return ps.inventorySlots.reduce((sum, s) => (isPageSlot(s) ? sum + s.count : sum), 0);
+}
 
 /** Build description for a recipe, including current inventory counts only for ingredients this recipe uses. */
 function getRecipeDescriptionWithCounts(recipe: StrategyRecipeDef, ps: PlayingStateShape): string {
@@ -45,10 +50,12 @@ function getRecipeDescriptionWithCounts(recipe: StrategyRecipeDef, ps: PlayingSt
   if (out.type === 'craft' && out.consumes) {
     const needHerb = out.consumes.herb ?? 0;
     const needMushroom = out.consumes.mushroom ?? 0;
-    if (needHerb > 0 || needMushroom > 0) {
+    const needPage = out.consumes.page ?? 0;
+    if (needHerb > 0 || needMushroom > 0 || needPage > 0) {
       const have: string[] = [];
       if (needHerb > 0) have.push(`${countHerbs(ps)} herb${countHerbs(ps) !== 1 ? 's' : ''}`);
       if (needMushroom > 0) have.push(`${countMushrooms(ps)} mushroom${countMushrooms(ps) !== 1 ? 's' : ''}`);
+      if (needPage > 0) have.push(`${countPages(ps)} page${countPages(ps) !== 1 ? 's' : ''}`);
       parts.push(`You have: ${have.join(', ')}.`);
     }
   }
@@ -217,11 +224,13 @@ export function updateStrategyCraftingPane(
   if (!pane || !listEl) return;
 
   const unlocked = migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []);
+  const loadoutIds = new Set((ps.strategyLoadoutSlotIds ?? []).filter((id): id is string => id != null));
   const selectedId = ps.selectedStrategyRecipeId ?? null;
 
   listEl.innerHTML = '';
   for (const recipe of STRATEGY_RECIPES) {
     if (!unlocked.includes(recipe.id)) continue;
+    if (!loadoutIds.has(recipe.id)) continue;
     const item = document.createElement('div');
     item.className = 'strategy-crafting-recipe';
     if (recipe.id === selectedId) item.classList.add('selected');

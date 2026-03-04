@@ -1,8 +1,8 @@
 /**
  * Shop inventory: weapons the shopkeeper sells, grouped by material tier.
- * All tiers from materialTiers are sold (Rusty through Dragon).
+ * All tiers from materialTiers are sold (Bronze through Dragon).
  * Bow and staff use wood tiers (Oak through Elder).
- * Weapon keys must exist in WeaponsRegistry (e.g. sword_rusty, bow_oak, staff_elder).
+ * Weapon keys must exist in WeaponsRegistry (e.g. sword_bronze, bow_oak, staff_elder).
  */
 import { MATERIALS, TIERED_WEAPON_KEYS, TIERED_OFFHAND_KEYS, WOOD_MATERIALS } from '../weapons/materialTiers.js';
 
@@ -17,8 +17,8 @@ export interface ShopSection {
   items: ShopItem[];
 }
 
-/** Base price (gold) for each weapon type at Rusty tier. */
-const RUSTY_BASE_PRICE: Record<string, number> = {
+/** Base price (gold) for each weapon type at Bronze tier. */
+const BRONZE_BASE_PRICE: Record<string, number> = {
   sword: 25,
   dagger: 20,
   greatsword: 45,
@@ -45,14 +45,10 @@ const WOOD_TIER_PRICE_ADD: Record<string, number> = {
 
 /** Extra price added per material tier (index matches MATERIALS order). */
 const TIER_PRICE_ADD: Record<string, number> = {
-  rusty: 0,
-  bronze: 30,
-  iron: 65,
-  steel: 115,
-  mithril: 175,
-  adamant: 250,
-  rune: 340,
-  dragon: 450,
+  bronze: 0,
+  steel: 80,
+  adamant: 180,
+  dragon: 320,
 };
 
 function buildShopSections(): ShopSection[] {
@@ -61,14 +57,14 @@ function buildShopSections(): ShopSection[] {
     const add = TIER_PRICE_ADD[material.id] ?? 0;
     const items: ShopItem[] = [];
     for (const baseKey of TIERED_WEAPON_KEYS) {
-      const basePrice = RUSTY_BASE_PRICE[baseKey] ?? 30;
+      const basePrice = BRONZE_BASE_PRICE[baseKey] ?? 30;
       items.push({
         weaponKey: `${baseKey}_${material.id}`,
         price: basePrice + add,
       });
     }
     for (const baseKey of TIERED_OFFHAND_KEYS) {
-      const basePrice = RUSTY_BASE_PRICE[baseKey] ?? 22;
+      const basePrice = BRONZE_BASE_PRICE[baseKey] ?? 22;
       items.push({
         weaponKey: `${baseKey}_${material.id}`,
         price: basePrice + add,

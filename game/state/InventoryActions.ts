@@ -12,9 +12,12 @@ import {
   type HoneyConsumable,
   type PotionConsumable,
   type GoldConsumable,
+  type PageConsumable,
+  type EnchantScrollConsumable,
   getSlotKey,
   getActiveWeaponSet,
   setActiveWeaponSet,
+  normalizeWeaponInstance,
   INVENTORY_SLOT_COUNT,
   MAX_WEAPON_DURABILITY,
   CHEST_SLOT_COUNT,
@@ -25,12 +28,15 @@ import {
   isMushroomSlot,
   isHoneySlot,
   isPotionSlot,
-  isGoldSlot
+  isGoldSlot,
+  isPageSlot,
+  isEnchantScrollSlot
 } from './PlayingState.js';
 import { Weapons } from '../weapons/WeaponsRegistry.js';
 import { canEquipWeaponInSlot, getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { rollEnchantForSlot } from '../config/enchantmentConfig.js';
 import type { EnchantmentSlot } from '../config/enchantmentConfig.js';
+import { getMaxSlotsForRarity } from '../config/rarityConfig.js';
 import { WHETSTONE_REPAIR_PERCENT } from '../config/lootConfig.js';
 
 type WeaponLike = { twoHanded?: boolean; offhandOnly?: boolean };
@@ -71,6 +77,7 @@ export function equipFromInventory(
   if (!item || !isWeaponInstance(item)) return;
   if (item.durability <= 0) return;
   if (!canEquipWeaponInSlot(item.key, slot)) return;
+  const instance = normalizeWeaponInstance(item as WeaponInstance & { prefixId?: string; suffixId?: string });
   const weapon = getWeapon(item.key);
   const active = getActiveWeaponSet(ps);
   if (slot === 'mainhand') {
@@ -78,25 +85,25 @@ export function equipFromInventory(
       unequipToInventory(ps, 'offhand', undefined, undefined, syncCombat);
     }
     setActiveWeaponSet(ps, {
-      mainhandKey: item.key,
-      mainhandDurability: item.durability,
-      mainhandPrefixId: item.prefixId,
-      mainhandSuffixId: item.suffixId
+      mainhandKey: instance.key,
+      mainhandDurability: instance.durability,
+      mainhandEffectIds: instance.effectIds,
+      mainhandRarity: instance.rarity
     });
     if (weapon?.twoHanded) {
       setActiveWeaponSet(ps, {
         offhandKey: 'none',
         offhandDurability: MAX_WEAPON_DURABILITY,
-        offhandPrefixId: undefined,
-        offhandSuffixId: undefined
+        offhandEffectIds: undefined,
+        offhandRarity: undefined
       });
     }
   } else {
     setActiveWeaponSet(ps, {
-      offhandKey: item.key,
-      offhandDurability: item.durability,
-      offhandPrefixId: item.prefixId,
-      offhandSuffixId: item.suffixId
+      offhandKey: instance.key,
+      offhandDurability: instance.durability,
+      offhandEffectIds: instance.effectIds,
+      offhandRarity: instance.rarity
     });
   }
   ps.inventorySlots[slotIndex] = null;
@@ -118,8 +125,8 @@ export function unequipToInventory(
       : equipSlot === 'mainhand'
         ? active.mainhandDurability
         : active.offhandDurability;
-  const prefixId = equipSlot === 'mainhand' ? active.mainhandPrefixId : active.offhandPrefixId;
-  const suffixId = equipSlot === 'mainhand' ? active.mainhandSuffixId : active.offhandSuffixId;
+  const effectIds = equipSlot === 'mainhand' ? active.mainhandEffectIds : active.offhandEffectIds;
+  const rarity = equipSlot === 'mainhand' ? active.mainhandRarity : active.offhandRarity;
   if (!key || key === 'none') return;
   if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return;
 
@@ -128,20 +135,20 @@ export function unequipToInventory(
     index = ps.inventorySlots.findIndex((s) => s == null);
     if (index < 0) return;
   }
-  ps.inventorySlots[index] = { key, durability, prefixId, suffixId } as WeaponInstance;
+  ps.inventorySlots[index] = { key, durability, rarity, effectIds: effectIds ?? [] } as WeaponInstance;
   if (equipSlot === 'mainhand') {
     setActiveWeaponSet(ps, {
       mainhandKey: 'none',
       mainhandDurability: MAX_WEAPON_DURABILITY,
-      mainhandPrefixId: undefined,
-      mainhandSuffixId: undefined
+      mainhandEffectIds: undefined,
+      mainhandRarity: undefined
     });
   } else {
     setActiveWeaponSet(ps, {
       offhandKey: 'none',
       offhandDurability: MAX_WEAPON_DURABILITY,
-      offhandPrefixId: undefined,
-      offhandSuffixId: undefined
+      offhandEffectIds: undefined,
+      offhandRarity: undefined
     });
   }
   syncCombat?.(ps);
@@ -150,9 +157,10 @@ export function unequipToInventory(
 export function equipFromChest(ps: PlayingStateShape, chestIndex: number, bagIndex: number): void {
   if (!ps.chestSlots || chestIndex < 0 || chestIndex >= CHEST_SLOT_COUNT) return;
   if (bagIndex < 0 || bagIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return;
-  const instance = ps.chestSlots[chestIndex];
-  if (!instance) return;
-  ps.inventorySlots[bagIndex] = { key: instance.key, durability: instance.durability, prefixId: instance.prefixId, suffixId: instance.suffixId };
+  const raw = ps.chestSlots[chestIndex];
+  if (!raw) return;
+  const instance = normalizeWeaponInstance(raw as WeaponInstance & { prefixId?: string; suffixId?: string });
+  ps.inventorySlots[bagIndex] = { key: instance.key, durability: instance.durability, rarity: instance.rarity, effectIds: instance.effectIds };
   ps.chestSlots[chestIndex] = null;
 }
 
@@ -164,8 +172,9 @@ export function equipFromChestToHand(
   syncCombat?: SyncCombat
 ): void {
   if (!ps.chestSlots || chestIndex < 0 || chestIndex >= CHEST_SLOT_COUNT) return;
-  const instance = ps.chestSlots[chestIndex];
-  if (!instance) return;
+  const raw = ps.chestSlots[chestIndex];
+  if (!raw) return;
+  const instance = normalizeWeaponInstance(raw as WeaponInstance & { prefixId?: string; suffixId?: string });
   if (instance.durability <= 0) return;
   if (!canEquipWeaponInSlot(instance.key, slot)) return;
   const weapon = getWeapon(instance.key);
@@ -177,23 +186,23 @@ export function equipFromChestToHand(
     setActiveWeaponSet(ps, {
       mainhandKey: instance.key,
       mainhandDurability: instance.durability,
-      mainhandPrefixId: instance.prefixId,
-      mainhandSuffixId: instance.suffixId
+      mainhandEffectIds: instance.effectIds,
+      mainhandRarity: instance.rarity
     });
     if (weapon?.twoHanded) {
       setActiveWeaponSet(ps, {
         offhandKey: 'none',
         offhandDurability: MAX_WEAPON_DURABILITY,
-        offhandPrefixId: undefined,
-        offhandSuffixId: undefined
+        offhandEffectIds: undefined,
+        offhandRarity: undefined
       });
     }
   } else {
     setActiveWeaponSet(ps, {
       offhandKey: instance.key,
       offhandDurability: instance.durability,
-      offhandPrefixId: instance.prefixId,
-      offhandSuffixId: instance.suffixId
+      offhandEffectIds: instance.effectIds,
+      offhandRarity: instance.rarity
     });
   }
   ps.chestSlots[chestIndex] = null;
@@ -207,7 +216,8 @@ export function putInChestFromInventory(ps: PlayingStateShape, bagIndex: number)
   ps.inventorySlots[bagIndex] = null;
   if (!ps.chestSlots || ps.chestSlots.length !== CHEST_SLOT_COUNT) return;
   const empty = ps.chestSlots.findIndex((s) => s == null);
-  if (empty >= 0) ps.chestSlots[empty] = { key: item.key, durability: item.durability, prefixId: item.prefixId, suffixId: item.suffixId };
+  const inst = normalizeWeaponInstance(item as WeaponInstance & { prefixId?: string; suffixId?: string });
+  if (empty >= 0) ps.chestSlots[empty] = { key: inst.key, durability: inst.durability, rarity: inst.rarity, effectIds: inst.effectIds };
 }
 
 /** Swap two chest slots (for reordering when dragging within the chest). */
@@ -228,25 +238,25 @@ export function putInChestFromEquipment(
   const active = getActiveWeaponSet(ps);
   const key = equipSlot === 'mainhand' ? active.mainhandKey : active.offhandKey;
   const durability = equipSlot === 'mainhand' ? active.mainhandDurability : active.offhandDurability;
-  const prefixId = equipSlot === 'mainhand' ? active.mainhandPrefixId : active.offhandPrefixId;
-  const suffixId = equipSlot === 'mainhand' ? active.mainhandSuffixId : active.offhandSuffixId;
+  const effectIds = equipSlot === 'mainhand' ? active.mainhandEffectIds : active.offhandEffectIds;
+  const rarity = equipSlot === 'mainhand' ? active.mainhandRarity : active.offhandRarity;
   if (!key || key === 'none') return;
   if (!ps.chestSlots || ps.chestSlots.length !== CHEST_SLOT_COUNT) return;
   const empty = ps.chestSlots.findIndex((s) => s == null);
-  if (empty >= 0) ps.chestSlots[empty] = { key, durability, prefixId, suffixId };
+  if (empty >= 0) ps.chestSlots[empty] = { key, durability, rarity, effectIds: effectIds ?? [] };
   if (equipSlot === 'mainhand') {
     setActiveWeaponSet(ps, {
       mainhandKey: 'none',
       mainhandDurability: MAX_WEAPON_DURABILITY,
-      mainhandPrefixId: undefined,
-      mainhandSuffixId: undefined
+      mainhandEffectIds: undefined,
+      mainhandRarity: undefined
     });
   } else {
     setActiveWeaponSet(ps, {
       offhandKey: 'none',
       offhandDurability: MAX_WEAPON_DURABILITY,
-      offhandPrefixId: undefined,
-      offhandSuffixId: undefined
+      offhandEffectIds: undefined,
+      offhandRarity: undefined
     });
   }
   syncCombat?.(ps);
@@ -262,41 +272,42 @@ export function swapEquipmentWithInventory(
   const bagItem = ps.inventorySlots[bagIndex];
   if (!bagItem || !isWeaponInstance(bagItem)) return;
   if (bagItem.durability <= 0 || !canEquipWeaponInSlot(bagItem.key, equipSlot)) return;
+  const instance = normalizeWeaponInstance(bagItem as WeaponInstance & { prefixId?: string; suffixId?: string });
   const active = getActiveWeaponSet(ps);
   const equipKey = equipSlot === 'mainhand' ? active.mainhandKey : active.offhandKey;
   const equipDurability = equipSlot === 'mainhand' ? active.mainhandDurability : active.offhandDurability;
-  const equipPrefixId = equipSlot === 'mainhand' ? active.mainhandPrefixId : active.offhandPrefixId;
-  const equipSuffixId = equipSlot === 'mainhand' ? active.mainhandSuffixId : active.offhandSuffixId;
+  const equipEffectIds = equipSlot === 'mainhand' ? active.mainhandEffectIds : active.offhandEffectIds;
+  const equipRarity = equipSlot === 'mainhand' ? active.mainhandRarity : active.offhandRarity;
 
   if (equipSlot === 'mainhand') {
-    const newMainWeapon = bagItem ? getWeapon(bagItem.key) : undefined;
+    const newMainWeapon = getWeapon(instance.key);
     if (newMainWeapon?.twoHanded && active.offhandKey && active.offhandKey !== 'none') {
       unequipToInventory(ps, 'offhand', undefined, undefined, syncCombat);
     }
     setActiveWeaponSet(ps, {
-      mainhandKey: bagItem ? bagItem.key : 'none',
-      mainhandDurability: bagItem ? bagItem.durability : MAX_WEAPON_DURABILITY,
-      mainhandPrefixId: bagItem?.prefixId,
-      mainhandSuffixId: bagItem?.suffixId
+      mainhandKey: instance.key,
+      mainhandDurability: instance.durability,
+      mainhandEffectIds: instance.effectIds,
+      mainhandRarity: instance.rarity
     });
     if (newMainWeapon?.twoHanded) {
       setActiveWeaponSet(ps, {
         offhandKey: 'none',
         offhandDurability: MAX_WEAPON_DURABILITY,
-        offhandPrefixId: undefined,
-        offhandSuffixId: undefined
+        offhandEffectIds: undefined,
+        offhandRarity: undefined
       });
     }
   } else {
     setActiveWeaponSet(ps, {
-      offhandKey: bagItem ? bagItem.key : 'none',
-      offhandDurability: bagItem ? bagItem.durability : MAX_WEAPON_DURABILITY,
-      offhandPrefixId: bagItem?.prefixId,
-      offhandSuffixId: bagItem?.suffixId
+      offhandKey: instance.key,
+      offhandDurability: instance.durability,
+      offhandEffectIds: instance.effectIds,
+      offhandRarity: instance.rarity
     });
   }
   ps.inventorySlots[bagIndex] =
-    equipKey && equipKey !== 'none' ? { key: equipKey, durability: equipDurability, prefixId: equipPrefixId, suffixId: equipSuffixId } : null;
+    equipKey && equipKey !== 'none' ? { key: equipKey, durability: equipDurability, rarity: equipRarity, effectIds: equipEffectIds ?? [] } : null;
   syncCombat?.(ps);
 }
 
@@ -304,50 +315,101 @@ export function swapEquipmentWithEquipment(ps: PlayingStateShape, syncCombat?: S
   const active = getActiveWeaponSet(ps);
   const mainKey = active.mainhandKey;
   const mainDur = active.mainhandDurability;
-  const mainPrefix = active.mainhandPrefixId;
-  const mainSuffix = active.mainhandSuffixId;
+  const mainEffectIds = active.mainhandEffectIds;
+  const mainRarity = active.mainhandRarity;
   const offKey = active.offhandKey;
   const offDur = active.offhandDurability;
-  const offPrefix = active.offhandPrefixId;
-  const offSuffix = active.offhandSuffixId;
+  const offEffectIds = active.offhandEffectIds;
+  const offRarity = active.offhandRarity;
   if (mainKey && mainKey !== 'none' && !canEquipWeaponInSlot(mainKey, 'offhand')) return;
   if (offKey && offKey !== 'none' && !canEquipWeaponInSlot(offKey, 'mainhand')) return;
   setActiveWeaponSet(ps, {
     mainhandKey: offKey,
     mainhandDurability: offDur,
-    mainhandPrefixId: offPrefix,
-    mainhandSuffixId: offSuffix,
+    mainhandEffectIds: offEffectIds,
+    mainhandRarity: offRarity,
     offhandKey: mainKey,
     offhandDurability: mainDur,
-    offhandPrefixId: mainPrefix,
-    offhandSuffixId: mainSuffix
+    offhandEffectIds: mainEffectIds,
+    offhandRarity: mainRarity
   });
   syncCombat?.(ps);
 }
 
-const REROLL_PREFIX_COST = 50;
-const REROLL_SUFFIX_COST = 50;
-const REROLL_BOTH_COST = 80;
+export const FILL_SLOT_COST = 40;
+export const REROLL_SLOT_COST = 50;
+
+/** Gold cost for reroll UI (prefix button). */
+export const REROLL_PREFIX_COST = 50;
+/** Gold cost for reroll UI (suffix button). */
+export const REROLL_SUFFIX_COST = 50;
+/** Gold cost for reroll UI (both button). */
+export const REROLL_BOTH_COST = 80;
 
 /**
- * Reroll enchantment(s) on the item in the reroll slot. Deducts gold and updates the instance in place.
- * Returns true if reroll was performed.
+ * Fill an empty effect slot or reroll a filled slot on the item in the reroll slot.
+ * slotIndex 0 = first slot, 1 = second slot. Returns true if action was performed.
  */
-export function rerollEnchantSlot(ps: PlayingStateShape, which: 'prefix' | 'suffix' | 'both'): boolean {
+export function fillOrRerollSlot(ps: PlayingStateShape, slotIndex: 0 | 1): boolean {
   const instance = ps.rerollSlotItem;
   if (!instance?.key) return false;
-  const cost = which === 'both' ? REROLL_BOTH_COST : which === 'prefix' ? REROLL_PREFIX_COST : REROLL_SUFFIX_COST;
+  const maxSlots = getMaxSlotsForRarity(instance.rarity ?? 'common');
+  if (maxSlots === 0 || slotIndex >= maxSlots) return false;
+  let effectIds = instance.effectIds ?? [];
+  if (effectIds.length < maxSlots) {
+    effectIds = [...effectIds];
+    while (effectIds.length < maxSlots) effectIds.push(null);
+    instance.effectIds = effectIds;
+  }
+  const isEmpty = effectIds[slotIndex] == null;
+  const cost = isEmpty ? FILL_SLOT_COST : REROLL_SLOT_COST;
   if (getTotalGoldFromInventory(ps) < cost) return false;
   const enchantSlot: EnchantmentSlot = getEquipSlotForWeapon(instance.key) === 'offhand' ? 'offhand' : 'weapon';
-  if (which === 'prefix' || which === 'both') {
-    const rolled = rollEnchantForSlot(enchantSlot);
-    instance.prefixId = rolled?.id;
-  }
-  if (which === 'suffix' || which === 'both') {
-    const rolled = rollEnchantForSlot(enchantSlot);
-    instance.suffixId = rolled?.id;
-  }
+  const rolled = rollEnchantForSlot(enchantSlot);
+  if (!rolled) return false;
+  instance.effectIds = [...instance.effectIds!];
+  instance.effectIds[slotIndex] = rolled.id;
   return tryConsumeGold(ps, cost);
+}
+
+/**
+ * Apply one roll to the given effect slot on the item in the reroll slot. Caller must ensure instance exists.
+ */
+function applyRollToRerollSlot(ps: PlayingStateShape, slotIndex: 0 | 1): void {
+  const instance = ps.rerollSlotItem!;
+  const enchantSlot: EnchantmentSlot = getEquipSlotForWeapon(instance.key) === 'offhand' ? 'offhand' : 'weapon';
+  const rolled = rollEnchantForSlot(enchantSlot);
+  if (!rolled) return;
+  const effectIds = instance.effectIds ?? [];
+  if (!instance.effectIds) instance.effectIds = [...effectIds];
+  else instance.effectIds = [...instance.effectIds];
+  instance.effectIds[slotIndex] = rolled.id;
+}
+
+/**
+ * Reroll enchantment(s) with gold. action: prefix = slot 0, suffix = slot 1, both = both slots.
+ */
+export function rerollEnchantSlot(ps: PlayingStateShape, action: 'prefix' | 'suffix' | 'both'): boolean {
+  const instance = ps.rerollSlotItem;
+  if (!instance?.key) return false;
+  const cost = action === 'both' ? REROLL_BOTH_COST : action === 'prefix' ? REROLL_PREFIX_COST : REROLL_SUFFIX_COST;
+  if (getTotalGoldFromInventory(ps) < cost) return false;
+  if (action === 'prefix' || action === 'both') applyRollToRerollSlot(ps, 0);
+  if (action === 'suffix' || action === 'both') applyRollToRerollSlot(ps, 1);
+  return tryConsumeGold(ps, cost);
+}
+
+/**
+ * Use one enchant scroll to fill or reroll the given effect slot on the item in the reroll slot.
+ * Returns true if scroll was consumed and roll applied.
+ */
+export function useEnchantScrollOnRerollSlot(ps: PlayingStateShape, slotIndex: 0 | 1): boolean {
+  if (countEnchantScrolls(ps) < 1 || !ps.rerollSlotItem?.key) return false;
+  const maxSlots = getMaxSlotsForRarity(ps.rerollSlotItem.rarity ?? 'common');
+  if (maxSlots === 0 || slotIndex >= maxSlots) return false;
+  if (!consumeOneEnchantScroll(ps)) return false;
+  applyRollToRerollSlot(ps, slotIndex);
+  return true;
 }
 
 /**
@@ -366,43 +428,44 @@ export function moveToRerollSlot(
     if (index < 0 || index >= INVENTORY_SLOT_COUNT || !ps.inventorySlots) return false;
     const item = ps.inventorySlots[index];
     if (!item || !isWeaponInstance(item)) return false;
-    instance = { key: item.key, durability: item.durability, prefixId: item.prefixId, suffixId: item.suffixId };
+    instance = normalizeWeaponInstance(item as WeaponInstance & { prefixId?: string; suffixId?: string });
     ps.inventorySlots[index] = null;
   } else if (source === 'chest') {
     if (!ps.chestSlots || index < 0 || index >= ps.chestSlots.length) return false;
-    instance = ps.chestSlots.splice(index, 1)[0];
-    if (!instance?.key) return false;
+    const raw = ps.chestSlots.splice(index, 1)[0];
+    if (!raw?.key) return false;
+    instance = normalizeWeaponInstance(raw as WeaponInstance & { prefixId?: string; suffixId?: string });
   } else {
     const equipSlot = index === 0 ? 'mainhand' : 'offhand';
     const active = getActiveWeaponSet(ps);
     const key = equipSlot === 'mainhand' ? active.mainhandKey : active.offhandKey;
     const durability = equipSlot === 'mainhand' ? active.mainhandDurability : active.offhandDurability;
-    const prefixId = equipSlot === 'mainhand' ? active.mainhandPrefixId : active.offhandPrefixId;
-    const suffixId = equipSlot === 'mainhand' ? active.mainhandSuffixId : active.offhandSuffixId;
+    const effectIds = equipSlot === 'mainhand' ? active.mainhandEffectIds : active.offhandEffectIds;
+    const rarity = equipSlot === 'mainhand' ? active.mainhandRarity : active.offhandRarity;
     if (!key || key === 'none') return false;
-    instance = { key, durability, prefixId, suffixId };
+    instance = { key, durability, rarity, effectIds: effectIds ?? [] };
     if (equipSlot === 'mainhand') {
       setActiveWeaponSet(ps, {
         mainhandKey: 'none',
         mainhandDurability: MAX_WEAPON_DURABILITY,
-        mainhandPrefixId: undefined,
-        mainhandSuffixId: undefined
+        mainhandEffectIds: undefined,
+        mainhandRarity: undefined
       });
       const weapon = getWeapon(key);
       if (weapon?.twoHanded) {
         setActiveWeaponSet(ps, {
           offhandKey: 'none',
           offhandDurability: MAX_WEAPON_DURABILITY,
-          offhandPrefixId: undefined,
-          offhandSuffixId: undefined
+          offhandEffectIds: undefined,
+          offhandRarity: undefined
         });
       }
     } else {
       setActiveWeaponSet(ps, {
         offhandKey: 'none',
         offhandDurability: MAX_WEAPON_DURABILITY,
-        offhandPrefixId: undefined,
-        offhandSuffixId: undefined
+        offhandEffectIds: undefined,
+        offhandRarity: undefined
       });
     }
     syncCombat?.(ps);
@@ -424,57 +487,56 @@ export function moveFromRerollSlotTo(
 ): boolean {
   const instance = ps.rerollSlotItem;
   if (!instance?.key) return false;
+  const normalized = normalizeWeaponInstance(instance as WeaponInstance & { prefixId?: string; suffixId?: string });
   if (target === 'inventory') {
     const idx = targetIndex >= 0 && targetIndex < INVENTORY_SLOT_COUNT && !ps.inventorySlots?.[targetIndex]
       ? targetIndex
       : ps.inventorySlots?.findIndex((s) => s == null) ?? -1;
     if (idx < 0 || !ps.inventorySlots) return false;
-    ps.inventorySlots[idx] = { key: instance.key, durability: instance.durability, prefixId: instance.prefixId, suffixId: instance.suffixId };
+    ps.inventorySlots[idx] = { key: normalized.key, durability: normalized.durability, rarity: normalized.rarity, effectIds: normalized.effectIds };
     ps.rerollSlotItem = null;
     return true;
   }
   if (target === 'chest') {
     ps.chestSlots = ps.chestSlots ?? [];
-    ps.chestSlots.push({ key: instance.key, durability: instance.durability, prefixId: instance.prefixId, suffixId: instance.suffixId });
+    ps.chestSlots.push({ key: normalized.key, durability: normalized.durability, rarity: normalized.rarity, effectIds: normalized.effectIds });
     ps.rerollSlotItem = null;
     return true;
   }
   const equipSlot = targetIndex === 0 ? 'mainhand' : 'offhand';
-  if (!canEquipWeaponInSlot(instance.key, equipSlot)) return false;
-  const weapon = getWeapon(instance.key);
+  if (!canEquipWeaponInSlot(normalized.key, equipSlot)) return false;
+  const weapon = getWeapon(normalized.key);
   const active = getActiveWeaponSet(ps);
   if (equipSlot === 'mainhand' && weapon?.twoHanded && active.offhandKey && active.offhandKey !== 'none') {
     unequipToInventory(ps, 'offhand', undefined, undefined, syncCombat);
   }
   if (equipSlot === 'mainhand') {
     setActiveWeaponSet(ps, {
-      mainhandKey: instance.key,
-      mainhandDurability: instance.durability,
-      mainhandPrefixId: instance.prefixId,
-      mainhandSuffixId: instance.suffixId
+      mainhandKey: normalized.key,
+      mainhandDurability: normalized.durability,
+      mainhandEffectIds: normalized.effectIds,
+      mainhandRarity: normalized.rarity
     });
     if (weapon?.twoHanded) {
       setActiveWeaponSet(ps, {
         offhandKey: 'none',
         offhandDurability: MAX_WEAPON_DURABILITY,
-        offhandPrefixId: undefined,
-        offhandSuffixId: undefined
+        offhandEffectIds: undefined,
+        offhandRarity: undefined
       });
     }
   } else {
     setActiveWeaponSet(ps, {
-      offhandKey: instance.key,
-      offhandDurability: instance.durability,
-      offhandPrefixId: instance.prefixId,
-      offhandSuffixId: instance.suffixId
+      offhandKey: normalized.key,
+      offhandDurability: normalized.durability,
+      offhandEffectIds: normalized.effectIds,
+      offhandRarity: normalized.rarity
     });
   }
   ps.rerollSlotItem = null;
   syncCombat?.(ps);
   return true;
 }
-
-export { REROLL_PREFIX_COST, REROLL_SUFFIX_COST, REROLL_BOTH_COST };
 
 /**
  * Add a weapon instance to the first free inventory slot. Returns true if added, false if inventory full.
@@ -483,12 +545,8 @@ export function addWeaponToInventory(ps: PlayingStateShape, instance: WeaponInst
   if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
   const index = ps.inventorySlots.findIndex((s) => s == null);
   if (index < 0) return false;
-  ps.inventorySlots[index] = {
-    key: instance.key,
-    durability: instance.durability,
-    prefixId: instance.prefixId,
-    suffixId: instance.suffixId
-  };
+  const norm = normalizeWeaponInstance(instance as WeaponInstance & { prefixId?: string; suffixId?: string });
+  ps.inventorySlots[index] = { key: norm.key, durability: norm.durability, rarity: norm.rarity, effectIds: norm.effectIds };
   return true;
 }
 
@@ -574,6 +632,90 @@ export function addPotionToInventory(ps: PlayingStateShape): boolean {
   const empty = ps.inventorySlots.findIndex((s) => s == null);
   if (empty < 0) return false;
   ps.inventorySlots[empty] = { type: 'potion', count: 1 };
+  return true;
+}
+
+/**
+ * Add one page to inventory. Returns true if added.
+ */
+export function addPageToInventory(ps: PlayingStateShape): boolean {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  const existing = ps.inventorySlots.findIndex((s): s is PageConsumable => isPageSlot(s));
+  if (existing >= 0) {
+    (ps.inventorySlots[existing] as PageConsumable).count += 1;
+    return true;
+  }
+  const empty = ps.inventorySlots.findIndex((s) => s == null);
+  if (empty < 0) return false;
+  ps.inventorySlots[empty] = { type: 'page', count: 1 };
+  return true;
+}
+
+/**
+ * Add one enchant scroll to inventory. Returns true if added.
+ */
+export function addEnchantScrollToInventory(ps: PlayingStateShape): boolean {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  const existing = ps.inventorySlots.findIndex((s): s is EnchantScrollConsumable => isEnchantScrollSlot(s));
+  if (existing >= 0) {
+    (ps.inventorySlots[existing] as EnchantScrollConsumable).count += 1;
+    return true;
+  }
+  const empty = ps.inventorySlots.findIndex((s) => s == null);
+  if (empty < 0) return false;
+  ps.inventorySlots[empty] = { type: 'enchantScroll', count: 1 };
+  return true;
+}
+
+/**
+ * Total pages across all inventory slots.
+ */
+export function countPages(ps: PlayingStateShape): number {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return 0;
+  return ps.inventorySlots.reduce((sum, s) => (isPageSlot(s) ? sum + s.count : sum), 0);
+}
+
+/**
+ * Total enchant scrolls across all inventory slots.
+ */
+export function countEnchantScrolls(ps: PlayingStateShape): number {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return 0;
+  return ps.inventorySlots.reduce((sum, s) => (isEnchantScrollSlot(s) ? sum + s.count : sum), 0);
+}
+
+/**
+ * Consume n pages from inventory. Returns true if enough pages were consumed.
+ */
+export function consumePages(ps: PlayingStateShape, n: number): boolean {
+  if (!ps.inventorySlots || n <= 0) return n === 0;
+  let remaining = n;
+  for (let i = 0; i < ps.inventorySlots.length && remaining > 0; i++) {
+    const slot = ps.inventorySlots[i];
+    if (!isPageSlot(slot)) continue;
+    const take = Math.min(remaining, slot.count);
+    remaining -= take;
+    if (slot.count === take) {
+      ps.inventorySlots[i] = null;
+    } else {
+      slot.count -= take;
+    }
+  }
+  return remaining === 0;
+}
+
+/**
+ * Consume one enchant scroll from inventory. Returns true if one was consumed.
+ */
+export function consumeOneEnchantScroll(ps: PlayingStateShape): boolean {
+  if (!ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  const idx = ps.inventorySlots.findIndex((s) => isEnchantScrollSlot(s) && s.count >= 1);
+  if (idx < 0) return false;
+  const slot = ps.inventorySlots[idx] as EnchantScrollConsumable;
+  if (slot.count === 1) {
+    ps.inventorySlots[idx] = null;
+  } else {
+    slot.count -= 1;
+  }
   return true;
 }
 

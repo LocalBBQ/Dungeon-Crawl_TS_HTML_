@@ -75,19 +75,19 @@ export class SoundManager {
       this.play(SOUND_IDS.DASH);
     });
     this.eventBus.on(EventTypes.PLAYER_DODGE, () => {
-      this.play(SOUND_IDS.EVADE_WOOSH, 0.20);
+      this.play(SOUND_IDS.EVADE_WOOSH, 0.4);
     });
     this.eventBus.on(EventTypes.PLAYER_MELEE_SWING, () => {
-      this.play(SOUND_IDS.WEAPON_SWING);
+      this.play(SOUND_IDS.WEAPON_SWING, 1.0);
     });
     this.eventBus.onTyped(EventTypes.INPUT_KEYDOWN, (key) => {
       if (key === 'tab') this.play(SOUND_IDS.INVENTORY_OPEN);
     });
     this.eventBus.on(EventTypes.UI_BUTTON_CLICK, () => {
-      this.play(SOUND_IDS.UI_MENU_BUTTON_CLICK);
+      this.play(SOUND_IDS.UI_MENU_BUTTON_CLICK, 0.2);
     });
     this.eventBus.on(EventTypes.GOLD_PICKED_UP, () => {
-      this.play(SOUND_IDS.PICKUP_GOLD);
+      this.play(SOUND_IDS.PICKUP_GOLD, 0.2);
     });
     this.eventBus.on(EventTypes.HERB_MUSHROOM_GATHERED, () => {
       this.play(SOUND_IDS.PULL_PLANT);

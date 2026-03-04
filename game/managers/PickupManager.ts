@@ -8,9 +8,9 @@ import type { CameraShape } from '../types/camera.js';
 import type { EntityShape } from '../types/entity.js';
 import type { WeaponInstance } from '../state/PlayingState.js';
 import { drawWeaponIcon, getWeaponDisplayName } from '../ui/InventoryChestCanvas.js';
-import { drawHoneyIcon } from '../graphics/herbMushroomIcons.js';
+import { drawHoneyIcon, drawPageIcon } from '../graphics/herbMushroomIcons.js';
 
-export type PickupType = 'gold' | 'weapon' | 'whetstone' | 'honey';
+export type PickupType = 'gold' | 'weapon' | 'whetstone' | 'honey' | 'page';
 
 interface BasePickup {
   id: string;
@@ -42,13 +42,18 @@ export interface HoneyPickupItem extends BasePickup {
   type: 'honey';
 }
 
-export type PickupItem = GoldPickupItem | WeaponPickupItem | WhetstonePickupItem | HoneyPickupItem;
+export interface PagePickupItem extends BasePickup {
+  type: 'page';
+}
+
+export type PickupItem = GoldPickupItem | WeaponPickupItem | WhetstonePickupItem | HoneyPickupItem | PagePickupItem;
 
 export type OnGoldCollected = (amount: number) => void;
 export type OnWeaponCollected = (instance: WeaponInstance) => void;
 /** Return false to leave the pickup in the world (e.g. inventory full). */
 export type OnWhetstoneCollected = () => boolean | void;
 export type OnHoneyCollected = () => void;
+export type OnPageCollected = () => void;
 
 export class PickupManager {
   items: PickupItem[] = [];
@@ -56,6 +61,7 @@ export class PickupManager {
   onWeaponCollected: OnWeaponCollected | null = null;
   onWhetstoneCollected: OnWhetstoneCollected | null = null;
   onHoneyCollected: OnHoneyCollected | null = null;
+  onPageCollected: OnPageCollected | null = null;
 
   spawnGold(x: number, y: number, amount: number): GoldPickupItem {
     const item: GoldPickupItem = {
@@ -114,6 +120,20 @@ export class PickupManager {
     return item;
   }
 
+  spawnPage(x: number, y: number): PagePickupItem {
+    const item: PagePickupItem = {
+      id: `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'page',
+      x, y,
+      radius: 6,
+      lifetime: 90,
+      age: 0,
+      pulsePhase: 0
+    };
+    this.items.push(item);
+    return item;
+  }
+
   update(deltaTime: number, systems: SystemManager | null): void {
     const entityManager = systems ? systems.get<{ get(id: string): EntityShape | undefined }>('entities') : null;
     const player = entityManager ? entityManager.get('player') : null;
@@ -150,6 +170,9 @@ export class PickupManager {
         case 'honey':
           if (this.onHoneyCollected) this.onHoneyCollected();
           break;
+        case 'page':
+          if (this.onPageCollected) this.onPageCollected();
+          break;
       }
       if (remove) this.items.splice(i, 1);
     }
@@ -173,6 +196,9 @@ export class PickupManager {
           break;
         case 'honey':
           this._renderHoney(ctx, camera, item, screenX, screenY);
+          break;
+        case 'page':
+          this._renderPage(ctx, camera, item, screenX, screenY);
           break;
       }
     }
@@ -230,6 +256,17 @@ export class PickupManager {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Honey', screenX, screenY + iconSize + 12);
+  }
+
+  private _renderPage(ctx: CanvasRenderingContext2D, camera: CameraShape, item: PagePickupItem, screenX: number, screenY: number): void {
+    const radius = item.radius * camera.zoom;
+    const iconSize = Math.max(14, radius * 2.2);
+    drawPageIcon(ctx, screenX, screenY, iconSize);
+    ctx.fillStyle = '#e0c8a0';
+    ctx.font = '600 10px Cinzel, Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Page', screenX, screenY + iconSize + 12);
   }
 
   clear(): void {

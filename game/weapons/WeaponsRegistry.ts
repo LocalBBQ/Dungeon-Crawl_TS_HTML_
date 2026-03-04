@@ -1,4 +1,4 @@
-// Registry of player weapons: tiered variants (sword_rusty, shield_wooden, ...).
+// Registry of player weapons: tiered variants (sword_bronze, shield_wooden, ...).
 import { Weapon } from './Weapon.js';
 import { BASE_WEAPON_CONFIGS, shieldConfig, defenderConfig, blessedWindsConfig, crossbowConfig, bowConfig, staffConfig } from './weaponConfigs.js';
 import { MATERIALS, TIERED_WEAPON_KEYS, TIERED_OFFHAND_KEYS, getTierDamage, SHIELD_MATERIALS, SHIELD_BLOCK_TABLE, WOOD_MATERIALS, getBowWoodDamage, getStaffWoodDamage } from './materialTiers.js';

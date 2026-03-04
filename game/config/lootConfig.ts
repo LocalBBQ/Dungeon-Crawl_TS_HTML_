@@ -1,5 +1,6 @@
 /**
  * Loot pools and roll logic for weapon drops from enemies.
+ * Option C: roll rarity, then for each slot pre-fill or leave empty.
  */
 import type { WeaponInstance } from '../state/PlayingState.js';
 import { MAX_WEAPON_DURABILITY } from '../state/PlayingState.js';
@@ -8,60 +9,62 @@ import { TIERED_WEAPON_KEYS, TIERED_OFFHAND_KEYS, MATERIALS, SHIELD_MATERIALS } 
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import { rollEnchantForSlot } from './enchantmentConfig.js';
 import type { EnchantmentSlot } from './enchantmentConfig.js';
+import { rollItemRarity, getMaxSlotsForRarity, PRE_FILL_CHANCE } from './rarityConfig.js';
+import type { ItemRarity } from './rarityConfig.js';
 
 export interface LootPoolDef {
-  /** Full weapon keys that can drop (e.g. sword_rusty, dagger_bronze). */
+  /** Full weapon keys that can drop (e.g. sword_bronze, dagger_steel). */
   weaponKeys: string[];
-  /** Chance (0–1) that the item has at least one enchant. */
-  enchantChance: number;
-  /** If has enchants, chance (0–1) to get a second enchant. */
-  secondEnchantChance: number;
+  /** @deprecated Unused; rarity and pre-fill drive slots. Kept for reference. */
+  enchantChance?: number;
+  /** @deprecated Unused. Kept for reference. */
+  secondEnchantChance?: number;
 }
 
 /** Loot pools by id. */
 export const LOOT_POOLS: Record<string, LootPoolDef> = {
   goblin: {
-    weaponKeys: ['dagger_rusty', 'dagger_bronze', 'sword_rusty', 'defender_rusty'],
+    weaponKeys: ['dagger_bronze', 'dagger_steel', 'sword_bronze', 'defender_bronze'],
     enchantChance: 0.25,
     secondEnchantChance: 0.2
   },
   goblinChieftain: {
-    weaponKeys: ['mace_rusty', 'mace_bronze', 'mace_iron', 'greatsword_rusty', 'greatsword_bronze'],
+    weaponKeys: ['mace_bronze', 'mace_steel', 'greatsword_bronze', 'greatsword_steel'],
     enchantChance: 0.5,
     secondEnchantChance: 0.3
   },
   skeleton: {
-    weaponKeys: ['sword_rusty', 'sword_bronze', 'dagger_rusty', 'dagger_bronze', 'defender_rusty'],
+    weaponKeys: ['sword_bronze', 'sword_steel', 'dagger_bronze', 'dagger_steel', 'defender_bronze'],
     enchantChance: 0.3,
     secondEnchantChance: 0.2
   },
   zombie: {
-    weaponKeys: ['sword_rusty', 'mace_rusty', 'dagger_rusty'],
+    weaponKeys: ['sword_bronze', 'mace_bronze', 'dagger_bronze'],
     enchantChance: 0.2,
     secondEnchantChance: 0.15
   },
   bandit: {
-    weaponKeys: ['mace_rusty', 'mace_bronze', 'sword_rusty', 'sword_bronze', 'dagger_bronze', 'defender_rusty'],
+    weaponKeys: ['mace_bronze', 'mace_steel', 'sword_bronze', 'sword_steel', 'dagger_steel', 'defender_bronze'],
     enchantChance: 0.35,
     secondEnchantChance: 0.25
   },
   lesserDemon: {
-    weaponKeys: ['sword_iron', 'sword_steel', 'dagger_iron', 'mace_iron', 'defender_bronze'],
+    weaponKeys: ['sword_bronze', 'sword_steel', 'dagger_steel', 'mace_steel', 'defender_bronze'],
     enchantChance: 0.4,
     secondEnchantChance: 0.3
   },
   greaterDemon: {
-    weaponKeys: ['sword_steel', 'sword_mithril', 'greatsword_iron', 'greatsword_steel', 'mace_steel', 'crossbow', 'bow_willow', 'staff_willow', 'defender_iron'],
+    weaponKeys: ['sword_steel', 'sword_adamant', 'greatsword_steel', 'mace_steel', 'crossbow', 'bow_willow', 'staff_willow', 'defender_steel'],
     enchantChance: 0.55,
     secondEnchantChance: 0.35
   },
   fireDragon: {
-    weaponKeys: ['sword_steel', 'sword_mithril', 'greatsword_steel', 'greatsword_mithril', 'mace_steel', 'crossbow', 'bow_yew', 'staff_yew', 'defender_iron'],
+    weaponKeys: ['sword_steel', 'sword_adamant', 'greatsword_steel', 'greatsword_adamant', 'mace_steel', 'crossbow', 'bow_yew', 'staff_yew', 'defender_steel'],
     enchantChance: 0.6,
     secondEnchantChance: 0.4
   },
   villageOgre: {
-    weaponKeys: ['mace_steel', 'mace_iron', 'greatsword_rusty', 'greatsword_bronze', 'greatsword_iron', 'defender_bronze', 'defender_iron'],
+    weaponKeys: ['mace_steel', 'greatsword_bronze', 'greatsword_steel', 'defender_bronze', 'defender_steel'],
     enchantChance: 0.5,
     secondEnchantChance: 0.35
   },
@@ -84,28 +87,30 @@ export const LOOT_POOLS: Record<string, LootPoolDef> = {
 
 /**
  * Roll a weapon drop for the given enemy type. Returns null if no drop or invalid pool.
+ * Option C: roll rarity, slot count from rarity, then per-slot pre-fill or empty.
  */
 export function rollWeaponDrop(enemyType: string, poolId?: string): WeaponInstance | null {
   const pool = poolId && LOOT_POOLS[poolId] ? LOOT_POOLS[poolId] : LOOT_POOLS.default;
   if (!pool || pool.weaponKeys.length === 0) return null;
   const key = pool.weaponKeys[Math.floor(Math.random() * pool.weaponKeys.length)];
   if (!Weapons[key]) return null;
+  const rarity: ItemRarity = rollItemRarity();
+  const slotCount = getMaxSlotsForRarity(rarity);
   const enchantSlot: EnchantmentSlot = getEquipSlotForWeapon(key) === 'offhand' ? 'offhand' : 'weapon';
-  let prefixId: string | undefined;
-  let suffixId: string | undefined;
-  if (Math.random() < pool.enchantChance) {
-    const first = rollEnchantForSlot(enchantSlot);
-    if (first) prefixId = first.id;
-    if (Math.random() < pool.secondEnchantChance) {
-      const second = rollEnchantForSlot(enchantSlot);
-      if (second) suffixId = second.id;
+  const effectIds: (string | null)[] = [];
+  for (let i = 0; i < slotCount; i++) {
+    if (Math.random() < PRE_FILL_CHANCE) {
+      const rolled = rollEnchantForSlot(enchantSlot);
+      effectIds.push(rolled?.id ?? null);
+    } else {
+      effectIds.push(null);
     }
   }
   return {
     key,
     durability: MAX_WEAPON_DURABILITY,
-    prefixId,
-    suffixId
+    rarity,
+    effectIds
   };
 }
 
@@ -116,5 +121,12 @@ export const WHETSTONE_REPAIR_PERCENT = 0.35;
  * Roll whether a whetstone drops. Caller should use enemy's whetstoneDropChance.
  */
 export function rollWhetstoneDrop(chance: number): boolean {
+  return chance > 0 && Math.random() < chance;
+}
+
+/**
+ * Roll whether a page drops. Caller should use enemy's pageDropChance.
+ */
+export function rollPageDrop(chance: number): boolean {
   return chance > 0 && Math.random() < chance;
 }

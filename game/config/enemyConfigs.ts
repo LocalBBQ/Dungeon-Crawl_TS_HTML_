@@ -50,7 +50,8 @@ const goblinConfig = {
   goldDrop: 2,
   weaponDropChance: 0.04,
   weaponDropPoolId: 'goblin',
-  whetstoneDropChance: 0.06
+  whetstoneDropChance: 0.06,
+  pageDropChance: 0.04
 };
 
 // Skeleton: ranged projectile, no melee
@@ -76,7 +77,8 @@ const skeletonConfig = {
   goldDrop: 3,
   weaponDropChance: 0.05,
   weaponDropPoolId: 'skeleton',
-  whetstoneDropChance: 0.07
+  whetstoneDropChance: 0.07,
+  pageDropChance: 0.05
 };
 
 // Lesser demon: claw + lunge
@@ -176,7 +178,8 @@ const goblinChieftainConfig = {
     damageMultiplier: 1.2
   },
   goldDrop: 5,
-  whetstoneDropChance: 0.08
+  whetstoneDropChance: 0.08,
+  pageDropChance: 0.07
 };
 
 // Bandit: mace — stats from Weapons.mace

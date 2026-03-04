@@ -309,13 +309,11 @@ export class HUDController {
         const active = getActiveWeaponSet(ps);
         const mainhand = getEffectiveWeapon(
             active.mainhandKey && active.mainhandKey !== 'none' ? active.mainhandKey : undefined,
-            active.mainhandPrefixId,
-            active.mainhandSuffixId
+            active.mainhandEffectIds
         );
         const offhand = getEffectiveWeapon(
             active.offhandKey && active.offhandKey !== 'none' ? active.offhandKey : undefined,
-            active.offhandPrefixId,
-            active.offhandSuffixId
+            active.offhandEffectIds
         );
         (combat as Combat & { setWeapons(m: unknown, o?: unknown): void }).setWeapons(mainhand, offhand);
     }
@@ -325,8 +323,8 @@ export class HUDController {
         const active = getActiveWeaponSet(ps);
         const mainEl = document.getElementById('chest-equip-mainhand');
         const offEl = document.getElementById('chest-equip-offhand');
-        const mainInstance = active.mainhandKey && active.mainhandKey !== 'none' ? { prefixId: active.mainhandPrefixId, suffixId: active.mainhandSuffixId } : null;
-        const offInstance = active.offhandKey && active.offhandKey !== 'none' ? { prefixId: active.offhandPrefixId, suffixId: active.offhandSuffixId } : null;
+        const mainInstance = active.mainhandKey && active.mainhandKey !== 'none' ? { rarity: active.mainhandRarity, effectIds: active.mainhandEffectIds } : null;
+        const offInstance = active.offhandKey && active.offhandKey !== 'none' ? { rarity: active.offhandRarity, effectIds: active.offhandEffectIds } : null;
         const mainName = getWeaponDisplayName(active.mainhandKey, mainInstance);
         const offName = getWeaponDisplayName(active.offhandKey, offInstance);
         const mainPct = active.mainhandDurability != null ? Math.round((100 * active.mainhandDurability) / MAX_WEAPON_DURABILITY) : null;
@@ -350,8 +348,8 @@ export class HUDController {
         const active = getActiveWeaponSet(ps);
         const mainEl = document.getElementById('inventory-equip-mainhand');
         const offEl = document.getElementById('inventory-equip-offhand');
-        const mainInstance = active.mainhandKey && active.mainhandKey !== 'none' ? { prefixId: active.mainhandPrefixId, suffixId: active.mainhandSuffixId } : null;
-        const offInstance = active.offhandKey && active.offhandKey !== 'none' ? { prefixId: active.offhandPrefixId, suffixId: active.offhandSuffixId } : null;
+        const mainInstance = active.mainhandKey && active.mainhandKey !== 'none' ? { rarity: active.mainhandRarity, effectIds: active.mainhandEffectIds } : null;
+        const offInstance = active.offhandKey && active.offhandKey !== 'none' ? { rarity: active.offhandRarity, effectIds: active.offhandEffectIds } : null;
         const mainName = getWeaponDisplayName(active.mainhandKey, mainInstance);
         const offName = getWeaponDisplayName(active.offhandKey, offInstance);
         const mainPct = active.mainhandDurability != null ? Math.round((100 * active.mainhandDurability) / MAX_WEAPON_DURABILITY) : null;

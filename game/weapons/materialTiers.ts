@@ -1,5 +1,5 @@
 /**
- * Weapon material tiers: Rusty (weakest/default), Bronze, Iron, Steel, Mithril, Adamant, Rune, Dragon.
+ * Weapon material tiers: 4 tiers — Bronze (weakest/default), Steel, Adamant, Dragon.
  * Each tier has its own color and explicit baseDamage per weapon type (no multipliers).
  */
 
@@ -10,14 +10,10 @@ export interface MaterialDef {
 }
 
 export const MATERIALS: MaterialDef[] = [
-    { id: 'rusty', displayName: 'Rusty', color: '#a0522d' },
-    { id: 'bronze', displayName: 'Bronze', color: '#b87333' },
-    { id: 'iron', displayName: 'Iron', color: '#5a5a5a' },
+    { id: 'bronze', displayName: 'Bronze', color: '#a86b2c' },
     { id: 'steel', displayName: 'Steel', color: '#a8a8b0' },
-    { id: 'mithril', displayName: 'Mithril', color: '#6b8cae' },
     { id: 'adamant', displayName: 'Adamant', color: '#4a7c59' },
-    { id: 'rune', displayName: 'Rune', color: '#7eb8e8' },
-    { id: 'dragon', displayName: 'Dragon', color: '#cc4444' }
+    { id: 'dragon', displayName: 'Dragon', color: '#b83c3c' }
 ];
 
 /** Wood types for bow and staff (tiered like shield materials). */
@@ -70,23 +66,23 @@ export type TieredWeaponKey = (typeof TIERED_WEAPON_KEYS)[number];
 
 /**
  * Explicit baseDamage per (weapon key, material id). No multipliers.
- * Rusty = weakest, Dragon = strongest per weapon.
+ * 4 tiers: Bronze (weakest), Steel, Adamant, Dragon (strongest).
  */
 export const TIER_DAMAGE_TABLE: Record<string, Record<string, number>> = {
     sword: {
-        rusty: 8, bronze: 12, iron: 15, steel: 18, mithril: 21, adamant: 24, rune: 26, dragon: 28
+        bronze: 10, steel: 16, adamant: 22, dragon: 28
     },
     greatsword: {
-        rusty: 10, bronze: 15, iron: 19, steel: 23, mithril: 26, adamant: 29, rune: 32, dragon: 35
+        bronze: 12, steel: 20, adamant: 27, dragon: 35
     },
     dagger: {
-        rusty: 2, bronze: 4, iron: 5, steel: 6, mithril: 8, adamant: 9, rune: 10, dragon: 12
+        bronze: 3, steel: 6, adamant: 9, dragon: 12
     },
     mace: {
-        rusty: 12, bronze: 17, iron: 20, steel: 24, mithril: 27, adamant: 30, rune: 33, dragon: 36
+        bronze: 14, steel: 22, adamant: 29, dragon: 36
     },
     defender: {
-        rusty: 5, bronze: 7, iron: 9, steel: 11, mithril: 13, adamant: 15, rune: 17, dragon: 20
+        bronze: 6, steel: 11, adamant: 15, dragon: 20
     }
 };
 

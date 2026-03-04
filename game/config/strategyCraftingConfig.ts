@@ -6,7 +6,7 @@
 export type StrategyDirection = 'up' | 'down' | 'left' | 'right';
 
 export type StrategyCraftOutput =
-  | { type: 'craft'; consumes: { herb?: number; mushroom?: number }; produces: 'healCharge' | string }
+  | { type: 'craft'; consumes: { herb?: number; mushroom?: number; page?: number }; produces: 'healCharge' | 'enchantScroll' | string }
   | { type: 'use'; use: 'whetstone'; target: 'mainhand' | 'offhand' }
   | { type: 'ability'; abilityId: string };
 
@@ -48,6 +48,14 @@ export const STRATEGY_RECIPES: StrategyRecipeDef[] = [
     label: 'Vigor Tonic',
     description: '2 Herbs → tonic (no charge)',
     unlockedByDefault: false
+  },
+  {
+    id: 'enchant_scroll',
+    sequence: ['left', 'up', 'right', 'down'],
+    output: { type: 'craft', consumes: { page: 3 }, produces: 'enchantScroll' },
+    label: 'Craft Enchant Scroll',
+    description: '3 Pages → 1 Enchant Scroll (use at reroll station to add or reroll enchants)',
+    unlockedByDefault: true
   }
 ];
 
@@ -77,3 +85,18 @@ export function migrateUnlockedStrategyRecipeIds(ids: string[]): string[] {
 
 /** Max length of input buffer before auto-reset (avoids accidental long sequences). */
 export const STRATEGY_BUFFER_MAX_LENGTH = 12;
+
+/** Number of slots in the strategy loadout (Tab panel). Only slotted strategies can be triggered by V+sequence. */
+export const STRATEGY_LOADOUT_SLOT_COUNT = 4;
+
+/**
+ * Default strategy loadout: first N unlocked recipe ids, then nulls.
+ * Used for new games and when migrating saves that lack strategyLoadoutSlotIds.
+ */
+export function getDefaultStrategyLoadoutSlotIds(unlockedIds: string[]): (string | null)[] {
+  const slots: (string | null)[] = Array(STRATEGY_LOADOUT_SLOT_COUNT).fill(null);
+  for (let i = 0; i < STRATEGY_LOADOUT_SLOT_COUNT && i < unlockedIds.length; i++) {
+    slots[i] = unlockedIds[i] ?? null;
+  }
+  return slots;
+}

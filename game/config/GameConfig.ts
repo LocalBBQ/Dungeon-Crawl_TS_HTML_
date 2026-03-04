@@ -26,7 +26,7 @@ const GameConfig: GameConfigShape = {
     maxStamina: 100,
     staminaRegen: 16,
     color: '#8b8b9a',
-    defaultWeapon: 'sword_rusty',
+    defaultWeapon: 'sword_bronze',
     defaultOffhand: 'none',
     sprint: { multiplier: 1.35, staminaCost: 12 },
     dodge: { speed: 800, duration: 0.15, cooldown: 0.5, staminaCost: 15 },

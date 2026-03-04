@@ -1,21 +1,30 @@
 /**
- * Reroll enchantments overlay: one drop slot, reroll buttons when slot has item.
- * Drag weapon into slot, modify, then drag out to re-equip or stash.
+ * Reroll overlay: one drop slot, per-effect-slot Fill/Reroll buttons when slot has item.
+ * Drag weapon into slot, fill empty slots or reroll filled ones, then drag out.
  */
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import type { EnchantmentEffect } from '../config/enchantmentConfig.js';
 import { getEnchantmentById } from '../config/enchantmentConfig.js';
 import { getWeaponDisplayName } from './InventoryChestCanvas.js';
 import { drawWeaponIcon } from './InventoryChestCanvas.js';
-import { REROLL_PREFIX_COST, REROLL_SUFFIX_COST, REROLL_BOTH_COST, getTotalGoldFromInventory } from '../state/InventoryActions.js';
+import { FILL_SLOT_COST, REROLL_SLOT_COST, getTotalGoldFromInventory } from '../state/InventoryActions.js';
+import { getRarityStyle, getMaxSlotsForRarity } from '../config/rarityConfig.js';
+
+export interface RerollSlotButton {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  slotIndex: 0 | 1;
+}
 
 export interface RerollOverlayLayout {
   panel: { x: number; y: number; w: number; h: number };
   back: { x: number; y: number; w: number; h: number };
-  /** Single drop slot: drag weapon in here to modify, then drag out. */
   slot: { x: number; y: number; w: number; h: number };
   titleY: number;
-  buttons: { x: number; y: number; w: number; h: number; action: 'prefix' | 'suffix' | 'both'; cost: number }[];
+  /** Up to 2 buttons (Slot 1, Slot 2). Cost/label derived from item in render. */
+  buttons: RerollSlotButton[];
   buttonsY: number;
 }
 
@@ -50,12 +59,11 @@ export function getRerollOverlayLayout(canvas: HTMLCanvasElement, ps: PlayingSta
     h: SLOT_SIZE
   };
   const buttonsY = panel.y + panel.h - 52;
-  const totalButtonW = BUTTON_W * 3 + GAP * 2;
+  const totalButtonW = BUTTON_W * 2 + GAP;
   const startX = panel.x + (panel.w - totalButtonW) / 2;
-  const buttons: RerollOverlayLayout['buttons'] = [
-    { x: startX, y: buttonsY, w: BUTTON_W, h: BUTTON_H, action: 'prefix', cost: REROLL_PREFIX_COST },
-    { x: startX + BUTTON_W + GAP, y: buttonsY, w: BUTTON_W, h: BUTTON_H, action: 'suffix', cost: REROLL_SUFFIX_COST },
-    { x: startX + (BUTTON_W + GAP) * 2, y: buttonsY, w: BUTTON_W, h: BUTTON_H, action: 'both', cost: REROLL_BOTH_COST }
+  const buttons: RerollSlotButton[] = [
+    { x: startX, y: buttonsY, w: BUTTON_W, h: BUTTON_H, slotIndex: 0 },
+    { x: startX + BUTTON_W + GAP, y: buttonsY, w: BUTTON_W, h: BUTTON_H, slotIndex: 1 }
   ];
 
   return { panel, back, slot, titleY, buttons, buttonsY };
@@ -150,34 +158,35 @@ export function renderRerollOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLC
   ctx.stroke();
   if (hasItem && ps.rerollSlotItem) {
     const inst = ps.rerollSlotItem;
+    const rarity = inst.rarity ?? 'common';
+    const style = getRarityStyle(rarity);
     drawWeaponIcon(ctx, slot.x + slot.w / 2, slot.y + slot.h / 2 - 8, slot.w / 2 - 8, inst.key);
     const name = getWeaponDisplayName(inst.key, inst);
     const centerX = slot.x + slot.w / 2;
     let textY = slot.y + slot.h + 14;
-    ctx.fillStyle = '#e8dcc8';
+    ctx.fillStyle = style.text;
     ctx.font = '600 12px Cinzel, Georgia, serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(name, centerX, textY);
     const lineHeight = 14;
-    if (inst.prefixId) {
-      const enc = getEnchantmentById(inst.prefixId);
-      if (enc) {
-        textY += lineHeight;
-        ctx.fillStyle = '#b8a080';
+    const effectIds = inst.effectIds ?? [];
+    const slotCount = getMaxSlotsForRarity(rarity);
+    for (let i = 0; i < slotCount; i++) {
+      textY += lineHeight;
+      const id = effectIds[i];
+      if (id) {
+        const enc = getEnchantmentById(id);
+        if (enc) {
+          ctx.fillStyle = '#b8a080';
+          ctx.font = '500 11px Cinzel, Georgia, serif';
+          const mod = enc.description ?? formatEnchantEffect(enc.effect);
+          ctx.fillText(`Effect ${i + 1}: ${enc.displayName} — ${mod}`, centerX, textY);
+        }
+      } else {
+        ctx.fillStyle = '#706050';
         ctx.font = '500 11px Cinzel, Georgia, serif';
-        const mod = enc.description ?? formatEnchantEffect(enc.effect);
-        ctx.fillText(`${enc.displayName}: ${mod}`, centerX, textY);
-      }
-    }
-    if (inst.suffixId) {
-      const enc = getEnchantmentById(inst.suffixId);
-      if (enc) {
-        textY += lineHeight;
-        ctx.fillStyle = '#b8a080';
-        ctx.font = '500 11px Cinzel, Georgia, serif';
-        const mod = enc.description ?? formatEnchantEffect(enc.effect);
-        ctx.fillText(`of ${enc.displayName}: ${mod}`, centerX, textY);
+        ctx.fillText(`Slot ${i + 1}: Empty`, centerX, textY);
       }
     }
   } else {
@@ -187,23 +196,38 @@ export function renderRerollOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLC
     ctx.fillText('Drop weapon here', slot.x + slot.w / 2, slot.y + slot.h / 2);
   }
 
-  if (hasItem) {
-    const gold = getTotalGoldFromInventory(ps);
-    for (const btn of buttons) {
-      const canAfford = gold >= btn.cost;
-      ctx.fillStyle = canAfford ? 'rgba(80, 60, 40, 0.9)' : 'rgba(50, 38, 28, 0.9)';
-      roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 6);
-      ctx.fill();
-      ctx.strokeStyle = canAfford ? 'rgba(201, 162, 39, 0.6)' : 'rgba(100, 80, 60, 0.6)';
-      ctx.lineWidth = 1.5;
-      roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 6);
-      ctx.stroke();
-      ctx.fillStyle = canAfford ? '#e8dcc8' : '#888';
-      ctx.font = '600 11px Cinzel, Georgia, serif';
+  if (hasItem && ps.rerollSlotItem) {
+    const inst = ps.rerollSlotItem;
+    const slotCount = getMaxSlotsForRarity(inst.rarity ?? 'common');
+    if (slotCount === 0) {
+      ctx.fillStyle = '#706050';
+      ctx.font = '500 12px Cinzel, Georgia, serif';
       ctx.textAlign = 'center';
-      const label = btn.action === 'prefix' ? `Prefix (${btn.cost}g)` : btn.action === 'suffix' ? `Suffix (${btn.cost}g)` : `Both (${btn.cost}g)`;
-      ctx.fillText(label, btn.x + btn.w / 2, btn.y + btn.h / 2);
+      ctx.fillText('Common items have no enchantment slots.', panel.x + panel.w / 2, slot.y + slot.h + 60);
+    } else {
+      const gold = getTotalGoldFromInventory(ps);
+      const effectIds = inst.effectIds ?? [];
+      for (const btn of buttons) {
+        if (btn.slotIndex >= slotCount) continue;
+        const isEmpty = effectIds[btn.slotIndex] == null;
+        const cost = isEmpty ? FILL_SLOT_COST : REROLL_SLOT_COST;
+        const canAfford = gold >= cost;
+        ctx.fillStyle = canAfford ? 'rgba(80, 60, 40, 0.9)' : 'rgba(50, 38, 28, 0.9)';
+        roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 6);
+        ctx.fill();
+        ctx.strokeStyle = canAfford ? 'rgba(201, 162, 39, 0.6)' : 'rgba(100, 80, 60, 0.6)';
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 6);
+        ctx.stroke();
+        ctx.fillStyle = canAfford ? '#e8dcc8' : '#888';
+        ctx.font = '600 11px Cinzel, Georgia, serif';
+        ctx.textAlign = 'center';
+        const label = isEmpty ? `Fill slot ${btn.slotIndex + 1} (${cost}g)` : `Reroll slot ${btn.slotIndex + 1} (${cost}g)`;
+        ctx.fillText(label, btn.x + btn.w / 2, btn.y + btn.h / 2);
+      }
     }
+  } else if (hasItem) {
+    // no slots (common item)
   } else {
     ctx.fillStyle = '#887866';
     ctx.font = '500 12px Cinzel, Georgia, serif';
@@ -217,7 +241,7 @@ export function renderRerollOverlay(ctx: CanvasRenderingContext2D, canvas: HTMLC
 export type RerollOverlayHit =
   | { type: 'back' }
   | { type: 'slot' }
-  | { type: 'reroll'; action: 'prefix' | 'suffix' | 'both' }
+  | { type: 'reroll'; slotIndex: 0 | 1 }
   | null;
 
 export function hitTestRerollOverlay(x: number, y: number, ps: PlayingStateShape, layout: RerollOverlayLayout): RerollOverlayHit {
@@ -225,8 +249,10 @@ export function hitTestRerollOverlay(x: number, y: number, ps: PlayingStateShape
   if (x >= back.x && x <= back.x + back.w && y >= back.y && y <= back.y + back.h) return { type: 'back' };
   if (x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h) return { type: 'slot' };
   if (ps.rerollSlotItem?.key) {
+    const slotCount = getMaxSlotsForRarity(ps.rerollSlotItem.rarity ?? 'common');
     for (const btn of buttons) {
-      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) return { type: 'reroll', action: btn.action };
+      if (btn.slotIndex >= slotCount) continue;
+      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) return { type: 'reroll', slotIndex: btn.slotIndex };
     }
   }
   return null;

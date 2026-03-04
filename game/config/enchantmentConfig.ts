@@ -160,3 +160,92 @@ export function applyEnchantEffectsToBlock(
   result.arcRad = arcRad;
   return result;
 }
+
+/**
+ * Apply effect ids (array form) to a base weapon-like object. Used by resolveEffectiveWeapon.
+ */
+export function applyEffectsToWeapon(
+  base: { baseDamage?: number; baseRange?: number; baseArcDegrees?: number; cooldown?: number; baseStunBuildup?: number; [k: string]: unknown },
+  effectIds: (string | null)[]
+): Record<string, unknown> {
+  const result = { ...base };
+  let damage = typeof base.baseDamage === 'number' ? base.baseDamage : 0;
+  let range = typeof base.baseRange === 'number' ? base.baseRange : 0;
+  let cooldown = typeof base.cooldown === 'number' ? base.cooldown : 0.1;
+  let stunBuildup = typeof base.baseStunBuildup === 'number' ? base.baseStunBuildup : 25;
+  let staminaCostMult = 1;
+
+  for (const id of effectIds) {
+    if (!id) continue;
+    const enc = getEnchantmentById(id);
+    if (!enc || enc.slot !== 'weapon') continue;
+    const e = enc.effect;
+    switch (e.type) {
+      case 'damageFlat':
+        damage += e.value;
+        break;
+      case 'damagePercent':
+        damage = Math.floor(damage * (1 + e.value / 100));
+        break;
+      case 'rangePercent':
+        range = Math.floor(range * (1 + e.value / 100));
+        break;
+      case 'cooldownMultiplier':
+        cooldown *= e.value;
+        break;
+      case 'stunBuildupPercent':
+        stunBuildup = Math.floor(stunBuildup * (1 + e.value / 100));
+        break;
+      case 'staminaCostPercent':
+        staminaCostMult *= 1 + e.value / 100;
+        break;
+      default:
+        break;
+    }
+  }
+
+  result.baseDamage = damage;
+  result.baseRange = range;
+  result.cooldown = cooldown;
+  result.baseStunBuildup = stunBuildup;
+  if (staminaCostMult !== 1) (result as { staminaCostMultiplier?: number }).staminaCostMultiplier = staminaCostMult;
+  return result;
+}
+
+/**
+ * Apply effect ids (array form) to block config (offhand).
+ */
+export function applyEffectsToBlock(
+  block: { damageReduction?: number; staminaCost?: number; arcRad?: number; arcDegrees?: number; [k: string]: unknown },
+  effectIds: (string | null)[]
+): Record<string, unknown> {
+  const result = { ...block };
+  let reduction = typeof block.damageReduction === 'number' ? block.damageReduction : 0.5;
+  let staminaCost = typeof block.staminaCost === 'number' ? block.staminaCost : 20;
+  let arcRad = typeof block.arcRad === 'number' ? block.arcRad : (typeof block.arcDegrees === 'number' ? (block.arcDegrees * Math.PI) / 180 : Math.PI / 2);
+
+  for (const id of effectIds) {
+    if (!id) continue;
+    const enc = getEnchantmentById(id);
+    if (!enc || enc.slot !== 'offhand') continue;
+    const e = enc.effect;
+    switch (e.type) {
+      case 'blockDamageReductionPercent':
+        reduction = Math.min(1, reduction * (1 + e.value / 100));
+        break;
+      case 'blockStaminaCostPercent':
+        staminaCost = Math.max(0, Math.floor(staminaCost * (1 + e.value / 100)));
+        break;
+      case 'blockArcDegrees':
+        arcRad += (e.value * Math.PI) / 180;
+        break;
+      default:
+        break;
+    }
+  }
+
+  result.damageReduction = reduction;
+  result.staminaCost = staminaCost;
+  result.arcRad = arcRad;
+  return result;
+}

@@ -161,3 +161,65 @@ export function drawHoneyIcon(ctx: CanvasRenderingContext2D, cx: number, cy: num
     ctx.fill();
     ctx.restore();
 }
+
+/** Page icon: parchment sheet with text lines (crafting ingredient for enchant scrolls). */
+export function drawPageIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    ctx.save();
+    const s = size;
+    const w = s * 0.72;
+    const h = s * 0.88;
+    const left = cx - w / 2;
+    const top = cy - h / 2;
+    const lw = Math.max(1, s / 20);
+
+    // Shadow / depth
+    ctx.fillStyle = 'rgba(80, 70, 60, 0.35)';
+    ctx.fillRect(left + 2, top + 2, w, h);
+    // Paper fill
+    ctx.fillStyle = '#e8e0d0';
+    ctx.strokeStyle = '#a89878';
+    ctx.lineWidth = lw;
+    ctx.fillRect(left, top, w, h);
+    ctx.strokeRect(left, top, w, h);
+    // Inner margin line (optional)
+    ctx.strokeStyle = 'rgba(168, 152, 120, 0.5)';
+    ctx.lineWidth = Math.max(1, s / 24);
+    const margin = s * 0.08;
+    ctx.strokeRect(left + margin, top + margin, w - margin * 2, h - margin * 2);
+    // Text lines (3 lines of parchment)
+    ctx.strokeStyle = '#b0a088';
+    ctx.lineWidth = Math.max(1, s / 28);
+    const lineGap = h * 0.22;
+    const lineY0 = top + h * 0.28;
+    const pad = w * 0.15;
+    for (let i = 0; i < 3; i++) {
+        const y = lineY0 + i * lineGap;
+        ctx.beginPath();
+        ctx.moveTo(left + pad, y);
+        ctx.lineTo(left + w - pad, y);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+/** Enchant scroll icon: rolled scroll shape (use at reroll station). */
+export function drawEnchantScrollIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+    ctx.save();
+    const s = size;
+    const r = s * 0.4;
+    ctx.fillStyle = '#8a7a5a';
+    ctx.strokeStyle = '#6a5a3a';
+    ctx.lineWidth = Math.max(1, s / 14);
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.3, cy, r * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#c9a227';
+    ctx.strokeStyle = '#8b6914';
+    ctx.lineWidth = Math.max(1, s / 20);
+    ctx.beginPath();
+    ctx.arc(cx + r * 0.2, cy - r * 0.1, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+}

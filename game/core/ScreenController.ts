@@ -211,7 +211,7 @@ export class ScreenController {
                 if (sm.isScreen('playing') || sm.isScreen('hub')) {
                     ps.inventoryOpen = !ps.inventoryOpen;
                     if (ps.inventoryOpen) ctx.clearPlayerInputsForMenu();
-                    ctx.setInventoryPanelVisible(false);
+                    ctx.setInventoryPanelVisible(ps.inventoryOpen);
                 }
                 return;
             }

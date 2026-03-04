@@ -4,7 +4,7 @@
  */
 import type { TooltipHover } from '../types/tooltip.js';
 import type { ArmorSlotId, InventorySlot, PlayingStateShape, WeaponInstance, PotionConsumable } from '../state/PlayingState.js';
-import { getSlotKey, getActiveWeaponSet, getInactiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT, TOOLBELT_SLOT_COUNT, isWeaponInstance as isWeaponSlotItem, isWhetstoneSlot, isHerbSlot, isMushroomSlot, isHoneySlot, isPotionSlot, isGoldSlot } from '../state/PlayingState.js';
+import { getSlotKey, getActiveWeaponSet, getInactiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY, CHEST_SLOT_COUNT, TOOLBELT_SLOT_COUNT, isWeaponInstance as isWeaponSlotItem, isWhetstoneSlot, isHerbSlot, isMushroomSlot, isHoneySlot, isPotionSlot, isGoldSlot, isPageSlot, isEnchantScrollSlot } from '../state/PlayingState.js';
 import { getTotalGoldFromInventory } from '../state/InventoryActions.js';
 import { getArmor, getPlayerArmorReduction, getShopArmorBySlot, SHOP_ARMOR_SLOT_ORDER, SHOP_ARMOR_SLOT_LABELS } from '../armor/armorConfigs.js';
 import { canEquipArmorInSlot } from '../state/ArmorActions.js';
@@ -16,15 +16,25 @@ import {
     SHOP_WEAPON_TYPE_ORDER,
     SHOP_WEAPON_TYPE_LABELS
 } from '../config/shopConfig.js';
-import { getEnchantmentById, applyEnchantEffectsToWeapon } from '../config/enchantmentConfig.js';
+import { getEnchantmentById, applyEffectsToWeapon } from '../config/enchantmentConfig.js';
+import { getRarityStyle } from '../config/rarityConfig.js';
+import type { ItemRarity } from '../config/rarityConfig.js';
 import { WHETSTONE_REPAIR_PERCENT } from '../config/lootConfig.js';
-import { drawHerbIcon, drawMushroomIcon, drawHoneyIcon, drawPotionIcon, drawGoldIcon } from '../graphics/herbMushroomIcons.js';
+import { STRATEGY_LOADOUT_SLOT_COUNT, STRATEGY_RECIPES, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
+import type { StrategyDirection, StrategyRecipeDef } from '../config/strategyCraftingConfig.js';
+import { getStrategyRecipe } from '../config/strategyCraftingConfig.js';
+import { drawHerbIcon, drawMushroomIcon, drawHoneyIcon, drawPotionIcon, drawGoldIcon, drawPageIcon, drawEnchantScrollIcon } from '../graphics/herbMushroomIcons.js';
+
+const STRATEGY_DIRECTION_SYMBOLS: Record<StrategyDirection, string> = { up: '↑', down: '↓', left: '←', right: '→' };
+function strategyDirectionToSymbol(d: StrategyDirection): string {
+    return STRATEGY_DIRECTION_SYMBOLS[d] ?? d;
+}
 
 function isWeaponInstance(w: unknown): w is Weapon {
     return !!w && typeof (w as Weapon).baseDamage === 'number';
 }
 
-/** Display damage from active weapon set: mainhand + Defender offhand, including prefix/suffix modifiers. */
+/** Display damage from active weapon set: mainhand + Defender offhand, including effect modifiers. */
 function getDisplayDamage(ps: PlayingStateShape): number | null {
     const active = getActiveWeaponSet(ps);
     let total = 0;
@@ -38,7 +48,7 @@ function getDisplayDamage(ps: PlayingStateShape): number | null {
                 cooldown: typeof (w as Weapon & { cooldown?: number }).cooldown === 'number' ? (w as Weapon & { cooldown?: number }).cooldown : 0.1,
                 baseStunBuildup: (w as Weapon & { baseStunBuildup?: number }).baseStunBuildup ?? 25
             };
-            const effective = applyEnchantEffectsToWeapon(base, active.mainhandPrefixId, active.mainhandSuffixId) as { baseDamage?: number };
+            const effective = applyEffectsToWeapon(base, active.mainhandEffectIds ?? []) as { baseDamage?: number };
             total += typeof effective.baseDamage === 'number' ? effective.baseDamage : 0;
         }
     }
@@ -52,7 +62,7 @@ function getDisplayDamage(ps: PlayingStateShape): number | null {
                 cooldown: typeof (w as Weapon & { cooldown?: number }).cooldown === 'number' ? (w as Weapon & { cooldown?: number }).cooldown : 0.1,
                 baseStunBuildup: (w as Weapon & { baseStunBuildup?: number }).baseStunBuildup ?? 25
             };
-            const effective = applyEnchantEffectsToWeapon(base, active.offhandPrefixId, active.offhandSuffixId) as { baseDamage?: number };
+            const effective = applyEffectsToWeapon(base, active.offhandEffectIds ?? []) as { baseDamage?: number };
             total += typeof effective.baseDamage === 'number' ? effective.baseDamage : 0;
         }
     }
@@ -73,14 +83,14 @@ const WEAPON_SYMBOLS: Record<string, string> = {
 };
 
 export const CHEST_WEAPON_ORDER: string[] = [
-    'sword_rusty', 'shield_wooden', 'defender_rusty', 'dagger_rusty', 'greatsword_rusty', 'crossbow', 'bow_oak', 'staff_oak', 'mace_rusty'
+    'sword_bronze', 'shield_wooden', 'defender_bronze', 'dagger_bronze', 'greatsword_bronze', 'crossbow', 'bow_oak', 'staff_oak', 'mace_bronze'
 ];
 
 const INVENTORY_COLS = 6;
 const INVENTORY_ROWS = 3;
 const INVENTORY_GRID_SLOTS = INVENTORY_COLS * INVENTORY_ROWS;
 
-/** Base weapon key from variant key (e.g. sword_rusty -> sword). */
+/** Base weapon key from variant key (e.g. sword_bronze -> sword). */
 function getBaseWeaponKey(key: string): string {
     if (!key || key === 'none') return key;
     const i = key.indexOf('_');
@@ -98,7 +108,7 @@ const BASE_DISPLAY_NAMES: Record<string, string> = {
     greatsword: 'Greatsword', mace: 'Mace', dagger: 'Dagger', crossbow: 'Crossbow', bow: 'Bow', staff: 'Staff', none: ''
 };
 
-/** Material display name from variant key suffix (e.g. sword_rusty -> Rusty). */
+/** Material display name from variant key suffix (e.g. sword_bronze -> Bronze). */
 function getMaterialDisplayNameFromKey(key: string): string | null {
     const i = key.indexOf('_');
     if (i <= 0) return null;
@@ -106,10 +116,10 @@ function getMaterialDisplayNameFromKey(key: string): string | null {
     return suffix.charAt(0).toUpperCase() + suffix.slice(1).toLowerCase();
 }
 
-/** Get display name for a weapon key; optionally include prefix/suffix from instance. */
+/** Get display name for a weapon key; optionally prepend rarity word from instance. */
 export function getWeaponDisplayName(
     key: string,
-    instance?: { prefixId?: string; suffixId?: string } | null
+    instance?: { rarity?: ItemRarity; effectIds?: (string | null)[] } | null
 ): string {
     if (!key) return '';
     const baseName = BASE_DISPLAY_NAMES[key] !== undefined
@@ -121,14 +131,12 @@ export function getWeaponDisplayName(
             if (bn && materialName) return `${materialName} ${bn}`;
             return key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
         })();
-    if (!instance?.prefixId && !instance?.suffixId) return baseName;
-    const prefix = instance.prefixId ? (getEnchantmentById(instance.prefixId)?.displayName ?? '') : '';
-    const suffix = instance.suffixId ? (getEnchantmentById(instance.suffixId)?.displayName ?? '') : '';
-    const parts: string[] = [];
-    if (prefix) parts.push(prefix);
-    parts.push(baseName);
-    if (suffix) parts.push(`of ${suffix}`);
-    return parts.join(' ');
+    const rarity = instance?.rarity;
+    if (rarity && rarity !== 'common') {
+        const label = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+        return `${label} ${baseName}`;
+    }
+    return baseName;
 }
 
 /** Metal fill and stroke for weapon icon from registry (material tier color). */
@@ -367,7 +375,11 @@ export interface DragState {
     /** True when dragging a whetstone from inventory (use-on-weapon drop). */
     isWhetstone?: boolean;
     /** When dragging herb, mushroom, honey, potion, or gold from inventory (reorder only). */
-    dragConsumableType?: 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold';
+    dragConsumableType?: 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold' | 'page' | 'enchantScroll';
+    /** When dragging a strategy from Strategy Book or from a loadout slot. */
+    dragStrategyId?: string;
+    /** When dragging from a strategy loadout slot, the source slot index (so we can clear it on drop). */
+    sourceStrategyLoadoutIndex?: number;
     /** When sourceContext is 'toolbelt': which toolbelt slot (0..3). */
     sourceToolbeltIndex?: number;
 }
@@ -395,6 +407,90 @@ export function ensureInventoryInitialized(ps: PlayingStateShape): void {
     if (!ps.toolbeltSlots || ps.toolbeltSlots.length !== TOOLBELT_SLOT_COUNT) {
         ps.toolbeltSlots = Array(TOOLBELT_SLOT_COUNT).fill(null) as (PotionConsumable | null)[];
     }
+}
+
+// --- Tab overlay: two panels (left = Strategy Book + loadout, right = inventory) ---
+const TAB_LEFT_PANEL_WIDTH_RATIO = 0.34;
+const TAB_RIGHT_PANEL_WIDTH_RATIO = 0.36;
+const TAB_LEFT_PANEL_MIN_WIDTH = 260;
+const TAB_LEFT_PANEL_MAX_WIDTH = 380;
+const TAB_RIGHT_PANEL_MIN_WIDTH = 280;
+const TAB_RIGHT_PANEL_MAX_WIDTH = 400;
+const STRATEGY_LOADOUT_SLOT_SIZE = 44;
+const STRATEGY_LOADOUT_GAP = 6;
+const STRATEGY_BOOK_ENTRY_HEIGHT = 36;
+const STRATEGY_BOOK_HEADER_H = 56;
+const STRATEGY_LOADOUT_ROW_H = 52;
+
+export interface TabOverlayLayout {
+    leftPanel: { x: number; y: number; w: number; h: number };
+    strategyLoadoutSlots: { x: number; y: number; w: number; h: number; index: number }[];
+    strategyBookEntries: { x: number; y: number; w: number; h: number; recipeId: string; index: number }[];
+    rightPanelRect: { x: number; y: number; w: number; h: number };
+}
+
+export function getTabOverlayLayout(canvas: HTMLCanvasElement, panelOffset?: { dx: number; dy: number }): TabOverlayLayout {
+    const W = canvas.width;
+    const H = canvas.height;
+    const leftW = Math.min(TAB_LEFT_PANEL_MAX_WIDTH, Math.max(TAB_LEFT_PANEL_MIN_WIDTH, W * TAB_LEFT_PANEL_WIDTH_RATIO));
+    const rightW = Math.min(TAB_RIGHT_PANEL_MAX_WIDTH, Math.max(TAB_RIGHT_PANEL_MIN_WIDTH, W * TAB_RIGHT_PANEL_WIDTH_RATIO));
+    const po = panelOffset ?? { dx: 0, dy: 0 };
+    const leftPanel = { x: 0 + po.dx, y: 0 + po.dy, w: leftW, h: H };
+    const rightPanelRect = { x: W - rightW + po.dx, y: 0 + po.dy, w: rightW, h: H };
+
+    const pad = Math.max(10, Math.min(16, leftW * 0.04));
+    const contentLeft = leftPanel.x + pad;
+    const contentW = leftPanel.w - pad * 2;
+
+    // Loadout slots: one row at top
+    const loadoutY = leftPanel.y + STRATEGY_BOOK_HEADER_H + 8;
+    const totalLoadoutW = STRATEGY_LOADOUT_SLOT_COUNT * STRATEGY_LOADOUT_SLOT_SIZE + (STRATEGY_LOADOUT_SLOT_COUNT - 1) * STRATEGY_LOADOUT_GAP;
+    const loadoutStartX = contentLeft + (contentW - totalLoadoutW) / 2;
+    const strategyLoadoutSlots: { x: number; y: number; w: number; h: number; index: number }[] = [];
+    for (let i = 0; i < STRATEGY_LOADOUT_SLOT_COUNT; i++) {
+        strategyLoadoutSlots.push({
+            x: loadoutStartX + i * (STRATEGY_LOADOUT_SLOT_SIZE + STRATEGY_LOADOUT_GAP),
+            y: loadoutY,
+            w: STRATEGY_LOADOUT_SLOT_SIZE,
+            h: STRATEGY_LOADOUT_SLOT_SIZE,
+            index: i
+        });
+    }
+
+    // Strategy Book entries: list below loadout row
+    const bookListTop = loadoutY + STRATEGY_LOADOUT_SLOT_SIZE + 16;
+    const strategyBookEntries: { x: number; y: number; w: number; h: number; recipeId: string; index: number }[] = [];
+    for (let i = 0; i < STRATEGY_RECIPES.length; i++) {
+        const recipe = STRATEGY_RECIPES[i];
+        if (!recipe) continue;
+        strategyBookEntries.push({
+            x: contentLeft,
+            y: bookListTop + i * (STRATEGY_BOOK_ENTRY_HEIGHT + 2),
+            w: contentW,
+            h: STRATEGY_BOOK_ENTRY_HEIGHT,
+            recipeId: recipe.id,
+            index: i
+        });
+    }
+
+    return { leftPanel, strategyLoadoutSlots, strategyBookEntries, rightPanelRect };
+}
+
+export type TabOverlayHit =
+    | { type: 'strategy-loadout-slot'; index: number }
+    | { type: 'strategy-book-entry'; recipeId: string }
+    | null;
+
+export function hitTestTabOverlay(x: number, y: number, _ps: PlayingStateShape, tabLayout: TabOverlayLayout): TabOverlayHit {
+    const { leftPanel, strategyLoadoutSlots, strategyBookEntries } = tabLayout;
+    if (x < leftPanel.x || x > leftPanel.x + leftPanel.w || y < leftPanel.y || y > leftPanel.y + leftPanel.h) return null;
+    for (const slot of strategyLoadoutSlots) {
+        if (inRect(x, y, slot)) return { type: 'strategy-loadout-slot', index: slot.index };
+    }
+    for (const entry of strategyBookEntries) {
+        if (inRect(x, y, entry)) return { type: 'strategy-book-entry', recipeId: entry.recipeId };
+    }
+    return null;
 }
 
 // --- Inventory panel layout (right side, responsive auto layout) ---
@@ -431,15 +527,16 @@ const CHEST_COLS_IN_PANEL = 4;
 const CHEST_ROWS_IN_PANEL = 3;
 const CHEST_SLOTS_IN_PANEL = CHEST_COLS_IN_PANEL * CHEST_ROWS_IN_PANEL;
 
-export function getInventoryLayout(canvas: HTMLCanvasElement, options?: { includeChestGrid?: boolean; panelOffset?: { dx: number; dy: number } }): InventoryLayout {
+export function getInventoryLayout(canvas: HTMLCanvasElement, options?: { includeChestGrid?: boolean; panelOffset?: { dx: number; dy: number }; overridePanel?: { x: number; y: number; w: number; h: number } }): InventoryLayout {
     const W = canvas.width;
     const H = canvas.height;
-    const panelW = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, W * PANEL_WIDTH_RATIO));
-    let panelX = W - panelW;
-    let panelY = 0;
-    const panelH = H;
+    const override = options?.overridePanel;
+    const panelW = override ? override.w : Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, W * PANEL_WIDTH_RATIO));
+    let panelX = override ? override.x : W - panelW;
+    let panelY = override ? override.y : 0;
+    const panelH = override ? override.h : H;
     const po = options?.panelOffset;
-    if (po) {
+    if (po && !override) {
         panelX += po.dx;
         panelY += po.dy;
     }
@@ -532,7 +629,7 @@ export function getInventoryLayout(canvas: HTMLCanvasElement, options?: { includ
 }
 
 export type InventoryHit =
-    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; prefixId?: string; suffixId?: string; itemType?: 'weapon' | 'armor' | 'whetstone' | 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold' }
+    | { type: 'inventory-slot'; index: number; weaponKey: string | null; durability?: number; rarity?: ItemRarity; effectIds?: (string | null)[]; itemType?: 'weapon' | 'armor' | 'whetstone' | 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold' | 'page' | 'enchantScroll' }
     | { type: 'equipment'; slot: 'mainhand' | 'offhand' }
     | { type: 'chest-slot'; index: number; key: string }
     | { type: 'armor-equipment'; slot: ArmorSlotId }
@@ -564,8 +661,8 @@ export function hitTestInventory(
         if (inRect(x, y, s)) {
             const slot = ps.inventorySlots?.[s.index] ?? null;
             const key = getSlotKey(slot);
-            const itemType = isWhetstoneSlot(slot) ? 'whetstone' : isHerbSlot(slot) ? 'herb' : isMushroomSlot(slot) ? 'mushroom' : isHoneySlot(slot) ? 'honey' : isPotionSlot(slot) ? 'potion' : key ? (getArmor(key) ? 'armor' : 'weapon') : undefined;
-            return { type: 'inventory-slot', index: s.index, weaponKey: key, durability: slot && 'durability' in slot ? slot.durability : undefined, prefixId: slot && 'prefixId' in slot ? slot.prefixId : undefined, suffixId: slot && 'suffixId' in slot ? slot.suffixId : undefined, itemType };
+            const itemType = isWhetstoneSlot(slot) ? 'whetstone' : isHerbSlot(slot) ? 'herb' : isMushroomSlot(slot) ? 'mushroom' : isHoneySlot(slot) ? 'honey' : isPotionSlot(slot) ? 'potion' : isPageSlot(slot) ? 'page' : isEnchantScrollSlot(slot) ? 'enchantScroll' : isGoldSlot(slot) ? 'gold' : key ? (getArmor(key) ? 'armor' : 'weapon') : undefined;
+            return { type: 'inventory-slot', index: s.index, weaponKey: key, durability: slot && 'durability' in slot ? slot.durability : undefined, rarity: slot && 'rarity' in slot ? slot.rarity : undefined, effectIds: slot && 'effectIds' in slot ? slot.effectIds : undefined, itemType };
         }
     }
     if (layout.chestSlots && chestSlots) {
@@ -1074,26 +1171,28 @@ function inRect(px: number, py: number, r: { x: number; y: number; w: number; h:
     return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
 }
 
-function getWeaponTooltipLines(key: string, instance?: { prefixId?: string; suffixId?: string } | null): { name: string; rows: { label: string; value: string }[] } {
+function getWeaponTooltipLines(key: string, instance?: { rarity?: ItemRarity; effectIds?: (string | null)[] } | null): { name: string; rows: { label: string; value: string }[] } {
     const name = getWeaponDisplayName(key, instance);
     const w = Weapons[key];
     const rows: { label: string; value: string }[] = [];
-    if (instance?.prefixId || instance?.suffixId) {
-        for (const id of [instance.prefixId, instance.suffixId]) {
-            if (!id) continue;
+    const effectIds = instance?.effectIds ?? [];
+    for (let i = 0; i < effectIds.length; i++) {
+        const id = effectIds[i];
+        if (id) {
             const enc = getEnchantmentById(id);
-            if (enc?.description) rows.push({ label: enc.displayName, value: enc.description });
+            if (enc?.description) rows.push({ label: `Effect ${i + 1}: ${enc.displayName}`, value: enc.description });
+        } else {
+            rows.push({ label: `Slot ${i + 1}`, value: 'Empty' });
         }
     }
     if (!isWeaponInstance(w)) return { name, rows };
-    // Use effective stats when weapon has prefix/suffix so tooltip shows actual damage/range
     const baseForEnchant = {
         baseDamage: w.baseDamage ?? 0,
         baseRange: w.baseRange ?? 0,
         cooldown: typeof (w as Weapon & { cooldown?: number }).cooldown === 'number' ? (w as Weapon & { cooldown?: number }).cooldown : 0.1,
         baseStunBuildup: (w as Weapon & { baseStunBuildup?: number }).baseStunBuildup ?? 25
     };
-    const effective = applyEnchantEffectsToWeapon(baseForEnchant, instance?.prefixId, instance?.suffixId);
+    const effective = applyEffectsToWeapon(baseForEnchant, effectIds) as { baseDamage?: number; baseRange?: number };
     const damage = typeof effective.baseDamage === 'number' ? effective.baseDamage : w.baseDamage ?? 0;
     const range = typeof effective.baseRange === 'number' ? effective.baseRange : w.baseRange ?? 0;
     if (damage > 0) rows.push({ label: 'Damage', value: String(damage) });
@@ -1190,7 +1289,7 @@ export function renderArmorTooltip(
     ctx.strokeRect(x, y, boxW, boxH);
     ctx.fillStyle = 'rgba(201, 162, 39, 0.85)';
     ctx.fillRect(x, y, TOOLTIP_ACCENT_LEFT, boxH);
-    ctx.fillStyle = '#c9a227';
+    ctx.fillStyle = hover.rarity ? getRarityStyle(hover.rarity).text : '#c9a227';
     ctx.font = '700 14px Cinzel, Georgia, serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -1334,6 +1433,28 @@ export function renderGoldTooltip(
     renderGatherTooltip(ctx, canvas, title, line1, hover);
 }
 
+export function renderPageTooltip(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    hover: { x: number; y: number; count: number } | null
+): void {
+    if (!hover) return;
+    const title = hover.count > 1 ? `Page ×${hover.count}` : 'Page';
+    const line1 = 'Crafting ingredient. 3 Pages → 1 Enchant Scroll at the strategy crafting pane.';
+    renderGatherTooltip(ctx, canvas, title, line1, hover);
+}
+
+export function renderEnchantScrollTooltip(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    hover: { x: number; y: number; count: number } | null
+): void {
+    if (!hover) return;
+    const title = hover.count > 1 ? `Enchant Scroll ×${hover.count}` : 'Enchant Scroll';
+    const line1 = 'Use at the reroll station to add or reroll an enchantment on a weapon (1 scroll per use).';
+    renderGatherTooltip(ctx, canvas, title, line1, hover);
+}
+
 function renderGatherTooltip(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
@@ -1387,11 +1508,11 @@ const TOOLTIP_ACCENT_LEFT = 3; // Gold accent stripe on left edge
 export function renderWeaponTooltip(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
-    hover: { weaponKey: string; x: number; y: number; durability?: number; prefixId?: string; suffixId?: string } | null,
+    hover: { weaponKey: string; x: number; y: number; durability?: number; rarity?: ItemRarity; effectIds?: (string | null)[] } | null,
     playingState?: PlayingStateShape
 ): void {
     if (!hover || !Weapons[hover.weaponKey]) return;
-    const instance = (hover.prefixId != null || hover.suffixId != null) ? { prefixId: hover.prefixId, suffixId: hover.suffixId } : null;
+    const instance = (hover.rarity != null || (hover.effectIds != null && hover.effectIds.length > 0)) ? { rarity: hover.rarity, effectIds: hover.effectIds ?? [] } : null;
     const { name, rows } = getWeaponTooltipLines(hover.weaponKey, instance);
     const W = canvas.width;
     const H = canvas.height;
@@ -1441,7 +1562,7 @@ export function renderWeaponTooltip(
     ctx.strokeRect(x, y, boxW, boxH);
     ctx.fillStyle = 'rgba(201, 162, 39, 0.85)';
     ctx.fillRect(x, y, TOOLTIP_ACCENT_LEFT, boxH);
-    ctx.fillStyle = '#c9a227';
+    ctx.fillStyle = hover.rarity ? getRarityStyle(hover.rarity).text : '#c9a227';
     ctx.font = '700 14px Cinzel, Georgia, serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -1509,7 +1630,7 @@ function drawShopParentHeader(ctx: CanvasRenderingContext2D, header: ShopParentH
     ctx.fillText(header.title, header.x + 32, header.y + header.h / 2);
 }
 
-function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, options: { filled?: boolean; symbol?: string; weaponKey?: string; label?: string; highlight?: boolean; emptyLabel?: string; broken?: boolean; itemIcon?: 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold'; stackCount?: number; dimmed?: boolean }) {
+function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, options: { filled?: boolean; symbol?: string; weaponKey?: string; label?: string; highlight?: boolean; emptyLabel?: string; broken?: boolean; itemIcon?: 'herb' | 'mushroom' | 'honey' | 'potion' | 'gold' | 'page' | 'enchantScroll'; stackCount?: number; dimmed?: boolean; rarity?: ItemRarity }) {
     const dimmed = options.dimmed === true;
     ctx.fillStyle = dimmed
         ? (options.filled ? 'rgba(12, 10, 6, 0.75)' : 'rgba(14, 12, 8, 0.5)')
@@ -1517,7 +1638,8 @@ function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: n
     if (options.highlight && !dimmed) ctx.fillStyle = 'rgba(201, 162, 39, 0.2)';
     roundRect(ctx, r.x, r.y, r.w, r.h, SLOT_RADIUS);
     ctx.fill();
-    ctx.strokeStyle = dimmed ? 'rgba(45, 32, 18, 0.5)' : (options.highlight ? 'rgba(201, 162, 39, 0.9)' : 'rgba(61, 40, 23, 0.6)');
+    const borderColor = options.rarity && !dimmed ? getRarityStyle(options.rarity).border : (dimmed ? 'rgba(45, 32, 18, 0.5)' : (options.highlight ? 'rgba(201, 162, 39, 0.9)' : 'rgba(61, 40, 23, 0.6)'));
+    ctx.strokeStyle = borderColor;
     ctx.lineWidth = options.highlight && !dimmed ? 2 : 1;
     roundRect(ctx, r.x, r.y, r.w, r.h, SLOT_RADIUS);
     ctx.stroke();
@@ -1589,19 +1711,123 @@ function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: n
     }
 }
 
+function renderStrategyBookAndLoadoutPanel(
+    ctx: CanvasRenderingContext2D,
+    ps: PlayingStateShape,
+    tabLayout: TabOverlayLayout
+): void {
+    const { leftPanel, strategyLoadoutSlots, strategyBookEntries } = tabLayout;
+    const PANEL_RADIUS = 10;
+    const unlocked = migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []);
+    const loadoutIds = ps.strategyLoadoutSlotIds ?? [];
+
+    ctx.fillStyle = 'rgba(24, 18, 14, 0.97)';
+    roundRect(ctx, leftPanel.x, leftPanel.y, leftPanel.w, leftPanel.h, PANEL_RADIUS);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70, 50, 32, 0.85)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, leftPanel.x, leftPanel.y, leftPanel.w, leftPanel.h, PANEL_RADIUS);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(28, 20, 14, 0.96)';
+    ctx.fillRect(leftPanel.x, leftPanel.y, leftPanel.w, STRATEGY_BOOK_HEADER_H);
+    ctx.fillStyle = '#c9a227';
+    ctx.font = '700 20px Cinzel, Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Strategy Book', leftPanel.x + 16, leftPanel.y + 28);
+
+    // Strategy loadout slots
+    ctx.fillStyle = '#a08050';
+    ctx.font = '600 12px Cinzel, Georgia, serif';
+    ctx.fillText('Strategy loadout', leftPanel.x + 16, leftPanel.y + STRATEGY_BOOK_HEADER_H - 2);
+    for (let i = 0; i < strategyLoadoutSlots.length; i++) {
+        const slot = strategyLoadoutSlots[i];
+        if (!slot) continue;
+        const strategyId = loadoutIds[slot.index] ?? null;
+        const recipe = strategyId ? getStrategyRecipe(strategyId) : null;
+        ctx.fillStyle = 'rgba(30, 22, 16, 0.9)';
+        roundRect(ctx, slot.x, slot.y, slot.w, slot.h, 6);
+        ctx.fill();
+        ctx.strokeStyle = recipe ? 'rgba(120, 90, 60, 0.7)' : 'rgba(61, 40, 23, 0.5)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, slot.x, slot.y, slot.w, slot.h, 6);
+        ctx.stroke();
+        if (recipe) {
+            ctx.fillStyle = '#e8dcc8';
+            ctx.font = '500 10px Cinzel, Georgia, serif';
+            ctx.textAlign = 'center';
+            const shortLabel = recipe.label.length > 10 ? recipe.label.slice(0, 9) + '…' : recipe.label;
+            ctx.fillText(shortLabel, slot.x + slot.w / 2, slot.y + slot.h / 2);
+            ctx.textAlign = 'left';
+        }
+    }
+
+    // Strategy Book list
+    const bookListTop = strategyBookEntries[0]?.y ?? leftPanel.y + STRATEGY_BOOK_HEADER_H + 60;
+    ctx.fillStyle = 'rgba(61, 40, 23, 0.4)';
+    ctx.fillRect(leftPanel.x + 16, bookListTop - 10, leftPanel.w - 32, 1);
+    ctx.fillStyle = '#a08050';
+    ctx.font = '600 12px Cinzel, Georgia, serif';
+    ctx.fillText('All strategies', leftPanel.x + 16, bookListTop - 2);
+
+    for (const entry of strategyBookEntries) {
+        const recipe = getStrategyRecipe(entry.recipeId);
+        if (!recipe) continue;
+        const isUnlocked = unlocked.includes(entry.recipeId);
+        ctx.fillStyle = isUnlocked ? 'rgba(26, 20, 14, 0.6)' : 'rgba(18, 14, 10, 0.85)';
+        roundRect(ctx, entry.x, entry.y, entry.w, entry.h, 4);
+        ctx.fill();
+        ctx.strokeStyle = isUnlocked ? 'rgba(61, 40, 23, 0.4)' : 'rgba(40, 28, 18, 0.6)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, entry.x, entry.y, entry.w, entry.h, 4);
+        ctx.stroke();
+        ctx.fillStyle = isUnlocked ? '#e8dcc8' : '#6a5a4a';
+        ctx.font = '500 13px Cinzel, Georgia, serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(recipe.label, entry.x + 8, entry.y + entry.h / 2 - 6);
+        const seqStr = recipe.sequence.map(strategyDirectionToSymbol).join(' ');
+        ctx.font = '500 11px Cinzel, Georgia, serif';
+        ctx.fillStyle = isUnlocked ? '#8a7048' : '#5a4a38';
+        ctx.fillText(seqStr, entry.x + 8, entry.y + entry.h / 2 + 8);
+        if (!isUnlocked) {
+            ctx.fillStyle = 'rgba(80, 60, 40, 0.5)';
+            ctx.font = '500 10px Cinzel, Georgia, serif';
+            ctx.fillText('Locked', entry.x + entry.w - 36, entry.y + entry.h / 2);
+        }
+    }
+    ctx.textAlign = 'left';
+}
+
 export function renderInventory(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     ps: PlayingStateShape,
     dragState: DragState,
     tooltipHover: TooltipHover,
-    options?: { includeChestInPanel?: boolean }
+    options?: { includeChestInPanel?: boolean; includeStrategyPanel?: boolean }
 ): void {
     ensureInventoryInitialized(ps);
-    const layout = getInventoryLayout(canvas, {
-        includeChestGrid: options?.includeChestInPanel,
-        panelOffset: ps.uiPanelOffsets?.inventory
-    });
+    let layout: InventoryLayout;
+    if (options?.includeStrategyPanel) {
+        const tabLayout = getTabOverlayLayout(canvas, ps.uiPanelOffsets?.strategyBook);
+        renderStrategyBookAndLoadoutPanel(ctx, ps, tabLayout);
+        const invOffset = ps.uiPanelOffsets?.inventory ?? { dx: 0, dy: 0 };
+        const rightPanel = {
+            ...tabLayout.rightPanelRect,
+            x: tabLayout.rightPanelRect.x + invOffset.dx,
+            y: tabLayout.rightPanelRect.y + invOffset.dy
+        };
+        layout = getInventoryLayout(canvas, {
+            includeChestGrid: options?.includeChestInPanel,
+            overridePanel: rightPanel
+        });
+    } else {
+        layout = getInventoryLayout(canvas, {
+            includeChestGrid: options?.includeChestInPanel,
+            panelOffset: ps.uiPanelOffsets?.inventory
+        });
+    }
     const { panel, slots, equipmentMainhand, equipmentOffhand, loadoutMainhand, loadoutOffhand, equipmentArmor, closeButton, chestSlots } = layout;
 
     ctx.save();
@@ -1711,6 +1937,7 @@ export function renderInventory(
     drawSlot(ctx, equipmentMainhand, {
         filled: true,
         weaponKey: mainKey ?? undefined,
+        rarity: active.mainhandRarity,
         emptyLabel: mainKey ? undefined : undefined,
         label: 'Main hand',
         highlight: !!mainKey || !!dragValidMain,
@@ -1719,6 +1946,7 @@ export function renderInventory(
     drawSlot(ctx, equipmentOffhand, {
         filled: true,
         weaponKey: offKey ?? undefined,
+        rarity: active.offhandRarity,
         emptyLabel: offKey ? undefined : undefined,
         label: 'Off hand',
         highlight: !!offKey || !!dragValidOff,
@@ -1773,16 +2001,19 @@ export function renderInventory(
         const isHoney = isHoneySlot(slot);
         const isPotion = isPotionSlot(slot);
         const isGold = isGoldSlot(slot);
-        const isConsumable = isWhetstone || isHerb || isMushroom || isHoney || isPotion || isGold;
+        const isPage = isPageSlot(slot);
+        const isEnchantScroll = isEnchantScrollSlot(slot);
+        const isConsumable = isWhetstone || isHerb || isMushroom || isHoney || isPotion || isGold || isPage || isEnchantScroll;
         const stackCount = isConsumable && slot && 'count' in slot ? slot.count : undefined;
         drawSlot(ctx, s, {
             filled: !!key || isConsumable,
             weaponKey: isWeapon ? key ?? undefined : undefined,
+            rarity: isWeapon && slot && 'rarity' in slot ? slot.rarity : undefined,
             symbol: isArmor ? '◆' : isWhetstone ? '◉' : undefined,
-            itemIcon: isHerb ? 'herb' : isMushroom ? 'mushroom' : isHoney ? 'honey' : isPotion ? 'potion' : isGold ? 'gold' : undefined,
+            itemIcon: isHerb ? 'herb' : isMushroom ? 'mushroom' : isHoney ? 'honey' : isPotion ? 'potion' : isGold ? 'gold' : isPage ? 'page' : isEnchantScroll ? 'enchantScroll' : undefined,
             emptyLabel: !key && !isConsumable ? undefined : undefined,
             stackCount: stackCount != null && (stackCount > 1 || isGold) ? stackCount : undefined,
-            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : isHerb ? (slot.count > 1 ? `Herb ×${slot.count}` : 'Herb') : isMushroom ? (slot.count > 1 ? `Mushroom ×${slot.count}` : 'Mushroom') : isHoney ? (slot.count > 1 ? `Honey ×${slot.count}` : 'Honey') : isPotion ? (slot.count > 1 ? `Potion ×${slot.count}` : 'Potion') : isGold ? (slot.count > 1 ? `Gold ×${slot.count}` : 'Gold') : undefined,
+            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : isHerb ? (slot.count > 1 ? `Herb ×${slot.count}` : 'Herb') : isMushroom ? (slot.count > 1 ? `Mushroom ×${slot.count}` : 'Mushroom') : isHoney ? (slot.count > 1 ? `Honey ×${slot.count}` : 'Honey') : isPotion ? (slot.count > 1 ? `Potion ×${slot.count}` : 'Potion') : isGold ? (slot.count > 1 ? `Gold ×${slot.count}` : 'Gold') : isPage ? (slot.count > 1 ? `Page ×${slot.count}` : 'Page') : isEnchantScroll ? (slot.count > 1 ? `Enchant Scroll ×${slot.count}` : 'Enchant Scroll') : undefined,
             broken: !!(key && isWeaponSlotItem(slot) && slot.durability === 0)
         });
         if (isArmor && key && slot && 'durability' in slot) {
@@ -1808,6 +2039,7 @@ export function renderInventory(
             drawSlot(ctx, s, {
                 filled: !!key,
                 weaponKey: key ?? undefined,
+                rarity: instance?.rarity,
                 emptyLabel: key ? undefined : undefined,
                 highlight: !!isEquipped,
                 broken: !!(key && instance && instance.durability === 0)
@@ -1823,6 +2055,8 @@ export function renderInventory(
     renderHoneyTooltip(ctx, canvas, tooltipHover?.type === 'honey' ? tooltipHover : null);
     renderPotionTooltip(ctx, canvas, tooltipHover?.type === 'potion' ? tooltipHover : null);
     renderGoldTooltip(ctx, canvas, tooltipHover?.type === 'gold' ? tooltipHover : null);
+    renderPageTooltip(ctx, canvas, tooltipHover?.type === 'page' ? tooltipHover : null);
+    renderEnchantScrollTooltip(ctx, canvas, tooltipHover?.type === 'enchantScroll' ? tooltipHover : null);
     ctx.restore();
 }
 
@@ -1902,6 +2136,29 @@ export function renderDragGhost(
     dragState: DragState
 ): void {
     if (!dragState.isDragging) return;
+    if (dragState.dragStrategyId) {
+        const recipe = getStrategyRecipe(dragState.dragStrategyId);
+        const ghostSize = 44;
+        const gx = dragState.pointerX - ghostSize / 2;
+        const gy = dragState.pointerY - ghostSize / 2;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = 'rgba(22, 16, 10, 0.97)';
+        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201, 162, 39, 0.95)';
+        ctx.lineWidth = 2;
+        roundRect(ctx, gx, gy, ghostSize, ghostSize, 8);
+        ctx.stroke();
+        ctx.fillStyle = '#e8dcc8';
+        ctx.font = '500 10px Cinzel, Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(recipe?.label ?? dragState.dragStrategyId, dragState.pointerX, dragState.pointerY);
+        ctx.restore();
+        return;
+    }
     if (dragState.isWhetstone) {
         const ghostSize = 44;
         const gx = dragState.pointerX - ghostSize / 2;
@@ -1920,7 +2177,7 @@ export function renderDragGhost(
         ctx.restore();
         return;
     }
-    if (dragState.dragConsumableType === 'herb' || dragState.dragConsumableType === 'mushroom' || dragState.dragConsumableType === 'honey' || dragState.dragConsumableType === 'potion' || dragState.dragConsumableType === 'gold') {
+    if (dragState.dragConsumableType === 'herb' || dragState.dragConsumableType === 'mushroom' || dragState.dragConsumableType === 'honey' || dragState.dragConsumableType === 'potion' || dragState.dragConsumableType === 'gold' || dragState.dragConsumableType === 'page' || dragState.dragConsumableType === 'enchantScroll') {
         const ghostSize = 44;
         const gx = dragState.pointerX - ghostSize / 2;
         const gy = dragState.pointerY - ghostSize / 2;
@@ -1939,6 +2196,8 @@ export function renderDragGhost(
         else if (dragState.dragConsumableType === 'mushroom') drawMushroomIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         else if (dragState.dragConsumableType === 'potion') drawPotionIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         else if (dragState.dragConsumableType === 'gold') drawGoldIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
+        else if (dragState.dragConsumableType === 'page') drawPageIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
+        else if (dragState.dragConsumableType === 'enchantScroll') drawEnchantScrollIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         else drawHoneyIcon(ctx, dragState.pointerX, dragState.pointerY, iconSize);
         ctx.restore();
         return;
