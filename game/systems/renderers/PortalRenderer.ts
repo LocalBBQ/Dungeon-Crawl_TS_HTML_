@@ -11,9 +11,27 @@ interface PortalLike {
 }
 
 export class PortalRenderer {
-    render(context: RenderContext, data: { portal?: PortalLike | null; playerNearPortal?: boolean; promptLines?: string[]; isStairs?: boolean; channelProgress?: number }): void {
+    render(context: RenderContext, data: {
+        portal?: PortalLike | null;
+        playerNearPortal?: boolean;
+        promptLines?: string[];
+        isStairs?: boolean;
+        channelProgress?: number;
+        /** Draw portal/stairs art only (no E prompt). */
+        skipInteractionPrompt?: boolean;
+        /** Draw only the prompt + channel bar (no portal art). */
+        interactionPromptOnly?: boolean;
+    }): void {
         const { ctx, canvas, camera } = context;
-        const { portal, playerNearPortal, promptLines: customPromptLines, isStairs, channelProgress = 0 } = data;
+        const {
+            portal,
+            playerNearPortal,
+            promptLines: customPromptLines,
+            isStairs,
+            channelProgress = 0,
+            skipInteractionPrompt = false,
+            interactionPromptOnly = false
+        } = data;
         if (!portal || !portal.spawned) return;
         const screenX = camera.toScreenX(portal.x);
         const screenY = camera.toScreenY(portal.y);
@@ -22,6 +40,12 @@ export class PortalRenderer {
         if (screenX + w < 0 || screenX > canvas.width || screenY + h < 0 || screenY > canvas.height) return;
         const cx = screenX + w / 2;
         const cy = screenY + h / 2;
+
+        if (interactionPromptOnly) {
+            if (!playerNearPortal) return;
+            this._drawPortalPrompt(ctx, cx, cy, h, portal, customPromptLines, isStairs, channelProgress);
+            return;
+        }
 
         if (isStairs) {
             // Stairs down: stepped brown/grey shape
@@ -60,57 +84,70 @@ export class PortalRenderer {
             ctx.stroke();
         }
 
-        if (playerNearPortal) {
-            ctx.font = 'bold 18px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const padding = 12;
-            const lineHeight = 24;
-            const lines = customPromptLines && customPromptLines.length > 0
-                ? customPromptLines
-                : (() => {
-                    const hasNext = portal.hasNextLevel === true;
-                    return [hasNext ? 'E Next area' : 'E Return to Sanctuary'];
-                })();
-            const textMetrics = lines.map(t => ctx.measureText(t));
-            const bgWidth = Math.max(...textMetrics.map(m => m.width)) + padding * 2;
-            const bgHeight = lines.length * lineHeight + padding;
-            const promptY = cy - h / 2 - 20 - (lines.length * lineHeight) / 2;
-            const bgX = cx - bgWidth / 2;
-            const bgY = promptY - padding;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.strokeStyle = isStairs ? 'rgba(90, 80, 70, 0.9)' : 'rgba(180, 140, 255, 0.9)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            lines.forEach((text, i) => {
-                const y = promptY + i * lineHeight;
-                ctx.fillText(text, cx + 1, y + 1);
-            });
-            ctx.fillStyle = '#e8dcc8';
-            lines.forEach((text, i) => {
-                const y = promptY + i * lineHeight;
-                ctx.fillText(text, cx, y);
-            });
-
-            if (channelProgress > 0) {
-                const barWidth = 120;
-                const barHeight = 8;
-                const barX = cx - barWidth / 2;
-                const barY = promptY + lines.length * lineHeight + padding + 6;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.strokeStyle = isStairs ? 'rgba(90, 80, 70, 0.9)' : 'rgba(180, 140, 255, 0.9)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = isStairs ? 'rgba(140, 120, 100, 0.95)' : 'rgba(160, 120, 255, 0.95)';
-                ctx.fillRect(barX, barY, barWidth * Math.min(1, channelProgress), barHeight);
-            }
+        if (!skipInteractionPrompt && playerNearPortal) {
+            this._drawPortalPrompt(ctx, cx, cy, h, portal, customPromptLines, isStairs, channelProgress);
         }
     }
 
-    /** Draw blue recall portal (player-spawned in level, or reenter portal in hub); E returns to Sanctuary or re-enters quest. */
+    private _drawPortalPrompt(
+        ctx: CanvasRenderingContext2D,
+        cx: number,
+        cy: number,
+        h: number,
+        portal: PortalLike,
+        customPromptLines: string[] | undefined,
+        isStairs: boolean | undefined,
+        channelProgress: number
+    ): void {
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const padding = 12;
+        const lineHeight = 24;
+        const lines = customPromptLines && customPromptLines.length > 0
+            ? customPromptLines
+            : (() => {
+                const hasNext = portal.hasNextLevel === true;
+                return [hasNext ? 'E Next area' : 'E Return to Sanctuary'];
+            })();
+        const textMetrics = lines.map((t) => ctx.measureText(t));
+        const bgWidth = Math.max(...textMetrics.map((m) => m.width)) + padding * 2;
+        const bgHeight = lines.length * lineHeight + padding;
+        const promptY = cy - h / 2 - 20 - (lines.length * lineHeight) / 2;
+        const bgX = cx - bgWidth / 2;
+        const bgY = promptY - padding;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.strokeStyle = isStairs ? 'rgba(90, 80, 70, 0.9)' : 'rgba(180, 140, 255, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        lines.forEach((text, i) => {
+            const y = promptY + i * lineHeight;
+            ctx.fillText(text, cx + 1, y + 1);
+        });
+        ctx.fillStyle = '#e8dcc8';
+        lines.forEach((text, i) => {
+            const y = promptY + i * lineHeight;
+            ctx.fillText(text, cx, y);
+        });
+
+        if (channelProgress > 0) {
+            const barWidth = 120;
+            const barHeight = 8;
+            const barX = cx - barWidth / 2;
+            const barY = promptY + lines.length * lineHeight + padding + 6;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            ctx.strokeStyle = isStairs ? 'rgba(90, 80, 70, 0.9)' : 'rgba(180, 140, 255, 0.9)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
+            ctx.fillStyle = isStairs ? 'rgba(140, 120, 100, 0.95)' : 'rgba(160, 120, 255, 0.95)';
+            ctx.fillRect(barX, barY, barWidth * Math.min(1, channelProgress), barHeight);
+        }
+    }
+
+    /** Draw blue recall portal (player-spawned in level); E returns to Sanctuary. */
     renderRecallPortal(
         context: RenderContext,
         data: {
@@ -118,10 +155,19 @@ export class PortalRenderer {
             playerNearRecallPortal: boolean;
             channelProgress: number;
             promptLines?: string[];
+            skipInteractionPrompt?: boolean;
+            interactionPromptOnly?: boolean;
         }
     ): void {
         const { ctx, canvas, camera } = context;
-        const { recallPortal, playerNearRecallPortal, channelProgress = 0, promptLines: customPromptLines } = data;
+        const {
+            recallPortal,
+            playerNearRecallPortal,
+            channelProgress = 0,
+            promptLines: customPromptLines,
+            skipInteractionPrompt = false,
+            interactionPromptOnly = false
+        } = data;
         if (!recallPortal?.spawned) return;
         const screenX = camera.toScreenX(recallPortal.x);
         const screenY = camera.toScreenY(recallPortal.y);
@@ -130,6 +176,12 @@ export class PortalRenderer {
         if (screenX + w < 0 || screenX > canvas.width || screenY + h < 0 || screenY > canvas.height) return;
         const cx = screenX + w / 2;
         const cy = screenY + h / 2;
+
+        if (interactionPromptOnly) {
+            if (!playerNearRecallPortal) return;
+            this._drawRecallPrompt(ctx, cx, cy, h, customPromptLines, channelProgress);
+            return;
+        }
 
         const time = performance.now() * 0.002;
         const pulse = 0.85 + 0.15 * Math.sin(time);
@@ -146,47 +198,58 @@ export class PortalRenderer {
         ctx.lineWidth = 3 / camera.zoom;
         ctx.stroke();
 
-        if (playerNearRecallPortal) {
-            ctx.font = 'bold 18px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const padding = 12;
-            const lineHeight = 24;
-            const lines = customPromptLines && customPromptLines.length > 0 ? customPromptLines : ['E Return to Sanctuary'];
-            const textMetrics = lines.map((t: string) => ctx.measureText(t));
-            const bgWidth = Math.max(...textMetrics.map((m: TextMetrics) => m.width)) + padding * 2;
-            const bgHeight = lines.length * lineHeight + padding;
-            const promptY = cy - h / 2 - 20 - (lines.length * lineHeight) / 2;
-            const bgX = cx - bgWidth / 2;
-            const bgY = promptY - padding;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        if (!skipInteractionPrompt && playerNearRecallPortal) {
+            this._drawRecallPrompt(ctx, cx, cy, h, customPromptLines, channelProgress);
+        }
+    }
+
+    private _drawRecallPrompt(
+        ctx: CanvasRenderingContext2D,
+        cx: number,
+        cy: number,
+        h: number,
+        customPromptLines: string[] | undefined,
+        channelProgress: number
+    ): void {
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const padding = 12;
+        const lineHeight = 24;
+        const lines = customPromptLines && customPromptLines.length > 0 ? customPromptLines : ['E Return to Sanctuary'];
+        const textMetrics = lines.map((t: string) => ctx.measureText(t));
+        const bgWidth = Math.max(...textMetrics.map((m: TextMetrics) => m.width)) + padding * 2;
+        const bgHeight = lines.length * lineHeight + padding;
+        const promptY = cy - h / 2 - 20 - (lines.length * lineHeight) / 2;
+        const bgX = cx - bgWidth / 2;
+        const bgY = promptY - padding;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.strokeStyle = 'rgba(80, 140, 255, 0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        lines.forEach((text: string, i: number) => {
+            const y = promptY + i * lineHeight;
+            ctx.fillText(text, cx + 1, y + 1);
+        });
+        ctx.fillStyle = '#e8dcc8';
+        lines.forEach((text: string, i: number) => {
+            const y = promptY + i * lineHeight;
+            ctx.fillText(text, cx, y);
+        });
+        if (channelProgress > 0) {
+            const barWidth = 120;
+            const barHeight = 8;
+            const barX = cx - barWidth / 2;
+            const barY = promptY + lines.length * lineHeight + padding + 6;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
             ctx.strokeStyle = 'rgba(80, 140, 255, 0.9)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            lines.forEach((text: string, i: number) => {
-                const y = promptY + i * lineHeight;
-                ctx.fillText(text, cx + 1, y + 1);
-            });
-            ctx.fillStyle = '#e8dcc8';
-            lines.forEach((text: string, i: number) => {
-                const y = promptY + i * lineHeight;
-                ctx.fillText(text, cx, y);
-            });
-            if (channelProgress > 0) {
-                const barWidth = 120;
-                const barHeight = 8;
-                const barX = cx - barWidth / 2;
-                const barY = promptY + lines.length * lineHeight + padding + 6;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                ctx.fillRect(barX, barY, barWidth, barHeight);
-                ctx.strokeStyle = 'rgba(80, 140, 255, 0.9)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(barX, barY, barWidth, barHeight);
-                ctx.fillStyle = 'rgba(100, 160, 255, 0.95)';
-                ctx.fillRect(barX, barY, barWidth * Math.min(1, channelProgress), barHeight);
-            }
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
+            ctx.fillStyle = 'rgba(100, 160, 255, 0.95)';
+            ctx.fillRect(barX, barY, barWidth * Math.min(1, channelProgress), barHeight);
         }
     }
 

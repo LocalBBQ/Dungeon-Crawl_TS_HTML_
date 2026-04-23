@@ -45,7 +45,7 @@ const COLOR_STUN_LABEL = '#706858';
 
 export interface StatsHUDData {
   delveFloor: number;
-  /** 0..1 progress while holding B to spawn recall portal; 0 when not holding. */
+  /** 0..1 progress while B-started recall spawn channel runs; 0 when idle. */
   recallChannelProgress?: number;
   /** Toolbelt slots (potions); length TOOLBELT_SLOT_COUNT. */
   toolbeltSlots?: (PotionConsumable | null)[];
@@ -224,7 +224,7 @@ export function renderStatsHUD(
     ctx.textAlign = 'left';
   }
 
-  // Recall portal slot (hold B 2.5s to spawn portal): icon + "B" key at bottom right
+  // Recall portal slot (tap B to start 2.5s spawn channel): icon + "B" key at bottom right
   const portalSlotX = toolbeltRowX + TOOLBELT_SLOT_COUNT * (TOOLBELT_SLOT_SIZE + TOOLBELT_SLOT_GAP);
   roundRect(ctx, portalSlotX, toolbeltRowY, TOOLBELT_SLOT_SIZE, TOOLBELT_SLOT_SIZE, 6);
   ctx.fillStyle = 'rgba(20, 16, 12, 0.95)';

@@ -190,8 +190,8 @@ export class ObstacleLayerRenderer {
             return;
         }
 
-        // Cave entrance (den): rock formation with black semi-circle opening for the player to enter
-        if (obstacle.type === 'caveEntrance') {
+        // Scene entrance (cave/doorway): rock formation with dark opening for entering interior scenes.
+        if (typeof obstacle.targetLevel === 'number' || obstacle.type === 'caveEntrance' || obstacle.type.endsWith('Entrance')) {
             const lw = Math.max(1, 2 / zoom);
             const cx = screenX + w / 2;
             const groundY = screenY + h;

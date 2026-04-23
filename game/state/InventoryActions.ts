@@ -636,6 +636,30 @@ export function addPotionToInventory(ps: PlayingStateShape): boolean {
 }
 
 /**
+ * Add one potion from crafting: prefer toolbelt slots (keys 1–4), then main inventory.
+ * Uses first empty toolbelt slot, otherwise stacks on the first slot that already holds potions.
+ */
+export function addCraftedPotionToToolbeltOrInventory(ps: PlayingStateShape): boolean {
+  if (!ps.toolbeltSlots || ps.toolbeltSlots.length !== TOOLBELT_SLOT_COUNT) {
+    return addPotionToInventory(ps);
+  }
+  for (let i = 0; i < TOOLBELT_SLOT_COUNT; i++) {
+    if (ps.toolbeltSlots[i] == null) {
+      ps.toolbeltSlots[i] = { type: 'potion', count: 1 };
+      return true;
+    }
+  }
+  for (let i = 0; i < TOOLBELT_SLOT_COUNT; i++) {
+    const s = ps.toolbeltSlots[i];
+    if (s && s.type === 'potion') {
+      ps.toolbeltSlots[i] = { type: 'potion', count: s.count + 1 };
+      return true;
+    }
+  }
+  return addPotionToInventory(ps);
+}
+
+/**
  * Add one page to inventory. Returns true if added.
  */
 export function addPageToInventory(ps: PlayingStateShape): boolean {

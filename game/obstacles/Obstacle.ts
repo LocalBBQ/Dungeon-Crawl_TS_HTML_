@@ -25,9 +25,9 @@ export class Obstacle {
   id?: string;
   /** If true, entity movement is not blocked (e.g. hub decorations that may not render). */
   passable?: boolean;
-  /** For caveEntrance: level to transition to when entering (e.g. 12 = Ogre's Den). */
+  /** For scene entrances: level to transition to when entering (e.g. 12 = Ogre's Den). */
   targetLevel?: number;
-  /** For caveEntrance: level to return to when leaving the target (e.g. 1 = Village Outskirts). */
+  /** For scene entrances/exits: level to return to when leaving the target (e.g. 1 = Village Outskirts). */
   returnLevel?: number;
 
   constructor(x: number, y: number, width: number, height: number, type = 'tree') {

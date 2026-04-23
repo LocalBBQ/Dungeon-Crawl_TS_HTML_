@@ -5,6 +5,7 @@
 import type { Quest } from '../types/quest.js';
 import type { ItemRarity } from '../config/rarityConfig.js';
 import { getDefaultUnlockedRecipeIds, getDefaultStrategyLoadoutSlotIds, STRATEGY_LOADOUT_SLOT_COUNT } from '../config/strategyCraftingConfig.js';
+import { CRAFTING_SCHEMA_VERSION, getDefaultUnlockedStationRecipeIds } from '../config/craftingConfig.js';
 
 export interface PortalState {
   x: number;
@@ -152,16 +153,16 @@ export interface PlayingStateShape {
   portal: PortalState | null;
   portalUseCooldown: number;
   playerNearPortal: boolean;
-  /** 0..1 progress while channeling portal/stairs (E or B); 0 when not channeling. */
+  /** 0..1 progress while portal/stairs channel runs after tapping E; 0 when idle. */
   portalChannelProgress: number;
   /** Which action is being channeled: 'e' = next area, 'b' = return to sanctuary; null when not channeling. */
   portalChannelAction: 'e' | 'b' | null;
-  /** 0..1 progress while holding B to spawn recall portal; 0 when not holding. */
+  /** 0..1 progress while recall portal spawn channel runs (tap B to start); 0 when idle. */
   recallChannelProgress: number;
-  /** Player-spawned blue portal (hold B 2.5s); E at portal returns to Sanctuary and keeps inventory. */
+  /** Player-spawned blue portal (tap B to start 2.5s channel); tap E at portal returns to Sanctuary and keeps inventory. */
   recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean } | null;
   playerNearRecallPortal: boolean;
-  /** 0..1 channel progress while holding E at recall portal; 0 when not channeling. */
+  /** 0..1 channel progress after tapping E at recall portal; 0 when not channeling. */
   recallPortalChannelProgress: number;
   board: BoardState | null;
   boardOpen: boolean;
@@ -170,7 +171,7 @@ export interface PlayingStateShape {
   /** In hub: player is within quest portal bounds (when activeQuest is set). */
   playerNearQuestPortal: boolean;
   questPortalUseCooldown: number;
-  /** 0..1 channel progress for entering quest via hub quest portal; 0 when not channeling. */
+  /** 0..1 channel progress after tapping E at hub quest portal; 0 when idle. */
   questPortalChannelProgress: number;
   chest: ChestState | null;
   chestOpen: boolean;
@@ -265,28 +266,20 @@ export interface PlayingStateShape {
   savedSanctuaryStamina?: number;
   /** When entering level 12 from a cave entrance, set to return level (e.g. 1); portal then returns here instead of hub. */
   portalReturnLevel: number | null;
-  /** In hub: level to re-enter via blue portal (set when returning from a quest). */
-  hubReenterLevel: number | null;
-  /** In hub: quest to restore when re-entering (same quest that was left). */
-  hubReenterQuest: Quest | null;
-  /** In hub: delve floor to restore when re-entering a delve. */
-  hubReenterDelveFloor: number;
-  /** True when returning to hub via blue recall portal (E at blue); only then show blue re-enter portal in hub. Cleared in startGame(). */
+  /** True when returning to hub via blue recall portal (E at blue); used so the run is not marked complete on hub load. Cleared in startGame(). */
   returnedViaBlueRecall?: boolean;
-  playerNearReenterPortal: boolean;
-  reenterPortalChannelProgress: number;
-  /** True when player overlaps a caveEntrance obstacle (level 1 etc). */
-  playerNearCaveEntrance: boolean;
-  /** World rect of the cave entrance the player is overlapping (for prompt position). */
-  caveEntranceRect: { x: number; y: number; width: number; height: number } | null;
-  /** 0..1 channel progress for entering cave; 0 when not channeling. */
-  caveEntranceChannelProgress: number;
-  /** True when player overlaps a caveExit obstacle (inside cave, exit back to previous level). */
-  playerNearCaveExit: boolean;
-  /** World rect of the cave exit the player is overlapping (for prompt position). */
-  caveExitRect: { x: number; y: number; width: number; height: number } | null;
-  /** 0..1 channel progress for exiting cave; 0 when not channeling. */
-  caveExitChannelProgress: number;
+  /** True when player overlaps a scene entrance obstacle (cave/door/portal-style) with targetLevel. */
+  playerNearSceneEntrance: boolean;
+  /** World rect of the scene entrance the player is overlapping (for prompt position). */
+  sceneEntranceRect: { x: number; y: number; width: number; height: number } | null;
+  /** 0..1 channel progress for entering an interior scene; 0 when not channeling. */
+  sceneEntranceChannelProgress: number;
+  /** True when player overlaps a scene exit obstacle (inside interior, returns to portalReturnLevel). */
+  playerNearSceneExit: boolean;
+  /** World rect of the scene exit the player is overlapping (for prompt position). */
+  sceneExitRect: { x: number; y: number; width: number; height: number } | null;
+  /** 0..1 channel progress for exiting interior scene; 0 when not channeling. */
+  sceneExitChannelProgress: number;
   /** Strategy Crafting: true while V is held. */
   strategyCraftingOpen: boolean;
   /** Recipe ids the player has collected (unlocked). */
@@ -295,6 +288,13 @@ export interface PlayingStateShape {
   strategyLoadoutSlotIds: (string | null)[];
   /** Selected recipe id in the Strategy Crafting pane. */
   selectedStrategyRecipeId: string | null;
+  craftingVersion?: number;
+  craftingStation: { x: number; y: number; width: number; height: number } | null;
+  craftingStationOpen: boolean;
+  craftingStationUseCooldown: number;
+  playerNearCraftingStation: boolean;
+  unlockedStationRecipeIds: string[];
+  selectedStationRecipeId: string | null;
   /** Player class chosen at new game (affects starting loadouts). */
   playerClass?: PlayerClass;
   /** Which weapon set is active (0 or 1). Swapped with R. */
@@ -483,6 +483,23 @@ export function migratePlayingStateWeaponKeys(ps: PlayingStateShape): void {
   if (ps.rerollSlotItem?.key) ps.rerollSlotItem = { ...ps.rerollSlotItem, key: m(ps.rerollSlotItem.key) };
 }
 
+export function migratePlayingStateCrafting(ps: PlayingStateShape): void {
+  const currentVersion = ps.craftingVersion ?? 0;
+  if (currentVersion >= CRAFTING_SCHEMA_VERSION) return;
+  if (!Array.isArray(ps.unlockedStrategyRecipeIds)) ps.unlockedStrategyRecipeIds = getDefaultUnlockedRecipeIds();
+  if (!Array.isArray(ps.strategyLoadoutSlotIds) || ps.strategyLoadoutSlotIds.length !== STRATEGY_LOADOUT_SLOT_COUNT) {
+    ps.strategyLoadoutSlotIds = getDefaultStrategyLoadoutSlotIds(ps.unlockedStrategyRecipeIds);
+  }
+  if (!Array.isArray(ps.unlockedStationRecipeIds)) ps.unlockedStationRecipeIds = getDefaultUnlockedStationRecipeIds();
+  if (ps.selectedStrategyRecipeId && !ps.unlockedStrategyRecipeIds.includes(ps.selectedStrategyRecipeId)) {
+    ps.selectedStrategyRecipeId = null;
+  }
+  if (ps.selectedStationRecipeId && !ps.unlockedStationRecipeIds.includes(ps.selectedStationRecipeId)) {
+    ps.selectedStationRecipeId = null;
+  }
+  ps.craftingVersion = CRAFTING_SCHEMA_VERSION;
+}
+
 /** Max durability per weapon. Each confirmed hit costs 1. */
 export const MAX_WEAPON_DURABILITY = 300;
 
@@ -580,22 +597,24 @@ const defaultPlayingState = (
     hubSelectedMainQuestIndex: 0,
     screenBeforePause: null,
     portalReturnLevel: null,
-    hubReenterLevel: null,
-    hubReenterQuest: null,
-    hubReenterDelveFloor: 0,
     returnedViaBlueRecall: false,
-    playerNearReenterPortal: false,
-    reenterPortalChannelProgress: 0,
-    playerNearCaveEntrance: false,
-    caveEntranceRect: null,
-    caveEntranceChannelProgress: 0,
-    playerNearCaveExit: false,
-    caveExitRect: null,
-    caveExitChannelProgress: 0,
+    playerNearSceneEntrance: false,
+    sceneEntranceRect: null,
+    sceneEntranceChannelProgress: 0,
+    playerNearSceneExit: false,
+    sceneExitRect: null,
+    sceneExitChannelProgress: 0,
     strategyCraftingOpen: false,
     unlockedStrategyRecipeIds: getDefaultUnlockedRecipeIds(),
     strategyLoadoutSlotIds: getDefaultStrategyLoadoutSlotIds(getDefaultUnlockedRecipeIds()),
-    selectedStrategyRecipeId: null
+    selectedStrategyRecipeId: null,
+    craftingVersion: CRAFTING_SCHEMA_VERSION,
+    craftingStation: null,
+    craftingStationOpen: false,
+    craftingStationUseCooldown: 0,
+    playerNearCraftingStation: false,
+    unlockedStationRecipeIds: getDefaultUnlockedStationRecipeIds(),
+    selectedStationRecipeId: null
   };
 };
 
@@ -679,22 +698,24 @@ export class PlayingState implements PlayingStateShape {
   shopExpandedArmor?: Record<string, boolean>;
   shopExpandedCategories?: Record<string, boolean>;
   portalReturnLevel: number | null = null;
-  hubReenterLevel: number | null = null;
-  hubReenterQuest: Quest | null = null;
-  hubReenterDelveFloor = 0;
   returnedViaBlueRecall: boolean = false;
-  playerNearReenterPortal = false;
-  reenterPortalChannelProgress = 0;
-  playerNearCaveEntrance = false;
-  caveEntranceRect: { x: number; y: number; width: number; height: number } | null = null;
-  caveEntranceChannelProgress = 0;
-  playerNearCaveExit = false;
-  caveExitRect: { x: number; y: number; width: number; height: number } | null = null;
-  caveExitChannelProgress = 0;
+  playerNearSceneEntrance = false;
+  sceneEntranceRect: { x: number; y: number; width: number; height: number } | null = null;
+  sceneEntranceChannelProgress = 0;
+  playerNearSceneExit = false;
+  sceneExitRect: { x: number; y: number; width: number; height: number } | null = null;
+  sceneExitChannelProgress = 0;
   strategyCraftingOpen = false;
   unlockedStrategyRecipeIds: string[] = getDefaultUnlockedRecipeIds();
   strategyLoadoutSlotIds: (string | null)[] = getDefaultStrategyLoadoutSlotIds(getDefaultUnlockedRecipeIds());
   selectedStrategyRecipeId: string | null = null;
+  craftingVersion = CRAFTING_SCHEMA_VERSION;
+  craftingStation: { x: number; y: number; width: number; height: number } | null = null;
+  craftingStationOpen = false;
+  craftingStationUseCooldown = 0;
+  playerNearCraftingStation = false;
+  unlockedStationRecipeIds: string[] = getDefaultUnlockedStationRecipeIds();
+  selectedStationRecipeId: string | null = null;
   playerClass?: PlayerClass;
   activeWeaponSet: 0 | 1 = 0;
   equippedMainhandKey2 = 'none';

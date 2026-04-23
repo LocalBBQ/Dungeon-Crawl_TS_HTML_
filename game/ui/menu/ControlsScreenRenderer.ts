@@ -15,8 +15,8 @@ const LINES = [
     'Right click — Block',
     'Q — Heal (tap to drink, then regen)',
     'Shift + Left click — Dash attack',
-    'E — Portal (next area or return to Sanctuary)',
-    'Hold B — Spawn blue recall portal (2.5s); E at portal to return to Sanctuary (keeps inventory)',
+    'E — Portal (tap E at portal to channel; next area or return to Sanctuary)',
+    'B — Start recall portal channel (2.5s); tap E at blue portal to return to Sanctuary (keeps inventory)',
     'In Sanctuary: E at board — Level select · E at chest — Equipment · E at shop — Buy weapons'
 ];
 

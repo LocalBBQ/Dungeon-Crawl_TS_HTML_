@@ -138,10 +138,10 @@ export class MinimapRenderer {
         }
 
         const obstacleManager = systems && systems.get ? (systems.get('obstacles') as { obstacles: { type?: string; color?: string; x?: number; y?: number; width?: number; height?: number }[] } | null) : null;
-        type ObstacleLike = { type?: string; color?: string; x?: number; y?: number; width?: number; height?: number };
+        type ObstacleLike = { type?: string; color?: string; x?: number; y?: number; width?: number; height?: number; targetLevel?: number };
         if (obstacleManager) {
             for (const obstacle of obstacleManager.obstacles as ObstacleLike[]) {
-                if (obstacle.type === 'caveEntrance') {
+                if (typeof obstacle.targetLevel === 'number' || obstacle.type === 'caveEntrance' || obstacle.type?.endsWith('Entrance')) {
                     ctx.fillStyle = obstacle.color || 'rgba(60, 50, 35, 0.9)';
                     ctx.fillRect(obstacle.x ?? 0, obstacle.y ?? 0, obstacle.width ?? 0, obstacle.height ?? 0);
                     const cx = (obstacle.x ?? 0) + (obstacle.width ?? 0) / 2;

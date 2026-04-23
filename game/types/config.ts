@@ -85,7 +85,7 @@ export interface GameConfigShape {
     spawn?: { maxEnemies: number };
   };
   packModifiers?: Record<string, { damageMultiplier?: number; healthMultiplier?: number; speedMultiplier?: number; color?: string; knockbackResist?: number; attackCooldownMultiplier?: number; stunBuildupPerHitMultiplier?: number; detectionRangeMultiplier?: number }>;
-  portal?: { x: number; y: number; width: number; height: number; /** Seconds to hold E/B to complete portal/stairs use. */ channelTime?: number };
+  portal?: { x: number; y: number; width: number; height: number; /** Seconds to complete portal/stairs channel after E starts it (tap to start, no hold). */ channelTime?: number };
   hub?: {
     name?: string;
     tileSize?: number;
@@ -97,8 +97,6 @@ export interface GameConfigShape {
     shopkeeper?: { x: number; y: number; width: number; height: number };
     /** Spawn position for the quest portal when a quest is accepted (player enters to go to quest). */
     questPortal?: { x: number; y: number; width: number; height: number };
-    /** Blue portal in hub to re-enter the quest that was just left (when returning from a level). */
-    reenterPortal?: { x: number; y: number; width: number; height: number };
     /** Training dummy position (center or top-left). Spawned only in hub. */
     trainingDummy?: { x: number; y: number };
     rerollStation?: { x: number; y: number; width: number; height: number };

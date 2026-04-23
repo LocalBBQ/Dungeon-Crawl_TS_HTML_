@@ -1,24 +1,21 @@
 /**
- * Strategy Crafting: execute recipes (craft, use item, ability).
- * Caller can pass context for side effects (e.g. add heal charge via player entity).
+ * Shared craft execution for sanctuary station (click) and field strategy (sequence).
  */
 import type { PlayingStateShape } from './PlayingState.js';
 import { INVENTORY_SLOT_COUNT, isHerbSlot, isMushroomSlot, isWhetstoneSlot } from './PlayingState.js';
-import { getStrategyRecipe, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
+import { getCraftRecipe, type CraftStationKind } from '../config/craftingConfig.js';
+import { migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
 import {
   addCraftedPotionToToolbeltOrInventory,
   addEnchantScrollToInventory,
-  useWhetstoneOnWeapon,
   countPages,
-  consumePages
+  consumePages,
+  useWhetstoneOnWeapon
 } from './InventoryActions.js';
 
-export type ExecuteRecipeResult =
-  | { success: true }
-  | { success: false; reason: string };
+export type CraftResult = { success: true } | { success: false; reason: string };
 
-export interface StrategyCraftingContext {
-  /** Add one heal charge to the player (e.g. crafted potion). */
+export interface CraftContext {
   addHealCharge?(): void;
 }
 
@@ -71,19 +68,30 @@ function findWhetstoneSlotIndex(ps: PlayingStateShape): number {
   return ps.inventorySlots.findIndex((s) => isWhetstoneSlot(s) && s.count >= 1);
 }
 
-/**
- * Execute a strategy recipe by id. Returns a result with success and optional failure reason.
- */
-export function executeRecipe(
+function isRecipeUnlocked(ps: PlayingStateShape, recipeId: string, station: CraftStationKind): boolean {
+  if (station === 'sanctuaryStation') {
+    const ids = ps.unlockedStationRecipeIds ?? [];
+    return ids.includes(recipeId);
+  }
+  return migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []).includes(recipeId);
+}
+
+export function craftRecipe(
   ps: PlayingStateShape,
   recipeId: string,
-  context?: StrategyCraftingContext
-): ExecuteRecipeResult {
-  const unlocked = migrateUnlockedStrategyRecipeIds(ps.unlockedStrategyRecipeIds ?? []);
-  if (!unlocked.includes(recipeId)) return { success: false, reason: 'Recipe not unlocked' };
+  station: CraftStationKind,
+  context?: CraftContext
+): CraftResult {
+  if (!isRecipeUnlocked(ps, recipeId, station)) {
+    return { success: false, reason: 'Recipe not unlocked' };
+  }
 
-  const recipe = getStrategyRecipe(recipeId);
+  const recipe = getCraftRecipe(recipeId);
   if (!recipe) return { success: false, reason: 'Unknown recipe' };
+
+  if (!recipe.allowedStations.includes(station)) {
+    return { success: false, reason: 'Recipe not available here' };
+  }
 
   const out = recipe.output;
 
@@ -98,15 +106,19 @@ export function executeRecipe(
     if (herbNeed > 0 && !hasHerb) return { success: false, reason: 'Not enough herbs' };
     if (mushroomNeed > 0 && !hasMushroom) return { success: false, reason: 'Not enough mushrooms' };
     if (pageNeed > 0 && !hasPages) return { success: false, reason: 'Not enough pages' };
+
     consumeHerbs(ps, herbNeed);
     consumeMushrooms(ps, mushroomNeed);
     if (pageNeed > 0) consumePages(ps, pageNeed);
+
     if (out.produces === 'healCharge' && context?.addHealCharge) {
       context.addHealCharge();
     } else if (out.produces === 'potion') {
       if (!addCraftedPotionToToolbeltOrInventory(ps)) return { success: false, reason: 'Inventory full' };
     } else if (out.produces === 'enchantScroll') {
       if (!addEnchantScrollToInventory(ps)) return { success: false, reason: 'Inventory full' };
+    } else {
+      return { success: false, reason: 'Unknown craft output' };
     }
     return { success: true };
   }
@@ -120,7 +132,6 @@ export function executeRecipe(
   }
 
   if (out.type === 'ability') {
-    // Placeholder for future ability system
     return { success: true };
   }
 

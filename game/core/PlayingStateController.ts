@@ -13,6 +13,9 @@ import { Combat } from '../components/Combat.js';
 import type { EntityShape } from '../types/entity.js';
 import { updateCrossbowReload } from '../utils/crossbowReload.js';
 
+/** Tap-to-start channels use InputSystem.consumeKeyJustPressed (no need to hold E/B). */
+type ChannelInput = { isKeyPressed(key: string): boolean; consumeKeyJustPressed(key: string): boolean };
+
 export interface PlayingStateControllerContext {
     playingState: PlayingStateShape;
     systems: {
@@ -42,6 +45,10 @@ export class PlayingStateController {
 
     updatePortal(deltaTime: number, player: EntityShape | undefined) {
         const g = this.game;
+        const isSceneEntranceObstacle = (obs: { type: string; targetLevel?: number }): boolean =>
+            obs.targetLevel != null || obs.type === 'caveEntrance' || obs.type.endsWith('Entrance');
+        const isSceneExitObstacle = (obs: { type: string; isScenarioExit?: boolean }): boolean =>
+            obs.type === 'caveExit' || obs.type === 'scenarioExit' || obs.type.endsWith('Exit') || obs.isScenarioExit === true;
         if (!g.playingState.portal) {
             g.playingState.playerNearPortal = false;
             return;
@@ -63,7 +70,7 @@ export class PlayingStateController {
         let caveEntranceOverlap: { targetLevel: number; returnLevel: number; x: number; y: number; width: number; height: number } | null = null;
         if (transform && obstacleManager?.obstacles) {
             for (const obs of obstacleManager.obstacles) {
-                if (obs.type !== 'caveEntrance' || obs.targetLevel == null) continue;
+                if (!isSceneEntranceObstacle(obs) || obs.targetLevel == null) continue;
                 const overlap = Utils.rectCollision(
                     transform.left, transform.top, transform.width, transform.height,
                     obs.x, obs.y, obs.width, obs.height
@@ -74,16 +81,16 @@ export class PlayingStateController {
                 }
             }
         }
-        g.playingState.playerNearCaveEntrance = caveEntranceOverlap != null;
-        g.playingState.caveEntranceRect = caveEntranceOverlap ? { x: caveEntranceOverlap.x, y: caveEntranceOverlap.y, width: caveEntranceOverlap.width, height: caveEntranceOverlap.height } : null;
+        g.playingState.playerNearSceneEntrance = caveEntranceOverlap != null;
+        g.playingState.sceneEntranceRect = caveEntranceOverlap ? { x: caveEntranceOverlap.x, y: caveEntranceOverlap.y, width: caveEntranceOverlap.width, height: caveEntranceOverlap.height } : null;
         if (!caveEntranceOverlap) {
-            g.playingState.caveEntranceChannelProgress = 0;
+            g.playingState.sceneEntranceChannelProgress = 0;
         } else {
-            const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
+            const inputSystem = g.systems.get('input') as ChannelInput | undefined;
             const channelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime != null) ? (GameConfig.portal as { channelTime: number }).channelTime : 1.2;
-            if (inputSystem?.isKeyPressed('e')) {
-                g.playingState.caveEntranceChannelProgress = Math.min(1, g.playingState.caveEntranceChannelProgress + deltaTime / channelTime);
-                if (g.playingState.caveEntranceChannelProgress >= 1) {
+            if (g.playingState.sceneEntranceChannelProgress > 0) {
+                g.playingState.sceneEntranceChannelProgress = Math.min(1, g.playingState.sceneEntranceChannelProgress + deltaTime / channelTime);
+                if (g.playingState.sceneEntranceChannelProgress >= 1) {
                     g.playingState.portalReturnLevel = caveEntranceOverlap.returnLevel;
                     // Serialize current level map so we can restore it when leaving the cave (e.g. ogre den).
                     const returnLevel = caveEntranceOverlap.returnLevel ?? 1;
@@ -100,11 +107,11 @@ export class PlayingStateController {
                     g.screenManager.selectedStartLevel = caveEntranceOverlap.targetLevel;
                     // Do not set activeQuest here: ogre is only the quest objective when the player chose "The Ogre's Den" from the hub. Entering the cave from outskirts is a random encounter; keep current quest (or null).
                     g.startGame();
-                    g.playingState.caveEntranceChannelProgress = 0;
+                    g.playingState.sceneEntranceChannelProgress = 0;
                     return;
                 }
-            } else {
-                g.playingState.caveEntranceChannelProgress = 0;
+            } else if (inputSystem?.consumeKeyJustPressed('e')) {
+                g.playingState.sceneEntranceChannelProgress = Math.min(1, deltaTime / channelTime);
             }
         }
 
@@ -127,12 +134,12 @@ export class PlayingStateController {
                     if (obsMgr?.addObstacle) {
                         const exitX = (worldW - exitW) / 2;
                         const exitY = perimeterMargin;
-                        obsMgr.addObstacle(exitX, exitY, exitW, exitH, 'caveExit', null, { passable: true });
+                        obsMgr.addObstacle(exitX, exitY, exitW, exitH, 'scenarioExit', null, { passable: true, isScenarioExit: true });
                         g.playingState.ogreDenExitSpawned = true;
                     }
                 }
                 for (const obs of obstacleManager.obstacles) {
-                    if (obs.type !== 'caveExit') continue;
+                    if (!isSceneExitObstacle(obs)) continue;
                     const overlap = Utils.rectCollision(
                         transform.left, transform.top, transform.width, transform.height,
                         obs.x, obs.y, obs.width, obs.height
@@ -144,8 +151,8 @@ export class PlayingStateController {
                 }
             }
         }
-        g.playingState.playerNearCaveExit = caveExitOverlap != null;
-        g.playingState.caveExitRect = caveExitOverlap;
+        g.playingState.playerNearSceneExit = caveExitOverlap != null;
+        g.playingState.sceneExitRect = caveExitOverlap;
         if (caveExitOverlap) {
             const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
             if (inputSystem?.isKeyPressed('e')) {
@@ -239,7 +246,7 @@ export class PlayingStateController {
         }
         if (g.playingState.portalUseCooldown > 0) return;
 
-        const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
+        const inputSystem = g.systems.get('input') as ChannelInput | undefined;
         if (!inputSystem) return;
 
         const channelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime != null)
@@ -260,9 +267,9 @@ export class PlayingStateController {
             });
         };
 
-        // Portal interact key is E only: E = next area when available, else E = return to sanctuary
+        // Portal: tap E once to start channel; progress completes while still in range (no need to hold E).
         if (g.playingState.portalChannelAction !== null) {
-            if (!inputSystem.isKeyPressed('e')) {
+            if (!overlap) {
                 g.playingState.portalChannelProgress = 0;
                 g.playingState.portalChannelAction = null;
                 return;
@@ -277,43 +284,60 @@ export class PlayingStateController {
                 } else {
                     doNextLevel();
                 }
-                return;
             }
             return;
         }
 
-        if (inputSystem.isKeyPressed('e')) {
+        if (inputSystem.consumeKeyJustPressed('e')) {
             const action = g.playingState.portal.hasNextLevel ? 'e' : 'b';
             g.playingState.portalChannelAction = action;
-            g.playingState.portalChannelProgress = 0;
+            g.playingState.portalChannelProgress = Math.min(1, deltaTime / channelTime);
             if (channelTime <= 0) {
                 if (action === 'b') doReturnToSanctuary();
                 else doNextLevel();
                 g.playingState.portalChannelAction = null;
+                g.playingState.portalChannelProgress = 0;
             }
         }
     }
 
-    /** When in a level: hold B (and not at recall portal) for 2.5s to spawn a blue recall portal; E at it returns to Sanctuary and keeps inventory. */
+    /** When in a level: tap B to start recall spawn channel (2.5s); E at blue portal returns to Sanctuary and keeps inventory. */
     updateRecallChannel(deltaTime: number) {
         const g = this.game;
         if (g.playingState.recallPortal?.spawned) return;
-        if (g.playingState.portal && g.playingState.playerNearPortal) return;
-        const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
-        if (!inputSystem) return;
-        const channelTime = 2.5;
-        if (!inputSystem.isKeyPressed('b')) {
+        if (g.playingState.portal && g.playingState.playerNearPortal) {
             g.playingState.recallChannelProgress = 0;
             return;
         }
-        g.playingState.recallChannelProgress = Math.min(1, g.playingState.recallChannelProgress + deltaTime / channelTime);
+        const inputSystem = g.systems.get('input') as ChannelInput | undefined;
+        if (!inputSystem) return;
+        const channelTime = 2.5;
+        if (g.playingState.recallChannelProgress > 0) {
+            g.playingState.recallChannelProgress = Math.min(1, g.playingState.recallChannelProgress + deltaTime / channelTime);
+        } else if (inputSystem.consumeKeyJustPressed('b')) {
+            g.playingState.recallChannelProgress = Math.min(1, deltaTime / channelTime);
+        } else {
+            return;
+        }
         if (g.playingState.recallChannelProgress >= 1) {
             g.playingState.recallChannelProgress = 0;
             const { width: worldW, height: worldH } = g.getCurrentWorldSize();
             const pw = 80;
             const ph = 80;
-            let rx: number, ry: number;
-            if (g.playingState.portal) {
+            const player = g.entities.get('player');
+            const pt = player?.getComponent(Transform);
+            let rx: number;
+            let ry: number;
+            if (pt) {
+                const angle = Math.random() * Math.PI * 2;
+                const minR = 56;
+                const maxR = 112;
+                const radius = minR + Math.random() * (maxR - minR);
+                rx = pt.x + Math.cos(angle) * radius - pw / 2;
+                ry = pt.y + Math.sin(angle) * radius - ph / 2;
+                rx = Math.max(0, Math.min(worldW - pw, rx));
+                ry = Math.max(0, Math.min(worldH - ph, ry));
+            } else if (g.playingState.portal) {
                 rx = g.playingState.portal.x + (g.playingState.portal.width - pw) / 2;
                 ry = g.playingState.portal.y + (g.playingState.portal.height - ph) / 2;
                 rx = Math.max(0, Math.min(worldW - pw, rx));
@@ -343,7 +367,7 @@ export class PlayingStateController {
             rp.x, rp.y, rp.width, rp.height
         );
         g.playingState.playerNearRecallPortal = overlap;
-        const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
+        const inputSystem = g.systems.get('input') as ChannelInput | undefined;
         if (!inputSystem) return;
         const channelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime != null)
             ? (GameConfig.portal as { channelTime: number }).channelTime
@@ -352,11 +376,13 @@ export class PlayingStateController {
             g.playingState.recallPortalChannelProgress = 0;
             return;
         }
-        if (!inputSystem.isKeyPressed('e')) {
-            g.playingState.recallPortalChannelProgress = 0;
+        if (g.playingState.recallPortalChannelProgress > 0) {
+            g.playingState.recallPortalChannelProgress = Math.min(1, g.playingState.recallPortalChannelProgress + deltaTime / channelTime);
+        } else if (inputSystem.consumeKeyJustPressed('e')) {
+            g.playingState.recallPortalChannelProgress = Math.min(1, deltaTime / channelTime);
+        } else {
             return;
         }
-        g.playingState.recallPortalChannelProgress = Math.min(1, g.playingState.recallPortalChannelProgress + deltaTime / channelTime);
         if (g.playingState.recallPortalChannelProgress >= 1) {
             g.playingState.recallPortal = null;
             g.playingState.recallPortalChannelProgress = 0;
@@ -383,7 +409,10 @@ export class PlayingStateController {
         if (g.playingState.questPortalUseCooldown > 0) {
             g.playingState.questPortalUseCooldown = Math.max(0, g.playingState.questPortalUseCooldown - deltaTime);
         }
-        if (g.playingState.boardOpen || g.playingState.chestOpen || g.playingState.shopOpen || g.playingState.rerollStationOpen) return;
+        if (g.playingState.craftingStationUseCooldown > 0) {
+            g.playingState.craftingStationUseCooldown = Math.max(0, g.playingState.craftingStationUseCooldown - deltaTime);
+        }
+        if (g.playingState.boardOpen || g.playingState.chestOpen || g.playingState.shopOpen || g.playingState.rerollStationOpen || g.playingState.craftingStationOpen) return;
 
         g.handleCameraZoom();
 
@@ -398,7 +427,7 @@ export class PlayingStateController {
         g.systems.update?.(deltaTime);
 
         const cameraSystem = g.systems.get('camera') as { follow(transform: unknown, w: number, h: number): void } | undefined;
-        const inputSystem = g.systems.get('input') as { isKeyPressed(key: string): boolean } | undefined;
+        const inputSystem = g.systems.get('input') as ChannelInput | undefined;
         if (player) {
             const transform = player.getComponent(Transform);
             if (transform && cameraSystem) {
@@ -490,47 +519,38 @@ export class PlayingStateController {
         } else {
             g.playingState.playerNearRerollStation = false;
         }
-        // Reenter portal in hub: blue portal to re-enter the quest that was just left
-        const hubConfig = GameConfig.hub as { questPortal?: { x: number; y: number; width: number; height: number }; reenterPortal?: { x: number; y: number; width: number; height: number } };
-        const reenterPortalConfig = hubConfig && hubConfig.reenterPortal;
-        const questChannelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime) ?? 1.2;
-        if (player && g.playingState.hubReenterLevel != null && reenterPortalConfig) {
+        if (!g.playingState.craftingStation && (GameConfig.hub as { craftingStation?: { x: number; y: number; width: number; height: number } })?.craftingStation) {
+            g.playingState.craftingStation = { ...(GameConfig.hub as { craftingStation: { x: number; y: number; width: number; height: number } }).craftingStation };
+        }
+        if (player && g.playingState.craftingStation) {
             const transform = player.getComponent(Transform);
             if (transform) {
                 const overlap = Utils.rectCollision(
                     transform.left, transform.top, transform.width, transform.height,
-                    reenterPortalConfig.x, reenterPortalConfig.y, reenterPortalConfig.width, reenterPortalConfig.height
+                    g.playingState.craftingStation.x, g.playingState.craftingStation.y, g.playingState.craftingStation.width, g.playingState.craftingStation.height
                 );
-                g.playingState.playerNearReenterPortal = overlap;
-                if (!overlap) {
-                    g.playingState.reenterPortalChannelProgress = 0;
-                } else if (inputSystem && inputSystem.isKeyPressed('e')) {
-                    g.playingState.reenterPortalChannelProgress = Math.min(1, g.playingState.reenterPortalChannelProgress + deltaTime / questChannelTime);
-                    if (g.playingState.reenterPortalChannelProgress >= 1) {
-                        g.playingState.activeQuest = g.playingState.hubReenterQuest;
-                        g.screenManager.selectedStartLevel = g.playingState.hubReenterLevel;
-                        if (g.playingState.hubReenterQuest?.questType === 'delve') {
-                            g.playingState.delveFloor = g.playingState.hubReenterDelveFloor;
-                        }
-                        g.playingState.hubReenterLevel = null;
-                        g.playingState.hubReenterQuest = null;
-                        g.playingState.hubReenterDelveFloor = 0;
-                        g.playingState.reenterPortalChannelProgress = 0;
-                        g.startGame();
-                    }
-                } else {
-                    g.playingState.reenterPortalChannelProgress = 0;
+                g.playingState.playerNearCraftingStation = overlap;
+                if (
+                    overlap &&
+                    !g.playingState.playerNearRerollStation &&
+                    g.playingState.craftingStationUseCooldown <= 0 &&
+                    inputSystem &&
+                    inputSystem.isKeyPressed('e')
+                ) {
+                    g.playingState.craftingStationOpen = true;
+                    g.playingState.craftingStationUseCooldown = 0.4;
+                    g.clearPlayerInputsForMenu();
                 }
             } else {
-                g.playingState.playerNearReenterPortal = false;
-                g.playingState.reenterPortalChannelProgress = 0;
+                g.playingState.playerNearCraftingStation = false;
             }
         } else {
-            g.playingState.playerNearReenterPortal = false;
-            g.playingState.reenterPortalChannelProgress = 0;
+            g.playingState.playerNearCraftingStation = false;
         }
+        const hubConfig = GameConfig.hub as { questPortal?: { x: number; y: number; width: number; height: number } };
+        const questChannelTime = (GameConfig.portal && (GameConfig.portal as { channelTime?: number }).channelTime) ?? 1.2;
 
-        // Quest portal in hub: when a quest is accepted, a portal spawns; hold E at portal to channel and start the quest
+        // Quest portal in hub: tap E once at portal to start channel; completes without holding E.
         const questPortalConfig = hubConfig && hubConfig.questPortal;
         if (player && g.playingState.activeQuest && questPortalConfig) {
             const transform = player.getComponent(Transform);
@@ -542,7 +562,9 @@ export class PlayingStateController {
                 g.playingState.playerNearQuestPortal = overlap;
                 if (!overlap) {
                     g.playingState.questPortalChannelProgress = 0;
-                } else if (g.playingState.questPortalUseCooldown <= 0 && inputSystem && inputSystem.isKeyPressed('e')) {
+                } else if (g.playingState.questPortalUseCooldown > 0) {
+                    g.playingState.questPortalChannelProgress = 0;
+                } else if (g.playingState.questPortalChannelProgress > 0) {
                     g.playingState.questPortalChannelProgress = Math.min(1, g.playingState.questPortalChannelProgress + deltaTime / questChannelTime);
                     if (g.playingState.questPortalChannelProgress >= 1) {
                         g.screenManager.selectedStartLevel = g.playingState.activeQuest.level;
@@ -550,8 +572,8 @@ export class PlayingStateController {
                         g.playingState.questPortalChannelProgress = 0;
                         g.startGame();
                     }
-                } else {
-                    g.playingState.questPortalChannelProgress = 0;
+                } else if (inputSystem?.consumeKeyJustPressed('e')) {
+                    g.playingState.questPortalChannelProgress = Math.min(1, deltaTime / questChannelTime);
                 }
             } else {
                 g.playingState.playerNearQuestPortal = false;

@@ -42,7 +42,7 @@ import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import type { GameRef, GameConfigShape } from '../types/index.js';
 import type { GameSystems } from '../types/systems.js';
-import { PlayingState, getActiveWeaponSet, swapActiveWeaponSet, migratePlayingStateWeaponKeys, type PlayerClass, type PlayingStateShape, type InventorySlot, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
+import { PlayingState, getActiveWeaponSet, swapActiveWeaponSet, migratePlayingStateWeaponKeys, migratePlayingStateCrafting, type PlayerClass, type PlayingStateShape, type InventorySlot, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import {
     addHerbToInventory,
     addMushroomToInventory,
@@ -69,6 +69,8 @@ import { PlayingStateController } from './PlayingStateController.js';
 import { StrategyCraftingInputController } from '../controllers/StrategyCraftingInputController.js';
 import { getDefaultStrategyLoadoutSlotIds, migrateUnlockedStrategyRecipeIds, STRATEGY_LOADOUT_SLOT_COUNT } from '../config/strategyCraftingConfig.js';
 import { setStrategyCraftingPaneVisible, updateStrategyCraftingPane, showRecipeSuccess, showStrategyCraftNotification, initStrategyCraftingPaneDraggable } from '../ui/StrategyCraftingPane.js';
+import { setStationCraftingPaneVisible, showStationCraftingNotification, updateStationCraftingPane } from '../ui/StationCraftingPane.js';
+import { craftRecipe } from '../state/CraftingActions.js';
 import { HUDController } from '../ui/HUDController.js';
 import { updateCrossbowReload } from '../utils/crossbowReload.js';
 import { AI } from '../components/AI.js';
@@ -266,6 +268,7 @@ class Game {
     set inventoryOpen(v) { this.playingState.inventoryOpen = v; }
     get chestOpen() { return this.playingState.chestOpen; }
     get strategyCraftingOpen() { return this.playingState.strategyCraftingOpen; }
+    get craftingStationOpen() { return this.playingState.craftingStationOpen; }
     set chestOpen(v) { this.playingState.chestOpen = v; }
     get shopOpen() { return this.playingState.shopOpen; }
     set shopOpen(v) { this.playingState.shopOpen = v; }
@@ -789,6 +792,27 @@ class Game {
             this.screenManager.setPressedButton(null);
         });
 
+        document.addEventListener('mousedown', (e) => {
+            if (!this.playingState.craftingStationOpen) return;
+            const target = e.target as HTMLElement | null;
+            const row = target?.closest?.('[data-recipe-id]') as HTMLElement | null;
+            if (!row) return;
+            const recipeId = row.getAttribute('data-recipe-id');
+            if (!recipeId) return;
+            this.playingState.selectedStationRecipeId = recipeId;
+            const result = craftRecipe(this.playingState, recipeId, 'sanctuaryStation', {
+                addHealCharge: () => {
+                    const player = this.entities.get('player');
+                    const healing = player?.getComponent(PlayerHealing);
+                    if (healing && healing.charges < healing.maxCharges) {
+                        healing.charges = Math.min(healing.maxCharges, healing.charges + 1);
+                    }
+                }
+            });
+            if (result.success) showStationCraftingNotification(`${recipeId} crafted`, 'success');
+            else showStationCraftingNotification('reason' in result ? result.reason : 'Craft failed', 'failure');
+        });
+
         initStrategyCraftingPaneDraggable();
     }
 
@@ -1148,7 +1172,17 @@ class Game {
                 ps[key] = data.playingState[key];
             }
         }
+        for (const deprecated of [
+            'hubReenterLevel',
+            'hubReenterQuest',
+            'hubReenterDelveFloor',
+            'playerNearReenterPortal',
+            'reenterPortalChannelProgress'
+        ] as const) {
+            delete ps[deprecated];
+        }
         migratePlayingStateWeaponKeys(this.playingState);
+        migratePlayingStateCrafting(this.playingState);
         const loadout = this.playingState.strategyLoadoutSlotIds;
         if (!loadout || !Array.isArray(loadout) || loadout.length !== STRATEGY_LOADOUT_SLOT_COUNT) {
             const unlocked = migrateUnlockedStrategyRecipeIds(this.playingState.unlockedStrategyRecipeIds ?? []);
@@ -1194,6 +1228,9 @@ class Game {
         const levels = this.config.levels || {};
         const hubLevel = (selectedLevel === 0 ? (levels[0] ?? (this.config as { hub?: unknown }).hub) : levels[selectedLevel]) as { width: number; height: number } | undefined;
 
+        /** True when leaving a level via the player-spawned blue recall (suspend run, do not mark quest complete). */
+        let deferHubQuestCompletion = false;
+
         if (selectedLevel === 0 && this.screenManager.currentScreen === 'playing') {
             const player = this.entities.get('player');
             const health = player?.getComponent(Health);
@@ -1202,21 +1239,14 @@ class Game {
             if (stamina != null) this.playingState.savedSanctuaryStamina = stamina.currentStamina;
             const ps = this.playingState as PlayingStateShape;
             if (ps.returnedViaBlueRecall) {
-                const currentLevel = enemyManager?.getCurrentLevel?.() ?? this.playingState.activeQuest?.level ?? 1;
-                this.playingState.hubReenterLevel = this.playingState.activeQuest?.level ?? currentLevel;
-                this.playingState.hubReenterQuest = this.playingState.activeQuest ? { ...this.playingState.activeQuest } : null;
-                this.playingState.hubReenterDelveFloor = this.playingState.activeQuest?.questType === 'delve' ? (this.playingState.delveFloor || 0) : 0;
+                deferHubQuestCompletion = true;
                 ps.returnedViaBlueRecall = false;
-            } else {
-                this.playingState.hubReenterLevel = null;
-                this.playingState.hubReenterQuest = null;
-                this.playingState.hubReenterDelveFloor = 0;
             }
         }
 
         if (selectedLevel === 0 && hubLevel) {
-            // Only mark Main Quest complete when actually returning from a level via the portal, not when re-entering hub from main menu
-            if (this.screenManager.currentScreen === 'playing' && this.playingState.activeQuest?.id) {
+            // Only mark Main Quest complete when actually finishing or forfeiting the run (portal / death), not when suspending via blue recall
+            if (this.screenManager.currentScreen === 'playing' && this.playingState.activeQuest?.id && !deferHubQuestCompletion) {
                 const id = this.playingState.activeQuest.id;
                 if (!this.playingState.completedQuestIds.includes(id)) {
                     this.playingState.completedQuestIds.push(id);
@@ -1295,7 +1325,9 @@ class Game {
         if (!visible) {
             this.playingState.inventoryOpen = false;
             this.playingState.strategyCraftingOpen = false;
+            this.playingState.craftingStationOpen = false;
             setStrategyCraftingPaneVisible(false);
+            setStationCraftingPaneVisible(false);
             this.tooltipHover = null;
             if (this.hudController) this.hudController.setInventoryPanelVisible(false);
         }
@@ -1590,8 +1622,9 @@ class Game {
             if (this.screenManager.isScreen('hub') || this.screenManager.isScreen('playing')) {
                 this.updateUIVisibility(true);
             }
+            setStationCraftingPaneVisible(this.playingState.craftingStationOpen && this.screenManager.isScreen('hub'));
 
-            const overlayScreenActive = this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls') || this.screenManager.isScreen('help') || this.playingState.shopOpen || this.playingState.rerollStationOpen;
+            const overlayScreenActive = this.screenManager.isScreen('pause') || this.screenManager.isScreen('settings') || this.screenManager.isScreen('settings-controls') || this.screenManager.isScreen('help') || this.playingState.shopOpen || this.playingState.rerollStationOpen || this.playingState.craftingStationOpen;
             this.hudController.setOverlayScreenActive(overlayScreenActive);
 
             const inHubContext = this.screenManager.isScreen('hub') ||
@@ -1602,22 +1635,19 @@ class Game {
                     renderSystem.clear();
                     renderSystem.renderWorld(cameraSystem, obstacleManager, 0, hubConfig.width, hubConfig.height);
                     if (this.playingState.board) {
-                        renderSystem.renderBoard(this.playingState.board, cameraSystem, this.playingState.playerNearBoard);
-                        if (this.playingState.playerNearBoard) {
-                            renderSystem.renderBoardInteractionPrompt(this.playingState.board, cameraSystem, true);
-                        }
+                        renderSystem.renderBoard(this.playingState.board, cameraSystem, this.playingState.playerNearBoard, { skipInteractionPrompt: true });
                     }
                     if (this.playingState.chest) {
-                        renderSystem.renderChest(this.playingState.chest, cameraSystem, this.playingState.playerNearChest);
-                        if (this.playingState.playerNearChest) {
-                            renderSystem.renderChestInteractionPrompt(this.playingState.chest, cameraSystem, true);
-                        }
+                        renderSystem.renderChest(this.playingState.chest, cameraSystem, this.playingState.playerNearChest, { skipInteractionPrompt: true });
                     }
                     if (this.playingState.shop) {
-                        renderSystem.renderShopkeeper(this.playingState.shop, cameraSystem, this.playingState.playerNearShop);
+                        renderSystem.renderShopkeeper(this.playingState.shop, cameraSystem, this.playingState.playerNearShop, null, { skipInteractionPrompt: true });
                     }
                     if (this.playingState.rerollStation) {
-                        renderSystem.renderRerollStation(this.playingState.rerollStation, cameraSystem, this.playingState.playerNearRerollStation);
+                        renderSystem.renderRerollStation(this.playingState.rerollStation, cameraSystem, this.playingState.playerNearRerollStation, { skipInteractionPrompt: true });
+                    }
+                    if (this.playingState.craftingStation) {
+                        renderSystem.renderRerollStation(this.playingState.craftingStation, cameraSystem, this.playingState.playerNearCraftingStation, { skipInteractionPrompt: true });
                     }
                     if (this.playingState.activeQuest && hubConfig.questPortal) {
                         const questPortal = {
@@ -1626,15 +1656,38 @@ class Game {
                             hasNextLevel: true,
                             targetLevel: this.playingState.activeQuest.level
                         };
-                        renderSystem.renderPortal(questPortal, cameraSystem, this.playingState.playerNearQuestPortal, ['E — Enter quest'], false, this.playingState.questPortalChannelProgress);
-                    }
-                    if (this.playingState.hubReenterLevel != null && (hubConfig as { reenterPortal?: { x: number; y: number; width: number; height: number } }).reenterPortal) {
-                        const reenterPortal = { ...(hubConfig as { reenterPortal: { x: number; y: number; width: number; height: number } }).reenterPortal, spawned: true };
-                        renderSystem.renderRecallPortal(reenterPortal, cameraSystem, this.playingState.playerNearReenterPortal, this.playingState.reenterPortalChannelProgress, ['E Re-enter quest']);
+                        renderSystem.renderPortal(questPortal, cameraSystem, undefined, undefined, false, 0, true);
                     }
                     const hubEntities = this.entities.getAll();
                     renderSystem.renderEntities(hubEntities, cameraSystem, obstacleManager, 0);
                     renderSystem.renderOverlay(this.ctx, cameraSystem);
+                    if (this.playingState.board && this.playingState.playerNearBoard) {
+                        renderSystem.renderBoardInteractionPrompt(this.playingState.board, cameraSystem, true);
+                    }
+                    if (this.playingState.chest && this.playingState.playerNearChest) {
+                        renderSystem.renderChestInteractionPrompt(this.playingState.chest, cameraSystem, true);
+                    }
+                    if (this.playingState.shop && this.playingState.playerNearShop) {
+                        renderSystem.renderShopkeeper(this.playingState.shop, cameraSystem, true, null, { interactionPromptOnly: true });
+                    }
+                    if (this.playingState.rerollStation && this.playingState.playerNearRerollStation) {
+                        renderSystem.renderRerollStation(this.playingState.rerollStation, cameraSystem, true, { interactionPromptOnly: true });
+                    }
+                    if (this.playingState.craftingStation && this.playingState.playerNearCraftingStation) {
+                        renderSystem.renderRerollStation(this.playingState.craftingStation, cameraSystem, true, {
+                            interactionPromptOnly: true,
+                            interactionPromptText: 'Press E to craft'
+                        });
+                    }
+                    if (this.playingState.activeQuest && hubConfig.questPortal && this.playingState.playerNearQuestPortal) {
+                        const questPortal = {
+                            ...hubConfig.questPortal,
+                            spawned: true,
+                            hasNextLevel: true,
+                            targetLevel: this.playingState.activeQuest.level
+                        };
+                        renderSystem.renderPortalInteractionPrompt(questPortal, cameraSystem, true, ['E — Enter quest'], false, this.playingState.questPortalChannelProgress);
+                    }
                 } finally {
                     // Always reset context and draw UI so minimap/level select work even if entity render threw
                     this.ctx.globalAlpha = 1;
@@ -1681,6 +1734,9 @@ class Game {
                     if (this.playingState.strategyCraftingOpen && this.strategyCraftingInputController) {
                         updateStrategyCraftingPane(this.playingState, this.strategyCraftingInputController.getBuffer());
                     }
+                    if (this.playingState.craftingStationOpen) {
+                        updateStationCraftingPane(this.playingState);
+                    }
                     if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone || this.inventoryDragState.dragConsumableType || this.inventoryDragState.dragStrategyId)) {
                         renderDragGhost(this.ctx, this.inventoryDragState);
                     }
@@ -1701,20 +1757,10 @@ class Game {
                 renderSystem.renderWorld(cameraSystem, obstacleManager, currentLevel, null, null);
                 if (this.playingState.portal) {
                     const isStairs = currentLevel === DELVE_LEVEL;
-                    renderSystem.renderPortal(this.playingState.portal, cameraSystem, undefined, undefined, isStairs);
-                    if (this.playingState.playerNearPortal) {
-                        const promptLines = isStairs ? [this.playingState.portal!.hasNextLevel ? 'E Descend' : 'E Return to Sanctuary'] : undefined;
-                        renderSystem.renderPortalInteractionPrompt(this.playingState.portal, cameraSystem, this.playingState.playerNearPortal, promptLines, isStairs, this.playingState.portalChannelProgress);
-                    }
+                    renderSystem.renderPortal(this.playingState.portal, cameraSystem, undefined, undefined, isStairs, 0, true);
                 }
                 if (this.playingState.recallPortal?.spawned) {
-                    renderSystem.renderRecallPortal(this.playingState.recallPortal, cameraSystem, this.playingState.playerNearRecallPortal, this.playingState.recallPortalChannelProgress);
-                }
-                if (this.playingState.playerNearCaveEntrance && this.playingState.caveEntranceRect) {
-                    renderSystem.renderCaveEntrancePrompt(this.playingState.caveEntranceRect, cameraSystem, this.playingState.caveEntranceChannelProgress);
-                }
-                if (this.playingState.playerNearCaveExit && this.playingState.caveExitRect) {
-                    renderSystem.renderCaveExitPrompt(this.playingState.caveExitRect, cameraSystem);
+                    renderSystem.renderRecallPortal(this.playingState.recallPortal, cameraSystem, this.playingState.playerNearRecallPortal, this.playingState.recallPortalChannelProgress, undefined, true);
                 }
                 const gatherableManager = this.systemsTyped.gatherables;
                 if (gatherableManager) {
@@ -1725,17 +1771,31 @@ class Game {
                     console.warn('No entities to render');
                 }
                 renderSystem.renderEntities(entities, cameraSystem, obstacleManager, currentLevel);
-                if (gatherableManager) {
-                    const playerEntity = this.entities.get('player');
-                    if (playerEntity) {
-                        gatherableManager.renderInteractPrompt(this.ctx, cameraSystem, playerEntity);
-                        gatherableManager.renderGatherRing(this.ctx, cameraSystem, playerEntity);
-                    }
-                }
                 renderSystem.renderOverlay(this.ctx, cameraSystem);
                 const hazardManager = this.systemsTyped.hazards;
                 if (hazardManager && hazardManager.renderFlamePillars) {
                     hazardManager.renderFlamePillars(this.ctx, cameraSystem);
+                }
+                if (this.playingState.portal && this.playingState.playerNearPortal) {
+                    const isStairs = currentLevel === DELVE_LEVEL;
+                    const promptLines = isStairs ? [this.playingState.portal!.hasNextLevel ? 'E Descend' : 'E Return to Sanctuary'] : undefined;
+                    renderSystem.renderPortalInteractionPrompt(this.playingState.portal, cameraSystem, true, promptLines, isStairs, this.playingState.portalChannelProgress);
+                }
+                if (this.playingState.recallPortal?.spawned && this.playingState.playerNearRecallPortal) {
+                    renderSystem.renderRecallPortal(this.playingState.recallPortal, cameraSystem, true, this.playingState.recallPortalChannelProgress, undefined, false, true);
+                }
+                if (this.playingState.playerNearSceneEntrance && this.playingState.sceneEntranceRect) {
+                    renderSystem.renderSceneEntrancePrompt(this.playingState.sceneEntranceRect, cameraSystem, this.playingState.sceneEntranceChannelProgress);
+                }
+                if (this.playingState.playerNearSceneExit && this.playingState.sceneExitRect) {
+                    renderSystem.renderSceneExitPrompt(this.playingState.sceneExitRect, cameraSystem);
+                }
+                if (gatherableManager) {
+                    const playerEntity = this.entities.get('player');
+                    if (playerEntity) {
+                        gatherableManager.renderGatherRing(this.ctx, cameraSystem, playerEntity);
+                        gatherableManager.renderInteractPrompt(this.ctx, cameraSystem, playerEntity);
+                    }
                 }
             } finally {
                 // Always reset context and draw UI so minimap/pause work even if entity render threw
@@ -1789,6 +1849,9 @@ class Game {
                     }
                     if (this.playingState.strategyCraftingOpen && this.strategyCraftingInputController) {
                         updateStrategyCraftingPane(this.playingState, this.strategyCraftingInputController.getBuffer());
+                    }
+                    if (this.playingState.craftingStationOpen) {
+                        updateStationCraftingPane(this.playingState);
                     }
                     if (this.inventoryDragState.isDragging && (this.inventoryDragState.weaponKey || this.inventoryDragState.isWhetstone || this.inventoryDragState.dragConsumableType || this.inventoryDragState.dragStrategyId)) {
                         renderDragGhost(this.ctx, this.inventoryDragState);

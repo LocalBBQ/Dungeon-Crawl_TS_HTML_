@@ -105,9 +105,6 @@ export class ScreenController {
                             ps.activeQuest = quest;
                             ps.questGoldMultiplier = quest.difficulty?.goldMultiplier ?? 1;
                             sm.selectedStartLevel = quest.level;
-                            ps.hubReenterLevel = null;
-                            ps.hubReenterQuest = null;
-                            ps.hubReenterDelveFloor = 0;
                         }
                         ps.boardOpen = false;
                         handled = true;
@@ -145,9 +142,6 @@ export class ScreenController {
                             };
                             ps.questGoldMultiplier = difficulty?.goldMultiplier ?? 1;
                             sm.selectedStartLevel = selected.level;
-                            ps.hubReenterLevel = null;
-                            ps.hubReenterQuest = null;
-                            ps.hubReenterDelveFloor = 0;
                             ps.boardOpen = false;
                         }
                         handled = true;

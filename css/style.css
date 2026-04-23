@@ -1233,3 +1233,120 @@ body {
     color: #e0a090;
 }
 
+/* Sanctuary station crafting (hub) – panel from right */
+.station-crafting-pane {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: clamp;
+    width: min(320px, 85vw);
+    max-width: 320px;
+    z-index: 55;
+    pointer-events: auto;
+    transform: translateX(100%);
+    transition: transform 0.2s ease-out;
+    display: flex;
+    flex-direction: column;
+}
+
+.station-crafting-pane.station-crafting-pane-open {
+    transform: translateX(0);
+}
+
+.station-crafting-pane-inner {
+    width: 100%;
+    height: 100%;
+    padding: clamp(12px, 2vw, 20px);
+    background: linear-gradient(195deg, rgba(22, 26, 32, 0.98) 0%, rgba(14, 16, 22, 0.98) 55%, rgba(10, 12, 18, 0.98) 100%);
+    border-left: 1px solid rgba(55, 70, 90, 0.85);
+    border-radius: 10px 0 0 10px;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.45);
+    overflow-y: auto;
+}
+
+.station-crafting-title {
+    font-size: clamp(14px, 2vw, 18px);
+    font-weight: 700;
+    color: #7eb8d6;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 6px 0;
+}
+
+.station-crafting-hint {
+    font-size: 12px;
+    color: rgba(150, 170, 190, 0.88);
+    margin: 0 0 12px 0;
+}
+
+.station-crafting-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+}
+
+.station-crafting-recipe {
+    padding: 10px 12px;
+    background: rgba(18, 22, 30, 0.88);
+    border: 1px solid rgba(45, 58, 75, 0.55);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.station-crafting-recipe:hover {
+    border-color: rgba(90, 120, 150, 0.55);
+    background: rgba(24, 30, 42, 0.92);
+}
+
+.station-crafting-recipe.selected {
+    border-color: rgba(126, 184, 214, 0.65);
+    background: rgba(28, 40, 52, 0.95);
+    box-shadow: 0 0 0 1px rgba(126, 184, 214, 0.28);
+}
+
+.station-crafting-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #c8dce8;
+}
+
+.station-crafting-desc {
+    font-size: 11px;
+    color: rgba(140, 160, 180, 0.9);
+}
+
+.station-crafting-notification {
+    margin-top: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    min-height: 20px;
+}
+
+.station-crafting-notification.station-crafting-notification-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.station-crafting-notification-success {
+    background: rgba(40, 65, 55, 0.92);
+    border-color: rgba(80, 140, 110, 0.55);
+    color: #a8dcc0;
+}
+
+.station-crafting-notification-failure {
+    background: rgba(65, 38, 38, 0.92);
+    border-color: rgba(160, 90, 90, 0.55);
+    color: #e8b0a8;
+}
+

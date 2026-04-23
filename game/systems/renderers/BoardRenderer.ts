@@ -9,9 +9,14 @@ interface BoardLike {
 }
 
 export class BoardRenderer {
-    render(context: RenderContext, data: { board?: BoardLike | null; playerNearBoard?: boolean }): void {
+    render(context: RenderContext, data: {
+        board?: BoardLike | null;
+        playerNearBoard?: boolean;
+        skipInteractionPrompt?: boolean;
+        interactionPromptOnly?: boolean;
+    }): void {
         const { ctx, canvas, camera } = context;
-        const { board, playerNearBoard } = data;
+        const { board, playerNearBoard, skipInteractionPrompt = false, interactionPromptOnly = false } = data;
         if (!board) return;
         const screenX = camera.toScreenX(board.x);
         const screenY = camera.toScreenY(board.y);
@@ -22,6 +27,12 @@ export class BoardRenderer {
         const cx = screenX + w / 2;
         const cy = screenY + h / 2;
         const lw = Math.max(1, 2 / camera.zoom);
+
+        if (interactionPromptOnly) {
+            if (!playerNearBoard) return;
+            this.drawBoardPrompt(ctx, cx, cy, h);
+            return;
+        }
 
         // Top-down quest board: wooden frame with notice area and stand
         ctx.fillStyle = '#3d3020';
@@ -68,25 +79,29 @@ export class BoardRenderer {
         ctx.strokeRect(screenX + trim, footY, footW, footH);
         ctx.strokeRect(screenX + w - trim - footW, footY, footW, footH);
 
-        if (playerNearBoard) {
-            const promptY = cy - h / 2 - 28;
-            const text = 'Press E to select level';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const textMetrics = ctx.measureText(text);
-            const padding = 10;
-            const bgWidth = textMetrics.width + padding * 2;
-            const bgHeight = 24;
-            const bgX = cx - bgWidth / 2;
-            const bgY = promptY - bgHeight / 2;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.strokeStyle = '#c9a227';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.fillStyle = '#e8dcc8';
-            ctx.fillText(text, cx, promptY);
+        if (!skipInteractionPrompt && playerNearBoard) {
+            this.drawBoardPrompt(ctx, cx, cy, h);
         }
+    }
+
+    private drawBoardPrompt(ctx: CanvasRenderingContext2D, cx: number, cy: number, h: number): void {
+        const promptY = cy - h / 2 - 28;
+        const text = 'Press E to select level';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const textMetrics = ctx.measureText(text);
+        const padding = 10;
+        const bgWidth = textMetrics.width + padding * 2;
+        const bgHeight = 24;
+        const bgX = cx - bgWidth / 2;
+        const bgY = promptY - bgHeight / 2;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.strokeStyle = '#c9a227';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.fillStyle = '#e8dcc8';
+        ctx.fillText(text, cx, promptY);
     }
 }

@@ -50,6 +50,8 @@ export class GatherableManager {
     gatherProgress = 0;
     playerInGatherableRange = false;
     playerNearGatherable = false;
+    /** World prompt above player when near a gatherable (herb/mushroom = "Pick", else "E"). */
+    gatherInteractPromptLabel = 'E';
 
     constructor(gameRef?: GameRefLike | null) {
         this.gameRef = gameRef ?? null;
@@ -76,6 +78,7 @@ export class GatherableManager {
         this.gatherProgress = 0;
         this.playerInGatherableRange = false;
         this.playerNearGatherable = false;
+        this.gatherInteractPromptLabel = 'E';
     }
 
     getCollectedCount(type: string): number {
@@ -113,6 +116,7 @@ export class GatherableManager {
 
         this.playerInGatherableRange = false;
         this.playerNearGatherable = false;
+        this.gatherInteractPromptLabel = 'E';
 
         if (!player || !inputSystem) return;
 
@@ -176,6 +180,8 @@ export class GatherableManager {
                 if (item.collected) continue;
                 if (canInteractWith(item)) {
                     this.playerNearGatherable = true;
+                    this.gatherInteractPromptLabel =
+                        item.type === 'herb' || item.type === 'mushroom' ? 'Pick' : 'E';
                     break;
                 }
             }
@@ -230,8 +236,9 @@ export class GatherableManager {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.strokeStyle = 'rgba(20, 20, 20, 0.9)';
         ctx.lineWidth = 3;
-        ctx.strokeText('E', screenX, screenY);
-        ctx.fillText('E', screenX, screenY);
+        const label = this.gatherInteractPromptLabel;
+        ctx.strokeText(label, screenX, screenY);
+        ctx.fillText(label, screenX, screenY);
         ctx.restore();
     }
 

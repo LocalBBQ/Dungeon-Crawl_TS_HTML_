@@ -5,6 +5,8 @@ import type { SystemManager } from '../core/SystemManager.js';
 export class InputSystem {
   canvas: HTMLCanvasElement;
   keys: Record<string, boolean>;
+  /** Physical keydowns this frame (no `repeat`); consumed by gameplay for tap-to-start channels. */
+  private keysJustPressed: Set<string> = new Set();
   mouseX: number;
   mouseY: number;
   mouseDown: boolean;
@@ -56,8 +58,12 @@ export class InputSystem {
         return;
       }
       e.preventDefault(); // block browser shortcuts where we can (Alt+key, etc.)
-      this.keys[e.key.toLowerCase()] = true;
-      this.systems!.eventBus.emit(EventTypes.INPUT_KEYDOWN, e.key.toLowerCase());
+      const k = e.key.toLowerCase();
+      this.keys[k] = true;
+      if (!e.repeat) {
+        this.keysJustPressed.add(k);
+      }
+      this.systems!.eventBus.emit(EventTypes.INPUT_KEYDOWN, k);
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Tab') {
@@ -131,6 +137,17 @@ export class InputSystem {
     return !!this.keys[key.toLowerCase()];
   }
 
+  /**
+   * True once per physical key press (ignores key-repeat). Call from gameplay that should start on tap
+   * rather than requiring the key to stay held.
+   */
+  consumeKeyJustPressed(key: string): boolean {
+    const k = key.toLowerCase();
+    if (!this.keysJustPressed.has(k)) return false;
+    this.keysJustPressed.delete(k);
+    return true;
+  }
+
   /** Use for Alt+key bindings; Ctrl+key is often captured by the browser before we see it. */
   isAltPressed(): boolean {
     return !!this.keys['alt'];
@@ -139,6 +156,7 @@ export class InputSystem {
   /** Clear all key and mouse state so menu open doesn't leave stale input (e.g. W still held). */
   clearAllKeys(): void {
     this.keys = {};
+    this.keysJustPressed.clear();
     this.mouseDown = false;
     this.isCharging = false;
     this.rightMouseDown = false;

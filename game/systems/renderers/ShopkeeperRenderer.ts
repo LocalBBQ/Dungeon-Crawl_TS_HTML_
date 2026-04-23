@@ -18,15 +18,23 @@ export class ShopkeeperRenderer {
         shop?: ShopLike | null;
         playerNearShop?: boolean;
         playerWorldPos?: { x: number; y: number } | null;
+        skipInteractionPrompt?: boolean;
+        interactionPromptOnly?: boolean;
     }): void {
         const { ctx, canvas, camera } = context;
-        const { shop, playerNearShop, playerWorldPos } = data;
+        const { shop, playerNearShop, playerWorldPos, skipInteractionPrompt = false, interactionPromptOnly = false } = data;
         if (!shop) return;
         const screenX = camera.toScreenX(shop.x);
         const screenY = camera.toScreenY(shop.y);
         const w = shop.width * camera.zoom;
         const h = shop.height * camera.zoom;
         if (screenX + w < 0 || screenX > canvas.width || screenY + h < 0 || screenY > canvas.height) return;
+
+        if (interactionPromptOnly) {
+            if (!playerNearShop) return;
+            this.drawShopPrompt(ctx, screenX, screenY, w, h);
+            return;
+        }
 
         const shopCenterWorldX = shop.x + shop.width / 2;
         const shopCenterWorldY = shop.y + shop.height / 2;
@@ -71,27 +79,31 @@ export class ShopkeeperRenderer {
         ctx.textBaseline = 'middle';
         ctx.fillText('Shop', screenX + w / 2, screenY + h * 0.62);
 
-        if (playerNearShop) {
-            const cx = screenX + w / 2;
-            const cy = screenY + h / 2;
-            const promptY = cy - h / 2 - 28;
-            const text = 'Press E to buy weapons';
-            ctx.font = 'bold 16px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const textMetrics = ctx.measureText(text);
-            const padding = 10;
-            const bgWidth = textMetrics.width + padding * 2;
-            const bgHeight = 24;
-            const bgX = cx - bgWidth / 2;
-            const bgY = promptY - bgHeight / 2;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.strokeStyle = '#8b6914';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
-            ctx.fillStyle = '#e8dcc8';
-            ctx.fillText(text, cx, promptY);
+        if (!skipInteractionPrompt && playerNearShop) {
+            this.drawShopPrompt(ctx, screenX, screenY, w, h);
         }
+    }
+
+    private drawShopPrompt(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, w: number, h: number): void {
+        const cx = screenX + w / 2;
+        const cy = screenY + h / 2;
+        const promptY = cy - h / 2 - 28;
+        const text = 'Press E to buy weapons';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const textMetrics = ctx.measureText(text);
+        const padding = 10;
+        const bgWidth = textMetrics.width + padding * 2;
+        const bgHeight = 24;
+        const bgX = cx - bgWidth / 2;
+        const bgY = promptY - bgHeight / 2;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.strokeStyle = '#8b6914';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bgX, bgY, bgWidth, bgHeight);
+        ctx.fillStyle = '#e8dcc8';
+        ctx.fillText(text, cx, promptY);
     }
 }

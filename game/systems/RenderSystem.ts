@@ -67,49 +67,118 @@ export class RenderSystem {
         }
     }
 
-    renderPortal(portal, camera, playerNearPortal?, promptLines?: string[], isStairs?: boolean, channelProgress?: number) {
-        this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal, promptLines, isStairs, channelProgress });
+    renderPortal(
+        portal: unknown,
+        camera: unknown,
+        playerNearPortal?: boolean,
+        promptLines?: string[],
+        isStairs?: boolean,
+        channelProgress?: number,
+        skipInteractionPrompt?: boolean,
+        interactionPromptOnly?: boolean
+    ) {
+        this.portalRenderer.render(this._getContext(camera), {
+            portal,
+            playerNearPortal,
+            promptLines,
+            isStairs,
+            channelProgress,
+            skipInteractionPrompt,
+            interactionPromptOnly
+        });
     }
 
-    renderPortalInteractionPrompt(portal, camera, showPrompt, promptLines?: string[], isStairs?: boolean, channelProgress?: number) {
-        this.portalRenderer.render(this._getContext(camera), { portal, playerNearPortal: showPrompt, promptLines, isStairs, channelProgress });
+    renderPortalInteractionPrompt(portal: unknown, camera: unknown, showPrompt: boolean, promptLines?: string[], isStairs?: boolean, channelProgress?: number) {
+        this.portalRenderer.render(this._getContext(camera), {
+            portal,
+            playerNearPortal: showPrompt,
+            promptLines,
+            isStairs,
+            channelProgress,
+            interactionPromptOnly: true
+        });
     }
 
-    renderRecallPortal(recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean }, camera: { x: number; y: number; zoom: number }, playerNearRecallPortal: boolean, channelProgress: number, promptLines?: string[]) {
-        this.portalRenderer.renderRecallPortal(this._getContext(camera), { recallPortal, playerNearRecallPortal, channelProgress, promptLines });
+    renderRecallPortal(
+        recallPortal: { x: number; y: number; width: number; height: number; spawned: boolean },
+        camera: { x: number; y: number; zoom: number },
+        playerNearRecallPortal: boolean,
+        channelProgress: number,
+        promptLines?: string[],
+        skipInteractionPrompt?: boolean,
+        interactionPromptOnly?: boolean
+    ) {
+        this.portalRenderer.renderRecallPortal(this._getContext(camera), {
+            recallPortal,
+            playerNearRecallPortal,
+            channelProgress,
+            promptLines,
+            skipInteractionPrompt,
+            interactionPromptOnly
+        });
     }
 
-    renderCaveEntrancePrompt(worldRect: { x: number; y: number; width: number; height: number }, camera, channelProgress?: number) {
+    renderSceneEntrancePrompt(worldRect: { x: number; y: number; width: number; height: number }, camera, channelProgress?: number) {
         this.portalRenderer.renderPromptAtRect(this._getContext(camera), { worldRect, promptLines: ['E Enter'], channelProgress: channelProgress ?? 0 });
     }
 
-    /** Doorway exit: prompt only, no channel bar (instant on E). */
-    renderCaveExitPrompt(worldRect: { x: number; y: number; width: number; height: number }, camera) {
+    /** Interior exit: prompt only, no channel bar (instant on E). */
+    renderSceneExitPrompt(worldRect: { x: number; y: number; width: number; height: number }, camera) {
         this.portalRenderer.renderPromptAtRect(this._getContext(camera), { worldRect, promptLines: ['E Leave'], channelProgress: 0 });
     }
 
-    renderBoard(board, camera, playerNearBoard) {
-        this.boardRenderer.render(this._getContext(camera), { board, playerNearBoard });
+    // Backward-compatible wrappers.
+    renderCaveEntrancePrompt(worldRect: { x: number; y: number; width: number; height: number }, camera, channelProgress?: number) {
+        this.renderSceneEntrancePrompt(worldRect, camera, channelProgress);
     }
 
-    renderBoardInteractionPrompt(board, camera, showPrompt) {
-        this.boardRenderer.render(this._getContext(camera), { board, playerNearBoard: showPrompt });
+    renderCaveExitPrompt(worldRect: { x: number; y: number; width: number; height: number }, camera) {
+        this.renderSceneExitPrompt(worldRect, camera);
     }
 
-    renderChest(chest, camera, playerNearChest) {
-        this.chestRenderer.render(this._getContext(camera), { chest, playerNearChest });
+    renderBoard(
+        board: unknown,
+        camera: unknown,
+        playerNearBoard: boolean,
+        opts?: { skipInteractionPrompt?: boolean; interactionPromptOnly?: boolean }
+    ) {
+        this.boardRenderer.render(this._getContext(camera), { board, playerNearBoard, ...opts });
     }
 
-    renderChestInteractionPrompt(chest, camera, showPrompt) {
-        this.chestRenderer.render(this._getContext(camera), { chest, playerNearChest: showPrompt });
+    renderBoardInteractionPrompt(board: unknown, camera: unknown, showPrompt: boolean) {
+        this.boardRenderer.render(this._getContext(camera), { board, playerNearBoard: showPrompt, interactionPromptOnly: true });
     }
 
-    renderShopkeeper(shop, camera, playerNearShop) {
-        this.shopkeeperRenderer.render(this._getContext(camera), { shop, playerNearShop });
+    renderChest(
+        chest: unknown,
+        camera: unknown,
+        playerNearChest: boolean,
+        opts?: { skipInteractionPrompt?: boolean; interactionPromptOnly?: boolean }
+    ) {
+        this.chestRenderer.render(this._getContext(camera), { chest, playerNearChest, ...opts });
     }
 
-    renderRerollStation(rerollStation, camera, playerNearRerollStation) {
-        this.rerollStationRenderer.render(this._getContext(camera), { rerollStation, playerNearRerollStation });
+    renderChestInteractionPrompt(chest: unknown, camera: unknown, showPrompt: boolean) {
+        this.chestRenderer.render(this._getContext(camera), { chest, playerNearChest: showPrompt, interactionPromptOnly: true });
+    }
+
+    renderShopkeeper(
+        shop: unknown,
+        camera: unknown,
+        playerNearShop: boolean,
+        playerWorldPos?: { x: number; y: number } | null,
+        opts?: { skipInteractionPrompt?: boolean; interactionPromptOnly?: boolean }
+    ) {
+        this.shopkeeperRenderer.render(this._getContext(camera), { shop, playerNearShop, playerWorldPos, ...opts });
+    }
+
+    renderRerollStation(
+        rerollStation: unknown,
+        camera: unknown,
+        playerNearRerollStation: boolean,
+        opts?: { skipInteractionPrompt?: boolean; interactionPromptOnly?: boolean; interactionPromptText?: string }
+    ) {
+        this.rerollStationRenderer.render(this._getContext(camera), { rerollStation, playerNearRerollStation, ...opts });
     }
 
     /** Draw entities and depth-sort obstacles (trees, etc.) interleaved by Y so layering respects player and enemies. */

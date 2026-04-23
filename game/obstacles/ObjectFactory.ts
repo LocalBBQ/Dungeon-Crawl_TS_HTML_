@@ -83,6 +83,10 @@ export class ObjectFactory {
       caveEntrance: { minSize: 80, maxSize: 120, defaultSpritePath: null, color: '#3a3528' },
       /** Cave/den exit: inside cave, interactable, passable. Channel E to return to previous level (portalReturnLevel). */
       caveExit: { minSize: 80, maxSize: 120, defaultSpritePath: null, color: '#3a3528', passable: true },
+      /** Generic enterable doorway for scene transitions (same behavior path as caveEntrance). */
+      scenarioEntrance: { minSize: 80, maxSize: 120, defaultSpritePath: null, color: '#3a3528' },
+      /** Generic interior exit for scene transitions (same behavior path as caveExit). */
+      scenarioExit: { minSize: 80, maxSize: 120, defaultSpritePath: null, color: '#3a3528', passable: true },
       /** Breakable hive on trees; passable (no collision). When destroyed drops honey pickup. */
       beehive: { minSize: 20, maxSize: 28, defaultSpritePath: null, color: '#8b6914', breakable: true, hp: 3 },
     };
