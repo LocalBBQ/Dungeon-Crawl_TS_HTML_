@@ -97,7 +97,7 @@ export function executeRecipe(
     if (!hasHerb && !hasMushroom && !hasPages) return { success: false, reason: 'Not enough ingredients' };
     if (herbNeed > 0 && !hasHerb) return { success: false, reason: 'Not enough herbs' };
     if (mushroomNeed > 0 && !hasMushroom) return { success: false, reason: 'Not enough mushrooms' };
-    if (pageNeed > 0 && !hasPages) return { success: false, reason: 'Not enough pages' };
+    if (pageNeed > 0 && !hasPages) return { success: false, reason: 'Not enough Enchantment Pages' };
     consumeHerbs(ps, herbNeed);
     consumeMushrooms(ps, mushroomNeed);
     if (pageNeed > 0) consumePages(ps, pageNeed);

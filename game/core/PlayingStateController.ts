@@ -10,6 +10,7 @@ import type { Quest } from '../types/quest.js';
 import type { PlayingStateShape } from '../state/PlayingState.js';
 import { Transform } from '../components/Transform.js';
 import { Combat } from '../components/Combat.js';
+import { Health } from '../components/Health.js';
 import type { EntityShape } from '../types/entity.js';
 import { updateCrossbowReload } from '../utils/crossbowReload.js';
 
@@ -41,6 +42,113 @@ export class PlayingStateController {
 
     constructor(game: PlayingStateControllerContext) {
         this.game = game;
+    }
+
+    /**
+     * Near a firepit: tap F to toggle resting and regain health. Runs in hub (Sanctuary) and playing levels.
+     * Must run before systems.update so movement respects restingAtCampfire.
+     */
+    updateCampfireRest(deltaTime: number, player: EntityShape | undefined): void {
+        const g = this.game;
+        const screenManager = (g as unknown as { screenManager?: { isScreen?: (name: string) => boolean } }).screenManager;
+        const ps = g.playingState;
+        const clear = (): void => {
+            ps.playerNearCampfire = false;
+            ps.restingAtCampfire = false;
+            ps.campfireRestToggledOn = false;
+        };
+        if (!screenManager?.isScreen?.('playing') && !screenManager?.isScreen?.('hub')) {
+            clear();
+            return;
+        }
+        if (
+            ps.chestOpen ||
+            ps.boardOpen ||
+            ps.shopOpen ||
+            ps.strategyCraftingOpen ||
+            ps.craftingStationOpen ||
+            ps.rerollStationOpen
+        ) {
+            clear();
+            return;
+        }
+        const transform = player?.getComponent(Transform);
+        const obstacleManager = g.systems.get('obstacles') as { obstacles?: { type: string; x: number; y: number; width: number; height: number; campfireHealRemaining?: number }[] } | undefined;
+        const obstacles = obstacleManager?.obstacles;
+        if (!transform || !obstacles?.length) {
+            clear();
+            return;
+        }
+        const cfg = (GameConfig as { player?: { campfireRest?: { interactPadding?: number; healthPerSecond?: number } } }).player?.campfireRest ?? {};
+        const pad = cfg.interactPadding ?? 38;
+        const hps = cfg.healthPerSecond ?? 15;
+        const pl = transform.left;
+        const pt = transform.top;
+        const pw = transform.width;
+        const ph = transform.height;
+        const pcx = transform.x;
+        const pcy = transform.y;
+
+        const findClosestUsableFirepit = (): { type: string; x: number; y: number; width: number; height: number; campfireHealRemaining?: number } | null => {
+            let best: { type: string; x: number; y: number; width: number; height: number; campfireHealRemaining?: number } | null = null;
+            let bestD = Infinity;
+            for (const obs of obstacles) {
+                if (obs.type !== 'firepit') continue;
+                const rem = obs.campfireHealRemaining;
+                if (typeof rem !== 'number' || rem <= 0) continue;
+                const ix = obs.x - pad;
+                const iy = obs.y - pad;
+                const iw = obs.width + 2 * pad;
+                const ih = obs.height + 2 * pad;
+                if (!Utils.rectCollision(pl, pt, pw, ph, ix, iy, iw, ih)) continue;
+                const ocx = obs.x + obs.width / 2;
+                const ocy = obs.y + obs.height / 2;
+                const d = Utils.distance(pcx, pcy, ocx, ocy);
+                if (d < bestD) {
+                    bestD = d;
+                    best = obs;
+                }
+            }
+            return best;
+        };
+
+        const usablePit = findClosestUsableFirepit();
+        const near = usablePit != null;
+        ps.playerNearCampfire = near;
+        if (!near) {
+            ps.campfireRestToggledOn = false;
+            ps.restingAtCampfire = false;
+            return;
+        }
+        const inputSystem = g.systems.get('input') as ChannelInput | undefined;
+        if (inputSystem?.consumeKeyJustPressed('f')) {
+            ps.campfireRestToggledOn = !ps.campfireRestToggledOn;
+        }
+        ps.restingAtCampfire = ps.campfireRestToggledOn;
+        if (!ps.restingAtCampfire) return;
+        const health = player?.getComponent(Health);
+        if (!health || health.isDead || health.currentHealth >= health.maxHealth) return;
+
+        const pit = findClosestUsableFirepit();
+        if (!pit || typeof pit.campfireHealRemaining !== 'number' || pit.campfireHealRemaining <= 0) {
+            ps.campfireRestToggledOn = false;
+            ps.restingAtCampfire = false;
+            return;
+        }
+        const room = health.maxHealth - health.currentHealth;
+        const want = hps * deltaTime;
+        const fromPit = Math.min(want, pit.campfireHealRemaining);
+        const amount = Math.min(fromPit, room);
+        if (amount > 0) {
+            health.heal(amount);
+            pit.campfireHealRemaining = Math.max(0, pit.campfireHealRemaining - amount);
+        }
+        const stillUsable = findClosestUsableFirepit() != null;
+        ps.playerNearCampfire = stillUsable;
+        if (!stillUsable) {
+            ps.campfireRestToggledOn = false;
+            ps.restingAtCampfire = false;
+        }
     }
 
     updatePortal(deltaTime: number, player: EntityShape | undefined) {

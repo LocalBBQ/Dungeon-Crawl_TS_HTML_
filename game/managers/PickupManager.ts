@@ -266,7 +266,7 @@ export class PickupManager {
     ctx.font = '600 10px Cinzel, Georgia, serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Page', screenX, screenY + iconSize + 12);
+    ctx.fillText('Enchantment Page', screenX, screenY + iconSize + 12);
   }
 
   clear(): void {

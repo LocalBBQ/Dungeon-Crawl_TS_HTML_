@@ -222,24 +222,37 @@ export class GatherableManager {
     }
 
     renderInteractPrompt(ctx: CanvasRenderingContext2D, camera: CameraShape, player: EntityShape | null): void {
-        if (this.gathering || !this.playerNearGatherable || !player) return;
-        const transform = player.getComponent(Transform);
-        if (!transform) return;
-        const centerX = transform.x + transform.width / 2;
-        const centerY = transform.y + transform.height / 2;
-        const screenX = camera.toScreenX(centerX);
-        const screenY = camera.toScreenY(centerY) - 48;
-        ctx.save();
-        ctx.font = 'bold 18px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.strokeStyle = 'rgba(20, 20, 20, 0.9)';
-        ctx.lineWidth = 3;
-        const label = this.gatherInteractPromptLabel;
-        ctx.strokeText(label, screenX, screenY);
-        ctx.fillText(label, screenX, screenY);
-        ctx.restore();
+        const transform = player?.getComponent(Transform);
+        const ps = (this.gameRef as { playingState?: { playerNearCampfire?: boolean; restingAtCampfire?: boolean } } | null)?.playingState;
+        const campfireNear = ps?.playerNearCampfire === true;
+        const campfireResting = ps?.restingAtCampfire === true;
+
+        const drawLine = (label: string, offsetY: number, fontPx: number, strokeW: number): void => {
+            if (!transform || !player) return;
+            const centerX = transform.x + transform.width / 2;
+            const centerY = transform.y + transform.height / 2;
+            const screenX = camera.toScreenX(centerX);
+            const screenY = camera.toScreenY(centerY) + offsetY;
+            ctx.save();
+            ctx.font = `bold ${fontPx}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.strokeStyle = 'rgba(20, 20, 20, 0.9)';
+            ctx.lineWidth = strokeW;
+            ctx.strokeText(label, screenX, screenY);
+            ctx.fillText(label, screenX, screenY);
+            ctx.restore();
+        };
+
+        if (!this.gathering && this.playerNearGatherable && player && transform) {
+            drawLine(this.gatherInteractPromptLabel, -48, 18, 3);
+        }
+        if (!this.gathering && campfireNear && player && transform) {
+            const yOff = this.playerNearGatherable ? -66 : -44;
+            const label = campfireResting ? 'Resting — F to stop' : 'F — Rest by the fire';
+            drawLine(label, yOff, 13, 2);
+        }
     }
 
     /** Small blue flame drawn above shrine blessing gatherables; not drawn for collected (removed) shrines. */

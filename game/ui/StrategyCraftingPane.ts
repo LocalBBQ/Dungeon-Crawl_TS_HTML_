@@ -55,7 +55,7 @@ function getRecipeDescriptionWithCounts(recipe: StrategyRecipeDef, ps: PlayingSt
       const have: string[] = [];
       if (needHerb > 0) have.push(`${countHerbs(ps)} herb${countHerbs(ps) !== 1 ? 's' : ''}`);
       if (needMushroom > 0) have.push(`${countMushrooms(ps)} mushroom${countMushrooms(ps) !== 1 ? 's' : ''}`);
-      if (needPage > 0) have.push(`${countPages(ps)} page${countPages(ps) !== 1 ? 's' : ''}`);
+      if (needPage > 0) have.push(`${countPages(ps)} Enchantment Page${countPages(ps) !== 1 ? 's' : ''}`);
       parts.push(`You have: ${have.join(', ')}.`);
     }
   }

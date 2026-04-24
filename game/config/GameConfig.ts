@@ -89,6 +89,16 @@ const GameConfig: GameConfigShape = {
       regenDuration: 1,
       chargeRegenTime: 15,
     },
+    /** Tap F near a firepit to toggle resting and recover health (Sanctuary hub and playing levels). Each pit has a limited pool. */
+    campfireRest: {
+      /** Extra pixels around the firepit hitbox for "in range" to sit. */
+      interactPadding: 38,
+      /** Health restored per second while resting (capped by the pit's remaining pool). */
+      healthPerSecond: 15,
+      /** Random total HP each new firepit can grant before it goes cold (inclusive). */
+      healPoolMin: 30,
+      healPoolMax: 60,
+    },
     stun: {
       threshold: 100,
       duration: 0.5,
@@ -578,3 +588,12 @@ const GameConfig: GameConfigShape = {
 };
 
 export { GameConfig };
+
+/** Total HP restored over one heal charge (potion adds one charge). Matches `PlayerHealing` regen phase. */
+export function getHealChargeTotalHp(): number {
+  const heal = GameConfig.player.heal as { regenRate?: number; regenDuration?: number } | undefined;
+  if (!heal) return 40;
+  const rate = typeof heal.regenRate === 'number' ? heal.regenRate : 20;
+  const duration = typeof heal.regenDuration === 'number' ? heal.regenDuration : 2;
+  return rate * duration;
+}

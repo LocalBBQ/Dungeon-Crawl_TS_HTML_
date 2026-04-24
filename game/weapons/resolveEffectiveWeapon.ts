@@ -1,20 +1,28 @@
 /**
  * Resolves an effective weapon (or offhand) from registry key + optional effect ids.
  * Returns a wrapper with overridden baseDamage, baseRange, cooldown; offhand also gets modified getBlockConfig.
+ * Instance `rarity` is stored on the returned object for UI / rendering (equipped weapon outline).
  */
 import { Weapons } from './WeaponsRegistry.js';
 import { applyEffectsToWeapon, applyEffectsToBlock } from '../config/enchantmentConfig.js';
+import type { ItemRarity } from '../config/rarityConfig.js';
 
 export function getEffectiveWeapon(
   key: string | undefined,
-  effectIds: (string | null)[] | undefined
+  effectIds: (string | null)[] | undefined,
+  options?: { rarity?: ItemRarity }
 ): unknown {
   if (!key || key === 'none') return null;
   const base = Weapons[key];
   if (!base || typeof base !== 'object') return null;
+  const rarity: ItemRarity = options?.rarity ?? 'common';
   const ids = effectIds ?? [];
   const hasEffects = ids.some((id) => !!id);
-  if (!hasEffects) return base;
+  if (!hasEffects) {
+    const w = Object.create(base) as Record<string, unknown>;
+    w.rarity = rarity;
+    return w;
+  }
 
   const baseObj = base as {
     baseDamage?: number;
@@ -52,5 +60,6 @@ export function getEffectiveWeapon(
       return applyEffectsToBlock(block as Record<string, unknown>, ids);
     };
   }
+  wrapper.rarity = rarity;
   return wrapper;
 }

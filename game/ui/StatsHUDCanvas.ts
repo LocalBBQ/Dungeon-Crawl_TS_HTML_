@@ -11,7 +11,7 @@ import { Combat } from '../components/Combat.js';
 import { StatusEffects } from '../components/StatusEffects.js';
 import { DELVE_LEVEL } from '../config/questConfig.js';
 import { drawPotionIcon } from '../graphics/herbMushroomIcons.js';
-import { TOOLBELT_SLOT_COUNT } from '../state/PlayingState.js';
+import { TOOLBELT_SLOT_COUNT, MAX_WEAPON_DURABILITY } from '../state/PlayingState.js';
 
 const PAD = 16;
 const ORB_RADIUS = 60;
@@ -35,7 +35,17 @@ const RECALL_PORTAL_SLOT_COUNT = 1;
 const TOTAL_BOTTOM_SLOTS = TOOLBELT_SLOT_COUNT + RECALL_PORTAL_SLOT_COUNT;
 const TOOLBELT_ROW_W = TOTAL_BOTTOM_SLOTS * TOOLBELT_SLOT_SIZE + (TOTAL_BOTTOM_SLOTS - 1) * TOOLBELT_SLOT_GAP;
 const BAR_GAP = 12;
-const BOTTOM_BAR_TOTAL_W = STUN_CARD_W + BAR_GAP + TOOLBELT_ROW_W;
+/** Stun + toolbelt + recall (weapon strip is added separately when shown). */
+const BOTTOM_BAR_CORE_W = STUN_CARD_W + BAR_GAP + TOOLBELT_ROW_W;
+const WEAPON_TO_STUN_GAP = 8;
+/** Sword durability HUD: half-length blade vs prior centered bar; height fits bottom row. */
+const SHARP_BLADE_MAIN_W = 114;
+const SHARP_BLADE_H = 20;
+const SHARP_OFFHAND_W_MULT = 0.7;
+const SHARP_OFFHAND_H_MULT = 0.85;
+const SHARP_ROW_GAP = 5;
+const SHARP_PANEL_PAD_X = 10;
+const SHARP_PANEL_PAD_Y = 6;
 const FONT_LABEL = '700 14px Cinzel, Georgia, serif';
 const FONT_TEXT = '700 15px Cinzel, Georgia, serif';
 const FONT_STAT = '600 15px Cinzel, Georgia, serif';
@@ -43,12 +53,22 @@ const COLOR_LABEL = '#c9a227';
 const COLOR_TEXT = '#d4bc8c';
 const COLOR_STUN_LABEL = '#706858';
 
+/** Active loadout durability for Monster Hunter–style blade HUD (optional). */
+export interface WeaponDurabilityHudSnapshot {
+  mainhandKey: string;
+  mainhandDurability: number;
+  offhandKey: string;
+  offhandDurability: number;
+}
+
 export interface StatsHUDData {
   delveFloor: number;
   /** 0..1 progress while B-started recall spawn channel runs; 0 when idle. */
   recallChannelProgress?: number;
   /** Toolbelt slots (potions); length TOOLBELT_SLOT_COUNT. */
   toolbeltSlots?: (PotionConsumable | null)[];
+  /** When set, draws blade gauge(s) in the bottom HUD row, left of the stun card. */
+  weaponDurabilityHud?: WeaponDurabilityHudSnapshot;
 }
 
 /**
@@ -138,17 +158,18 @@ export function renderStatsHUD(
     ctx.fillText('STAMINA', rightOrbX, orbCenterY + ORB_RADIUS + 8);
   }
 
-  // Bottom row: [ stun card | 4 toolbelt slots | recall portal slot ]
-  const barHeight = Math.max(STUN_CARD_H, TOOLBELT_SLOT_SIZE);
-  const bottomRowY = H - PAD - BOTTOM_BAR_PAD_BOTTOM - barHeight - 8;
-  const barLeftX = W / 2 - BOTTOM_BAR_TOTAL_W / 2;
-  const stunCardX = barLeftX;
-  const toolbeltRowX = barLeftX + STUN_CARD_W + BAR_GAP;
+  // Bottom row: [ weapon durability | stun card | 4 toolbelt slots | recall portal slot ]
+  const barLayout = getBottomHudBarLayout(canvas, data.weaponDurabilityHud);
+  const { barLeftX, bottomRowY, barHeight, stunCardX, toolbeltRowX } = barLayout;
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  // Stun card (left part of bar)
+  if (data.weaponDurabilityHud) {
+    drawWeaponSharpnessHud(ctx, barLeftX, bottomRowY, barHeight, data.weaponDurabilityHud);
+  }
+
+  // Stun card
   roundRect(ctx, stunCardX, bottomRowY, STUN_CARD_W, STUN_CARD_H, CARD_RADIUS);
   ctx.fillStyle = 'rgba(28, 22, 18, 0.92)';
   ctx.fill();
@@ -279,13 +300,52 @@ export interface ToolbeltLayout {
   slotRects: { x: number; y: number; w: number; h: number }[];
 }
 
-export function getToolbeltLayout(canvas: HTMLCanvasElement): ToolbeltLayout {
+export interface BottomHudBarLayout {
+  barLeftX: number;
+  bottomRowY: number;
+  barHeight: number;
+  stunCardX: number;
+  toolbeltRowX: number;
+  /** Panel + gap reserved left of the stun card (0 when no weapon HUD). */
+  weaponStripW: number;
+}
+
+/** Width of weapon durability panel + gap before stun (0 if nothing to show). */
+export function getWeaponDurabilityHudStripWidth(hud?: WeaponDurabilityHudSnapshot | null): number {
+  if (!hud) return 0;
+  const showMain = hud.mainhandKey && hud.mainhandKey !== 'none';
+  const showOff = hud.offhandKey && hud.offhandKey !== 'none';
+  if (!showMain && !showOff) return 0;
+  return SHARP_BLADE_MAIN_W + SHARP_PANEL_PAD_X * 2 + WEAPON_TO_STUN_GAP;
+}
+
+/** Bottom HUD row geometry (centered), matching `renderStatsHUD`. */
+export function getBottomHudBarLayout(
+  canvas: HTMLCanvasElement,
+  weaponHud?: WeaponDurabilityHudSnapshot | null
+): BottomHudBarLayout {
   const W = canvas.width;
   const H = canvas.height;
   const barHeight = Math.max(STUN_CARD_H, TOOLBELT_SLOT_SIZE);
   const bottomRowY = H - PAD - BOTTOM_BAR_PAD_BOTTOM - barHeight - 8;
-  const barLeftX = W / 2 - BOTTOM_BAR_TOTAL_W / 2;
-  const toolbeltRowX = barLeftX + STUN_CARD_W + BAR_GAP;
+  const weaponStripW = getWeaponDurabilityHudStripWidth(weaponHud);
+  const totalW = weaponStripW + BOTTOM_BAR_CORE_W;
+  const barLeftX = W / 2 - totalW / 2;
+  return {
+    barLeftX,
+    bottomRowY,
+    barHeight,
+    stunCardX: barLeftX + weaponStripW,
+    toolbeltRowX: barLeftX + weaponStripW + STUN_CARD_W + BAR_GAP,
+    weaponStripW
+  };
+}
+
+export function getToolbeltLayout(
+  canvas: HTMLCanvasElement,
+  weaponHud?: WeaponDurabilityHudSnapshot | null
+): ToolbeltLayout {
+  const { bottomRowY, barHeight, toolbeltRowX } = getBottomHudBarLayout(canvas, weaponHud);
   const toolbeltRowY = bottomRowY + (barHeight - TOOLBELT_SLOT_SIZE) / 2;
   const slotRects: { x: number; y: number; w: number; h: number }[] = [];
   for (let i = 0; i < TOOLBELT_SLOT_COUNT; i++) {
@@ -300,13 +360,210 @@ export function getToolbeltLayout(canvas: HTMLCanvasElement): ToolbeltLayout {
 }
 
 /** Hit-test toolbelt slots. Returns 0..3 for a slot index, or -1 if not over a toolbelt slot. */
-export function hitTestToolbelt(x: number, y: number, canvas: HTMLCanvasElement): number {
-  const layout = getToolbeltLayout(canvas);
+export function hitTestToolbelt(
+  x: number,
+  y: number,
+  canvas: HTMLCanvasElement,
+  weaponHud?: WeaponDurabilityHudSnapshot | null
+): number {
+  const layout = getToolbeltLayout(canvas, weaponHud);
   for (let i = 0; i < layout.slotRects.length; i++) {
     const r = layout.slotRects[i];
     if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return i;
   }
   return -1;
+}
+
+/** Sword silhouette durability: pommel, grip, curved guard, blade + tip; solid blade fill from guard toward tip. */
+
+/** Shared pommel / grip / guard / blade proportions (must match in silhouette + meter paths). */
+function getSwordProportions(h: number): {
+  rP: number;
+  cxOff: number;
+  gHH: number;
+  gripLen: number;
+  guardAlong: number;
+  bHalf: number;
+  guardArm: number;
+} {
+  return {
+    rP: Math.max(2.5, h * 0.23),
+    cxOff: 1.5,
+    gHH: h * 0.072,
+    gripLen: h * 0.48,
+    guardAlong: h * 0.6,
+    bHalf: h * 0.175,
+    guardArm: h * 0.54
+  };
+}
+
+/** Full sword outline (horizontal, tip right). */
+function addSwordSilhouettePath(
+  ctx: CanvasRenderingContext2D,
+  left: number,
+  top: number,
+  w: number,
+  h: number
+): void {
+  const mid = top + h * 0.5;
+  const { rP, cxOff, gHH, gripLen, guardAlong, bHalf, guardArm } = getSwordProportions(h);
+  const cxP = left + rP + cxOff;
+  const gl = cxP + rP;
+  const gr = gl + gripLen;
+  const bladeL = gr + guardAlong;
+  const tipX = left + w;
+  const tLen = Math.min(h * 0.88, (tipX - bladeL) * 0.38);
+  const flatR = tipX - tLen;
+
+  const gTipX = gr + guardAlong * 0.1;
+  const gMidX = gr + guardAlong * 0.4;
+  const gArmX = gr + guardAlong * 0.92;
+  const gTopY = mid - guardArm;
+  const gBotY = mid + guardArm;
+
+  ctx.beginPath();
+  ctx.moveTo(cxP - rP, mid);
+  ctx.arc(cxP, mid, rP, Math.PI, 0, false);
+  ctx.lineTo(cxP + rP, mid + gHH);
+  ctx.lineTo(gl, mid + gHH);
+  ctx.lineTo(gr, mid + gHH);
+  ctx.lineTo(gTipX, gBotY - h * 0.08);
+  ctx.quadraticCurveTo(gMidX, gBotY, gArmX, mid + bHalf - h * 0.02);
+  ctx.lineTo(bladeL, mid + bHalf);
+  ctx.lineTo(flatR, mid + bHalf);
+  ctx.lineTo(tipX, mid);
+  ctx.lineTo(flatR, mid - bHalf);
+  ctx.lineTo(bladeL, mid - bHalf);
+  ctx.lineTo(gArmX, mid - bHalf + h * 0.02);
+  ctx.quadraticCurveTo(gMidX, gTopY, gTipX, gTopY + h * 0.08);
+  ctx.lineTo(gr, mid - gHH);
+  ctx.lineTo(gl, mid - gHH);
+  ctx.lineTo(cxP + rP, mid - gHH);
+  ctx.arc(cxP, mid, rP, 0, Math.PI, false);
+  ctx.closePath();
+}
+
+/** Blade-only region (for meter fill), same tip/flat as silhouette. */
+function addBladeMeterPath(
+  ctx: CanvasRenderingContext2D,
+  bladeL: number,
+  mid: number,
+  bHalf: number,
+  flatR: number,
+  tipX: number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(bladeL, mid - bHalf);
+  ctx.lineTo(flatR, mid - bHalf);
+  ctx.lineTo(tipX, mid);
+  ctx.lineTo(flatR, mid + bHalf);
+  ctx.lineTo(bladeL, mid + bHalf);
+  ctx.closePath();
+}
+
+function swordLayout(left: number, top: number, w: number, h: number): {
+  bladeL: number;
+  mid: number;
+  bHalf: number;
+  flatR: number;
+  tipX: number;
+  bladeLen: number;
+} {
+  const mid = top + h * 0.5;
+  const { rP, cxOff, gripLen, guardAlong, bHalf } = getSwordProportions(h);
+  const cxP = left + rP + cxOff;
+  const gr = cxP + rP + gripLen;
+  const bladeL = gr + guardAlong;
+  const tipX = left + w;
+  const tLen = Math.min(h * 0.88, (tipX - bladeL) * 0.38);
+  const flatR = tipX - tLen;
+  return { bladeL, mid, bHalf, flatR, tipX, bladeLen: tipX - bladeL };
+}
+
+function durabilitySolidFillColor(pct: number): string {
+  if (pct <= 0) return '#4a2828';
+  if (pct < 0.2) return '#b03838';
+  if (pct < 0.4) return '#c07020';
+  if (pct < 0.6) return '#b89828';
+  if (pct < 0.8) return '#3a9858';
+  return '#42b870';
+}
+
+function drawSwordDurabilityRow(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  top: number,
+  w: number,
+  h: number,
+  durability: number,
+  maxDur: number
+): void {
+  const left = centerX - w / 2;
+  const pct = maxDur > 0 ? Math.max(0, Math.min(1, durability / maxDur)) : 0;
+  const { bladeL, mid, bHalf, flatR, tipX, bladeLen } = swordLayout(left, top, w, h);
+  const fillExtent = bladeLen * pct;
+
+  addSwordSilhouettePath(ctx, left, top, w, h);
+  ctx.fillStyle = '#0c0a09';
+  ctx.fill();
+
+  if (fillExtent > 0.4) {
+    ctx.save();
+    addBladeMeterPath(ctx, bladeL, mid, bHalf, flatR, tipX);
+    ctx.clip();
+    ctx.fillStyle = durabilitySolidFillColor(pct);
+    ctx.fillRect(bladeL - 0.5, top - 1, fillExtent + 1, h + 2);
+    ctx.restore();
+  }
+
+  ctx.save();
+  addSwordSilhouettePath(ctx, left, top, w, h);
+  ctx.strokeStyle = 'rgba(242, 238, 230, 0.92)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawWeaponSharpnessHud(
+  ctx: CanvasRenderingContext2D,
+  panelLeft: number,
+  bottomRowY: number,
+  barHeight: number,
+  hud: WeaponDurabilityHudSnapshot
+): void {
+  const max = MAX_WEAPON_DURABILITY;
+  const showMain = hud.mainhandKey && hud.mainhandKey !== 'none';
+  const showOff = hud.offhandKey && hud.offhandKey !== 'none';
+  if (!showMain && !showOff) return;
+
+  const mainW = SHARP_BLADE_MAIN_W;
+  const mainH = SHARP_BLADE_H;
+  const offW = Math.round(mainW * SHARP_OFFHAND_W_MULT);
+  const offH = Math.round(mainH * SHARP_OFFHAND_H_MULT);
+  const bodyH =
+    (showMain ? mainH : 0) + (showMain && showOff ? SHARP_ROW_GAP : 0) + (showOff ? offH : 0);
+  const panelW = mainW + SHARP_PANEL_PAD_X * 2;
+  const panelH = bodyH + SHARP_PANEL_PAD_Y * 2;
+  const panelTop = bottomRowY + (barHeight - panelH) / 2;
+
+  ctx.save();
+  roundRect(ctx, panelLeft, panelTop, panelW, panelH, 8);
+  ctx.fillStyle = 'rgba(20, 16, 13, 0.92)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(95, 72, 48, 0.42)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const cx = panelLeft + panelW / 2;
+  let y = panelTop + SHARP_PANEL_PAD_Y;
+  if (showMain) {
+    drawSwordDurabilityRow(ctx, cx, y, mainW, mainH, hud.mainhandDurability, max);
+    y += mainH + (showOff ? SHARP_ROW_GAP : 0);
+  }
+  if (showOff) {
+    drawSwordDurabilityRow(ctx, cx, y, offW, offH, hud.offhandDurability, max);
+  }
+  ctx.restore();
 }
 
 function drawOrb(

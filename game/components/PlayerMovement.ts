@@ -202,6 +202,13 @@ export class PlayerMovement extends Movement {
           }
         }
       } else {
+        const playingState = systems?.get?.('playingState') as { restingAtCampfire?: boolean } | undefined;
+        if (playingState?.restingAtCampfire) {
+          this.velocityX = 0;
+          this.velocityY = 0;
+          this.cancelPath();
+          if (this.isSprinting) this.setSprinting(false);
+        }
         const healing = this.entity!.getComponent(PlayerHealing);
         if (healing?.isHealing) {
           this.speed = this.baseSpeed * 0.5;

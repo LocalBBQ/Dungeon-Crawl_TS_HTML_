@@ -29,6 +29,8 @@ export class Obstacle {
   targetLevel?: number;
   /** For scene entrances/exits: level to return to when leaving the target (e.g. 1 = Village Outskirts). */
   returnLevel?: number;
+  /** Firepit only: HP the player can still recover here; at 0 the flame glow is not drawn. */
+  campfireHealRemaining?: number;
 
   constructor(x: number, y: number, width: number, height: number, type = 'tree') {
     this.x = x;

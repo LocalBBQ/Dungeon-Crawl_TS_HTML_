@@ -6,7 +6,7 @@ import type { PlayingStateShape } from '../state/PlayingState.js';
 import { getActiveWeaponSet, setActiveWeaponSet, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import { getInventoryLayout, getChestLayout, getShopLayout, hitTestInventory, hitTestChest, hitTestShop, getTabOverlayLayout, hitTestTabOverlay, ensureInventoryInitialized, type DragState, HEADER_H, SHOP_HEADER_HEIGHT } from '../ui/InventoryChestCanvas.js';
 import { migrateUnlockedStrategyRecipeIds, STRATEGY_LOADOUT_SLOT_COUNT } from '../config/strategyCraftingConfig.js';
-import { hitTestToolbelt } from '../ui/StatsHUDCanvas.js';
+import { hitTestToolbelt, type WeaponDurabilityHudSnapshot } from '../ui/StatsHUDCanvas.js';
 import type { TooltipHover } from '../types/tooltip.js';
 import { getRerollOverlayLayout, hitTestRerollOverlay, REROLL_HEADER_H } from '../ui/RerollOverlay.js';
 import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_ZOOM_STEP } from '../systems/renderers/MinimapRenderer.js';
@@ -30,11 +30,21 @@ import {
     moveFromRerollSlotTo,
     useWhetstoneOnWeapon,
     addPotionToToolbeltFromInventory,
-    removePotionFromToolbeltToInventory,
+    moveOnePotionFromToolbeltToInventorySlot,
     getTotalGoldFromInventory,
     tryConsumeGold,
 } from '../state/InventoryActions.js';
 import { equipArmorFromInventory, unequipArmorToInventory, swapArmorWithInventory, swapArmorWithArmor, canEquipArmorInSlot } from '../state/ArmorActions.js';
+
+function weaponHudSnapshotForToolbelt(ps: PlayingStateShape): WeaponDurabilityHudSnapshot {
+    const a = getActiveWeaponSet(ps);
+    return {
+        mainhandKey: a.mainhandKey,
+        mainhandDurability: a.mainhandDurability,
+        offhandKey: a.offhandKey,
+        offhandDurability: a.offhandDurability
+    };
+}
 
 export interface InventoryChestUIControllerContext {
     playingState: PlayingStateShape;
@@ -483,7 +493,7 @@ export class InventoryChestUIController {
             }
         }
         if (ps.inventoryOpen || ps.chestOpen) {
-            const tbIdx = hitTestToolbelt(x, y, g.canvas);
+            const tbIdx = hitTestToolbelt(x, y, g.canvas, weaponHudSnapshotForToolbelt(ps));
             const tbSlot = tbIdx >= 0 ? ps.toolbeltSlots?.[tbIdx] : null;
             if (tbIdx >= 0 && tbSlot && tbSlot.type === 'potion' && tbSlot.count >= 1) {
                 ds.isDragging = true;
@@ -696,7 +706,38 @@ export class InventoryChestUIController {
         }
         const sync = g.syncCombat;
 
-        const tbIdx = hitTestToolbelt(x, y, g.canvas);
+        const invPanelOpen = ps.inventoryOpen || ps.chestOpen || ps.rerollStationOpen;
+        const invLayoutForPotionDrop = ps.rerollStationOpen
+            ? getInventoryLayout(g.canvas, { includeChestGrid: true, panelOffset: ps.uiPanelOffsets?.inventory })
+            : getInventoryLayout(g.canvas, { panelOffset: ps.uiPanelOffsets?.inventory });
+        const invHitPotionDrop = invPanelOpen
+            ? hitTestInventory(x, y, ps, invLayoutForPotionDrop, ps.rerollStationOpen ? (ps.chestSlots ?? []) : undefined)
+            : null;
+
+        if (wasPotionDrag && sourceContext === 'inventory' && sourceIndex >= 0 && invHitPotionDrop?.type === 'inventory-slot') {
+            const targetIdx = invHitPotionDrop.index;
+            if (targetIdx === sourceIndex) {
+                g.refreshInventoryPanel();
+                return true;
+            }
+            swapInventorySlots(ps, sourceIndex, targetIdx);
+            g.refreshInventoryPanel();
+            return true;
+        }
+        if (
+            wasPotionDrag &&
+            sourceContext === 'toolbelt' &&
+            sourceToolbeltIndex !== undefined &&
+            sourceToolbeltIndex >= 0 &&
+            invHitPotionDrop?.type === 'inventory-slot'
+        ) {
+            if (moveOnePotionFromToolbeltToInventorySlot(ps, sourceToolbeltIndex, invHitPotionDrop.index)) {
+                g.refreshInventoryPanel();
+                return true;
+            }
+        }
+
+        const tbIdx = hitTestToolbelt(x, y, g.canvas, weaponHudSnapshotForToolbelt(ps));
         if (tbIdx >= 0 && wasPotionDrag && sourceContext === 'inventory' && sourceIndex >= 0) {
             addPotionToToolbeltFromInventory(ps, sourceIndex, tbIdx);
             g.refreshInventoryPanel();

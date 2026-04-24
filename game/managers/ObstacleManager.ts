@@ -25,6 +25,8 @@ export interface SerializedObstacle {
     passable?: boolean;
     targetLevel?: number;
     returnLevel?: number;
+    /** Firepit: remaining heal budget for campfire rest (serialized when returning from interiors). */
+    campfireHealRemaining?: number;
 }
 
 export interface SerializedLevelMap {
@@ -102,6 +104,19 @@ export class ObstacleManager {
         // Trees.png is a 3-frame strip: assign random variant when not set so each tree gets a random sprite
         if (type === 'tree' && (obstacle.spritePath || '').includes('Trees.png') && obstacle.spriteFrameIndex == null) {
             obstacle.spriteFrameIndex = Utils.randomInt(0, 2);
+        }
+        if (type === 'firepit') {
+            const cr = obstacle.campfireHealRemaining;
+            if (typeof cr !== 'number' || Number.isNaN(cr)) {
+                const restCfg = (this._config as { player?: { campfireRest?: { healPoolMin?: number; healPoolMax?: number } } }).player?.campfireRest;
+                const pmin = restCfg?.healPoolMin ?? 30;
+                const pmax = restCfg?.healPoolMax ?? 60;
+                const lo = Math.min(pmin, pmax);
+                const hi = Math.max(pmin, pmax);
+                obstacle.campfireHealRemaining = Utils.randomInt(lo, hi);
+            } else {
+                obstacle.campfireHealRemaining = Math.max(0, cr);
+            }
         }
         this.obstacles.push(obstacle);
         return obstacle;
@@ -758,6 +773,9 @@ export class ObstacleManager {
             if (obs.passable != null) s.passable = obs.passable;
             if (obs.targetLevel != null) s.targetLevel = obs.targetLevel;
             if (obs.returnLevel != null) s.returnLevel = obs.returnLevel;
+            if (obs.type === 'firepit' && typeof obs.campfireHealRemaining === 'number') {
+                s.campfireHealRemaining = obs.campfireHealRemaining;
+            }
             return s;
         });
     }
@@ -774,6 +792,7 @@ export class ObstacleManager {
             if (s.passable != null) customProps.passable = s.passable;
             if (s.targetLevel != null) customProps.targetLevel = s.targetLevel;
             if (s.returnLevel != null) customProps.returnLevel = s.returnLevel;
+            if (typeof s.campfireHealRemaining === 'number') customProps.campfireHealRemaining = s.campfireHealRemaining;
             this.addObstacle(
                 s.x,
                 s.y,

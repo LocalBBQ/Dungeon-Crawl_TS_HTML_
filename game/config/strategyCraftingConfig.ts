@@ -52,9 +52,9 @@ export const STRATEGY_RECIPES: StrategyRecipeDef[] = [
   {
     id: 'enchant_scroll',
     sequence: ['left', 'up', 'right', 'down'],
-    output: { type: 'craft', consumes: { page: 3 }, produces: 'enchantScroll' },
+    output: { type: 'craft', consumes: { page: 4 }, produces: 'enchantScroll' },
     label: 'Craft Enchant Scroll',
-    description: '3 Pages → 1 Enchant Scroll (use at reroll station to add or reroll enchants)',
+    description: '4 Enchantment Pages → 1 Enchant Scroll (use at reroll station to add or reroll enchants)',
     unlockedByDefault: true
   }
 ];

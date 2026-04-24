@@ -3,6 +3,8 @@
 // sword, greatsword, mace, and spin attacks — all use getSweepProgress + getAnticipationPullBack.
 import { Utils } from '../../utils/Utils.js';
 import { isBlockable } from '../../weapons/weaponBehavior.js';
+import type { ItemRarity } from '../../config/rarityConfig.js';
+import { getRarityStyle } from '../../config/rarityConfig.js';
 
 export const PlayerCombatRenderer = {
     SWEEP_SPEED: 1,
@@ -56,6 +58,42 @@ export const PlayerCombatRenderer = {
         const g = Math.max(0, Math.floor(parseInt(m[2], 16) * 0.55));
         const b = Math.max(0, Math.floor(parseInt(m[3], 16) * 0.55));
         return { fill: hex, stroke: `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}` };
+    },
+
+    /** Rarity-colored rim for equipped weapons (canvas shadow; cleared by clearRarityWeaponShadow). */
+    getWeaponSlotRarityShadow(
+        combat: unknown,
+        camera: { zoom: number },
+        slot: 'main' | 'off'
+    ): { shadowColor: string; shadowBlur: number } | null {
+        const c = combat as { weapon?: { rarity?: ItemRarity }; offhandWeapon?: { rarity?: ItemRarity } };
+        const w = slot === 'main' ? c.weapon : c.offhandWeapon;
+        const r = w?.rarity;
+        if (!r) return null;
+        const style = getRarityStyle(r);
+        const blurMul = r === 'legendary' ? 1.22 : r === 'rare' ? 1.08 : r === 'magic' ? 1 : 0.78;
+        return { shadowColor: style.border, shadowBlur: (3.4 * blurMul) / camera.zoom };
+    },
+
+    /** When sword is split into handle + blade passes, only the blade pass gets the rarity outline. */
+    outlineWeaponPart(part: string | undefined): boolean {
+        const p = part || 'all';
+        return p !== 'handle';
+    },
+
+    applyRarityWeaponShadow(ctx: CanvasRenderingContext2D, outline: { shadowColor: string; shadowBlur: number } | null): void {
+        if (!outline) return;
+        ctx.shadowColor = outline.shadowColor;
+        ctx.shadowBlur = outline.shadowBlur;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+    },
+
+    clearRarityWeaponShadow(ctx: CanvasRenderingContext2D): void {
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.shadowColor = 'transparent';
     },
 
     /** Raw linear progress 0..1 over the attack duration. */
@@ -396,7 +434,7 @@ export const PlayerCombatRenderer = {
      * Shared by player (e.g. dagger, sword; off-hand shield when equipped) and goblin. options.style === 'goblin' draws a Goblin Shiv (jagged, rusty).
      * part: 'handle' = pommel + grip only; 'blade' = guard + blade only; 'all' = full (default).
      */
-    drawDaggerAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { style?: string; part?: string; weaponColor?: string } = {}) {
+    drawDaggerAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { style?: string; part?: string; weaponColor?: string; rarityOutline?: { shadowColor: string; shadowBlur: number } | null } = {}) {
         if (options.style === 'goblin') {
             this._drawGoblinShivAt(ctx, gripX, gripY, angle, baseLength, camera, options);
             return;
@@ -413,6 +451,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(angle);
+        this.applyRarityWeaponShadow(ctx, options.rarityOutline ?? null);
         ctx.lineWidth = lw;
 
         if (part === 'handle' || part === 'all') {
@@ -461,6 +500,7 @@ export const PlayerCombatRenderer = {
             ctx.stroke();
         }
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -540,7 +580,7 @@ export const PlayerCombatRenderer = {
      * Blessed Winds: slender curved blade, ornate wind-themed guard and pommel, warm grip.
      * part: 'handle' = pommel + grip; 'blade' = guard + blade; 'all' = full.
      */
-    drawBlessedWindsAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { part?: string } = {}) {
+    drawBlessedWindsAt(ctx: CanvasRenderingContext2D, gripX: number, gripY: number, angle: number, baseLength: number, camera: { zoom: number }, options: { part?: string; rarityOutline?: { shadowColor: string; shadowBlur: number } | null } = {}) {
         const part = options.part || 'all';
         const z = camera.zoom;
         const swordLength = baseLength * z * 1.05;
@@ -548,6 +588,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(angle);
+        this.applyRarityWeaponShadow(ctx, options.rarityOutline ?? null);
         ctx.lineWidth = lw;
 
         if (part === 'handle' || part === 'all') {
@@ -652,6 +693,7 @@ export const PlayerCombatRenderer = {
             ctx.stroke();
         }
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -668,13 +710,14 @@ export const PlayerCombatRenderer = {
         const twoHanded = c.weapon && c.weapon.twoHanded;
         const defaultRange = c.weapon ? c.weapon.baseRange : 100;
         const baseLength = (c.weapon && c.weapon.weaponLength != null) ? c.weapon.weaponLength! : (c.attackRange ?? defaultRange) * 0.48;
+        const rarityOutline = this.outlineWeaponPart(part) ? this.getWeaponSlotRarityShadow(combat, camera, 'main') : null;
 
         if (c.weapon && c.weapon.name === 'Blessed Winds') {
-            this.drawBlessedWindsAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part });
+            this.drawBlessedWindsAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part, rarityOutline });
             return;
         }
         if (!twoHanded) {
-            this.drawDaggerAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part, weaponColor: c.weapon?.color });
+            this.drawDaggerAt(ctx, gripX, gripY, swordAngle, baseLength, camera, { part, weaponColor: c.weapon?.color, rarityOutline });
             return;
         }
 
@@ -685,6 +728,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(swordAngle);
+        this.applyRarityWeaponShadow(ctx, rarityOutline);
         const lw = 1;
         ctx.lineWidth = lw;
         const gripScale = 1.35;
@@ -736,6 +780,7 @@ export const PlayerCombatRenderer = {
             ctx.stroke();
         }
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -787,6 +832,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(maceAngle);
+        this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'main'));
         const lw = 1;
         const headMetal = this.weaponMetalColors(combat, '#5a5a62', '#3a3a42');
 
@@ -849,6 +895,7 @@ export const PlayerCombatRenderer = {
         ctx.arc(headCenterX, 0, headR - 2, 0, Math.PI * 2);
         ctx.stroke();
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -869,6 +916,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(drawAngle);
+        this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'main'));
 
         const stockLen = 28 * zoom;
         const limbHalf = 22 * zoom;
@@ -917,6 +965,7 @@ export const PlayerCombatRenderer = {
         ctx.strokeStyle = metal.stroke;
         ctx.strokeRect(-8 * zoom, -stockW / 2 - 2, 6, stockW + 4);
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -938,6 +987,7 @@ export const PlayerCombatRenderer = {
         ctx.translate(cx, cy);
         ctx.rotate(drawAngle);
         ctx.scale(-1, 1);
+        this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'main'));
 
         const halfLen = 28 * zoom;
         const gripLen = 5 * zoom;
@@ -997,6 +1047,7 @@ export const PlayerCombatRenderer = {
         ctx.lineTo(halfLen, nockY);
         ctx.stroke();
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -1036,6 +1087,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(gripX, gripY);
         ctx.rotate(staffAngle);
+        this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'main'));
 
         // Ferrule (metal cap at grip)
         ctx.fillStyle = metalFill;
@@ -1109,6 +1161,7 @@ export const PlayerCombatRenderer = {
         ctx.fill();
         ctx.stroke();
 
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -1136,6 +1189,7 @@ export const PlayerCombatRenderer = {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
+        this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'off'));
         if (!combat.isBlocking) ctx.globalAlpha = 0.85;
         ctx.strokeStyle = bladeStroke;
         ctx.fillStyle = bladeFill;
@@ -1154,6 +1208,7 @@ export const PlayerCombatRenderer = {
         ctx.fillRect(-3, -guardW * 0.5, 4, guardW);
         ctx.strokeRect(-3, -guardW * 0.5, 4, guardW);
         ctx.globalAlpha = 1;
+        this.clearRarityWeaponShadow(ctx);
         ctx.restore();
     },
 
@@ -1181,11 +1236,13 @@ export const PlayerCombatRenderer = {
             ctx.save();
             ctx.translate(shieldX, shieldY);
             ctx.rotate(movement.facingAngle + Math.PI / 2);
+            this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'off'));
             ctx.fillStyle = fill;
             ctx.strokeStyle = stroke;
             ctx.lineWidth = 2;
             ctx.fillRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.strokeRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
+            this.clearRarityWeaponShadow(ctx);
             ctx.restore();
         } else {
             const leftAngle = movement.facingAngle - Math.PI / 2;
@@ -1194,6 +1251,7 @@ export const PlayerCombatRenderer = {
             ctx.save();
             ctx.translate(leftX, leftY);
             ctx.rotate(leftAngle + Math.PI / 2);
+            this.applyRarityWeaponShadow(ctx, this.getWeaponSlotRarityShadow(combat, camera, 'off'));
             ctx.globalAlpha = 0.5;
             ctx.fillStyle = fill;
             ctx.strokeStyle = stroke;
@@ -1201,6 +1259,7 @@ export const PlayerCombatRenderer = {
             ctx.fillRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.strokeRect(-shieldW / 2, -shieldH / 2, shieldW, shieldH);
             ctx.globalAlpha = 1;
+            this.clearRarityWeaponShadow(ctx);
             ctx.restore();
         }
     }

@@ -36,6 +36,7 @@ export interface GameLike {
     crossbowPerfectReloadNext?: boolean;
     crossbowReloadInProgress?: boolean;
     playerProjectileCooldown?: number;
+    restingAtCampfire?: boolean;
     [key: string]: unknown;
 }
 
@@ -154,6 +155,7 @@ export class PlayerInputController {
             if (this.game.pointerDownConsumedByUI) return;
             const player = this.player;
             if (!player || !cameraSystem?.screenToWorld) return;
+            if (this.game.restingAtCampfire) return;
             // In range of a gatherable: click starts gather, don't start attack
             if (this.game.playerInGatherableRange) return;
 
@@ -198,6 +200,10 @@ export class PlayerInputController {
             }
             const player = this.player;
             if (!player || !cameraSystem?.screenToWorld) return;
+            if (this.game.restingAtCampfire) {
+                this.isChargingAttack = false;
+                return;
+            }
 
             const transform = player.getComponent(Transform);
             const movement = player.getComponent(Movement);
@@ -392,6 +398,7 @@ export class PlayerInputController {
             if (this.game.pointerDownConsumedByUI) return;
             const player = this.player;
             if (!player) return;
+            if (this.game.restingAtCampfire) return;
 
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
@@ -435,6 +442,7 @@ export class PlayerInputController {
             }
             const player = this.player;
             if (!player) return;
+            if (this.game.restingAtCampfire) return;
 
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
@@ -460,6 +468,7 @@ export class PlayerInputController {
 
             const player = this.player;
             if (!player || !inputSystem || !cameraSystem) return;
+            if (this.game.restingAtCampfire) return;
 
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
@@ -539,6 +548,7 @@ export class PlayerInputController {
 
             const player = this.player;
             if (!player || !inputSystem) return;
+            if (this.game.restingAtCampfire) return;
 
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
@@ -582,6 +592,7 @@ export class PlayerInputController {
 
             const player = this.player;
             if (!player || !inputSystem) return;
+            if (this.game.restingAtCampfire) return;
 
             const statusEffects = player.getComponent(StatusEffects);
             if (statusEffects && statusEffects.isStunned) return;
@@ -616,6 +627,7 @@ export class PlayerInputController {
 
             const player = this.player;
             if (!player || !inputSystem) return;
+            if (this.game.restingAtCampfire) return;
 
             const movement = player.getComponent(Movement);
             
@@ -668,6 +680,7 @@ export class PlayerInputController {
                 if (movement.isKnockedBack) {
                     return;
                 }
+                if (this.game.restingAtCampfire) return;
                 movement.cancelPath();
                 movement.clearAttackTarget?.(); // Clear attack target when manually moving
                 
@@ -708,6 +721,7 @@ export class PlayerInputController {
                 if (movement.isKnockedBack) {
                     return;
                 }
+                if (this.game.restingAtCampfire) return;
                 // Check if no movement keys are pressed
                 if (!inputSystem.isKeyPressed('w') && !inputSystem.isKeyPressed('s') &&
                     !inputSystem.isKeyPressed('a') && !inputSystem.isKeyPressed('d')) {

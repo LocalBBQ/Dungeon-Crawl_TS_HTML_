@@ -23,6 +23,7 @@ import { WHETSTONE_REPAIR_PERCENT } from '../config/lootConfig.js';
 import { STRATEGY_LOADOUT_SLOT_COUNT, STRATEGY_RECIPES, migrateUnlockedStrategyRecipeIds } from '../config/strategyCraftingConfig.js';
 import type { StrategyDirection, StrategyRecipeDef } from '../config/strategyCraftingConfig.js';
 import { getStrategyRecipe } from '../config/strategyCraftingConfig.js';
+import { getHealChargeTotalHp } from '../config/GameConfig.js';
 import { drawHerbIcon, drawMushroomIcon, drawHoneyIcon, drawPotionIcon, drawGoldIcon, drawPageIcon, drawEnchantScrollIcon } from '../graphics/herbMushroomIcons.js';
 
 const STRATEGY_DIRECTION_SYMBOLS: Record<StrategyDirection, string> = { up: '↑', down: '↓', left: '←', right: '→' };
@@ -1414,11 +1415,12 @@ export function renderHoneyTooltip(
 export function renderPotionTooltip(
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
-    hover: { x: number; y: number; count: number } | null
+    hover: { x: number; y: number; count: number } | null,
+    healHp: number
 ): void {
     if (!hover) return;
     const title = hover.count > 1 ? `Potion ×${hover.count}` : 'Potion';
-    const line1 = 'Crafted from Herb + Mushroom. Press Q to use (adds 1 heal charge).';
+    const line1 = `Heal ${healHp} HP`;
     renderGatherTooltip(ctx, canvas, title, line1, hover);
 }
 
@@ -1439,8 +1441,8 @@ export function renderPageTooltip(
     hover: { x: number; y: number; count: number } | null
 ): void {
     if (!hover) return;
-    const title = hover.count > 1 ? `Page ×${hover.count}` : 'Page';
-    const line1 = 'Crafting ingredient. 3 Pages → 1 Enchant Scroll at the strategy crafting pane.';
+    const title = hover.count > 1 ? `Enchantment Page ×${hover.count}` : 'Enchantment Page';
+    const line1 = 'Collect 4 to add a random enchantment';
     renderGatherTooltip(ctx, canvas, title, line1, hover);
 }
 
@@ -1661,6 +1663,10 @@ function drawSlot(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: n
         drawPotionIcon(ctx, cx, cy, iconSize);
     } else if (options.itemIcon === 'gold') {
         drawGoldIcon(ctx, cx, cy, iconSize);
+    } else if (options.itemIcon === 'page') {
+        drawPageIcon(ctx, cx, cy, iconSize);
+    } else if (options.itemIcon === 'enchantScroll') {
+        drawEnchantScrollIcon(ctx, cx, cy, iconSize);
     } else {
         const fontSize = r.w >= 56 ? 24 : 20;
         if (options.symbol) {
@@ -2013,7 +2019,7 @@ export function renderInventory(
             itemIcon: isHerb ? 'herb' : isMushroom ? 'mushroom' : isHoney ? 'honey' : isPotion ? 'potion' : isGold ? 'gold' : isPage ? 'page' : isEnchantScroll ? 'enchantScroll' : undefined,
             emptyLabel: !key && !isConsumable ? undefined : undefined,
             stackCount: stackCount != null && (stackCount > 1 || isGold) ? stackCount : undefined,
-            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : isHerb ? (slot.count > 1 ? `Herb ×${slot.count}` : 'Herb') : isMushroom ? (slot.count > 1 ? `Mushroom ×${slot.count}` : 'Mushroom') : isHoney ? (slot.count > 1 ? `Honey ×${slot.count}` : 'Honey') : isPotion ? (slot.count > 1 ? `Potion ×${slot.count}` : 'Potion') : isGold ? (slot.count > 1 ? `Gold ×${slot.count}` : 'Gold') : isPage ? (slot.count > 1 ? `Page ×${slot.count}` : 'Page') : isEnchantScroll ? (slot.count > 1 ? `Enchant Scroll ×${slot.count}` : 'Enchant Scroll') : undefined,
+            label: isWhetstone ? (slot.count > 1 ? `Whetstone ×${slot.count}` : 'Whetstone') : isHerb ? (slot.count > 1 ? `Herb ×${slot.count}` : 'Herb') : isMushroom ? (slot.count > 1 ? `Mushroom ×${slot.count}` : 'Mushroom') : isHoney ? (slot.count > 1 ? `Honey ×${slot.count}` : 'Honey') : isPotion ? (slot.count > 1 ? `Potion ×${slot.count}` : 'Potion') : isGold ? (slot.count > 1 ? `Gold ×${slot.count}` : 'Gold') : isPage ? (slot.count > 1 ? `Enchantment Page ×${slot.count}` : 'Enchantment Page') : isEnchantScroll ? (slot.count > 1 ? `Enchant Scroll ×${slot.count}` : 'Enchant Scroll') : undefined,
             broken: !!(key && isWeaponSlotItem(slot) && slot.durability === 0)
         });
         if (isArmor && key && slot && 'durability' in slot) {
@@ -2053,7 +2059,7 @@ export function renderInventory(
     renderHerbTooltip(ctx, canvas, tooltipHover?.type === 'herb' ? tooltipHover : null);
     renderMushroomTooltip(ctx, canvas, tooltipHover?.type === 'mushroom' ? tooltipHover : null);
     renderHoneyTooltip(ctx, canvas, tooltipHover?.type === 'honey' ? tooltipHover : null);
-    renderPotionTooltip(ctx, canvas, tooltipHover?.type === 'potion' ? tooltipHover : null);
+    renderPotionTooltip(ctx, canvas, tooltipHover?.type === 'potion' ? tooltipHover : null, getHealChargeTotalHp());
     renderGoldTooltip(ctx, canvas, tooltipHover?.type === 'gold' ? tooltipHover : null);
     renderPageTooltip(ctx, canvas, tooltipHover?.type === 'page' ? tooltipHover : null);
     renderEnchantScrollTooltip(ctx, canvas, tooltipHover?.type === 'enchantScroll' ? tooltipHover : null);

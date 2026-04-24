@@ -38,8 +38,8 @@ export const CRAFT_RECIPES: CraftRecipeDef[] = [
   {
     id: 'enchant_scroll',
     label: 'Craft Enchant Scroll',
-    description: '3 Pages → 1 Enchant Scroll',
-    output: { type: 'craft', consumes: { page: 3 }, produces: 'enchantScroll' },
+    description: '4 Enchantment Pages → 1 Enchant Scroll',
+    output: { type: 'craft', consumes: { page: 4 }, produces: 'enchantScroll' },
     allowedStations: ['sanctuaryStation', 'field'],
     unlockedByDefault: true
   },

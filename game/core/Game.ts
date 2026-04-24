@@ -42,7 +42,7 @@ import { getEffectiveWeapon } from '../weapons/resolveEffectiveWeapon.js';
 import { getEquipSlotForWeapon } from '../weapons/weaponSlot.js';
 import type { GameRef, GameConfigShape } from '../types/index.js';
 import type { GameSystems } from '../types/systems.js';
-import { PlayingState, getActiveWeaponSet, swapActiveWeaponSet, migratePlayingStateWeaponKeys, migratePlayingStateCrafting, type PlayerClass, type PlayingStateShape, type InventorySlot, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
+import { PlayingState, getActiveWeaponSet, setActiveWeaponSet, swapActiveWeaponSet, migratePlayingStateWeaponKeys, migratePlayingStateCrafting, type PlayerClass, type PlayingStateShape, type InventorySlot, INVENTORY_SLOT_COUNT, MAX_WEAPON_DURABILITY, MAX_ARMOR_DURABILITY } from '../state/PlayingState.js';
 import {
     addHerbToInventory,
     addMushroomToInventory,
@@ -280,6 +280,7 @@ class Game {
     clearPointerDownConsumedByUI(): void { this.lastPointerDownConsumedByUI = false; }
     get playerInGatherableRange() { return this.playingState.playerInGatherableRange; }
     set playerInGatherableRange(v) { this.playingState.playerInGatherableRange = v; }
+    get restingAtCampfire() { return this.playingState.restingAtCampfire; }
     get crossbowReloadProgress() { return this.playingState.crossbowReloadProgress; }
     set crossbowReloadProgress(v) { this.playingState.crossbowReloadProgress = v; }
     get crossbowReloadInProgress() { return this.playingState.crossbowReloadInProgress; }
@@ -914,9 +915,11 @@ class Game {
 
         this.systems.eventBus.onTyped(EventTypes.PLAYER_HIT_ENEMY, () => {
             const ps = this.playingState;
-            if (ps.equippedMainhandDurability > 0) {
-                ps.equippedMainhandDurability = Math.max(0, ps.equippedMainhandDurability - 1);
-                if (ps.equippedMainhandDurability === 0 && ps.equippedMainhandKey && ps.equippedMainhandKey !== 'none') {
+            const active = getActiveWeaponSet(ps);
+            if (active.mainhandDurability > 0) {
+                const next = Math.max(0, active.mainhandDurability - 1);
+                setActiveWeaponSet(ps, { mainhandDurability: next });
+                if (next === 0 && active.mainhandKey && active.mainhandKey !== 'none') {
                     unequipToInventory(ps, 'mainhand', undefined, 0, () => this.syncPlayerWeaponsFromState());
                 }
             }
@@ -934,14 +937,17 @@ class Game {
             const ps = this.playingState;
             // Parry: rally already added in EnemyManager/ProjectileManager; don't consume offhand durability (greatsword has no offhand)
             if (data.isParry) return;
-            if (ps.equippedOffhandDurability > 0) {
-                ps.equippedOffhandDurability = Math.max(0, ps.equippedOffhandDurability - 1);
-                if (ps.equippedOffhandDurability === 0 && ps.equippedOffhandKey && ps.equippedOffhandKey !== 'none') {
+            const blockActive = getActiveWeaponSet(ps);
+            if (blockActive.offhandDurability > 0) {
+                const nextOff = Math.max(0, blockActive.offhandDurability - 1);
+                setActiveWeaponSet(ps, { offhandDurability: nextOff });
+                if (nextOff === 0 && blockActive.offhandKey && blockActive.offhandKey !== 'none') {
                     unequipToInventory(ps, 'offhand', undefined, 0, () => this.syncPlayerWeaponsFromState());
                 }
             }
             // Rally: when player has defender equipped, add blocked damage to rally pool
-            if (ps.equippedOffhandKey?.startsWith('defender') && (data.damage ?? 0) > 0) {
+            const rallyActive = getActiveWeaponSet(ps);
+            if (rallyActive.offhandKey?.startsWith('defender') && (data.damage ?? 0) > 0) {
                 const player = this.entities.get('player');
                 const rally = player?.getComponent(Rally);
                 if (rally) rally.addToPool(data.damage!);
@@ -1377,9 +1383,10 @@ class Game {
                     this.playingState.shopScrollOffset = Math.max(0, Math.min(newOffset, layout.maxScrollOffset));
                 }
             }
+            const player = this.entities.get('player');
+            this.playingStateController.updateCampfireRest(deltaTime, player);
             this.playingStateController.updateHub(deltaTime);
             // updateHub already calls systems.update once; run combat so training dummy can be hit (no second systems.update or speed doubles)
-            const player = this.entities.get('player');
             if (player) {
                 const combat = player.getComponent(Combat);
                 if (combat && combat.isPlayer && !combat.isAttacking && combat.attackInputBuffered) {
@@ -1419,6 +1426,7 @@ class Game {
         const w = weapon as { isRanged?: boolean; isBow?: boolean; isStaff?: boolean } | null;
         const isCrossbow = w && w.isRanged === true && !w.isBow && !w.isStaff;
         updateCrossbowReload(deltaTime, this.playingState, player, this.config, !!isCrossbow);
+        this.playingStateController.updateCampfireRest(deltaTime, player);
         this.systems!.update(deltaTime);
         if (player) {
             const combatComp = player.getComponent(Combat);
@@ -1661,6 +1669,15 @@ class Game {
                     const hubEntities = this.entities.getAll();
                     renderSystem.renderEntities(hubEntities, cameraSystem, obstacleManager, 0);
                     renderSystem.renderOverlay(this.ctx, cameraSystem);
+                    const gatherableManager = this.systemsTyped.gatherables;
+                    if (gatherableManager) {
+                        gatherableManager.render(this.ctx, cameraSystem);
+                        const hubPlayerForGather = this.entities.get('player');
+                        if (hubPlayerForGather) {
+                            gatherableManager.renderGatherRing(this.ctx, cameraSystem, hubPlayerForGather);
+                            gatherableManager.renderInteractPrompt(this.ctx, cameraSystem, hubPlayerForGather);
+                        }
+                    }
                     if (this.playingState.board && this.playingState.playerNearBoard) {
                         renderSystem.renderBoardInteractionPrompt(this.playingState.board, cameraSystem, true);
                     }
@@ -1697,7 +1714,18 @@ class Game {
                     }
                     // Draw stats HUD before panels so inventory/chest/shop/reroll sit on top
                     const hubPlayer = this.entities.get('player');
-                    renderStatsHUD(this.ctx, this.canvas, hubPlayer, 0, { delveFloor: this.playingState.delveFloor, recallChannelProgress: this.playingState.recallChannelProgress, toolbeltSlots: this.playingState.toolbeltSlots });
+                    const hubWeaponHud = getActiveWeaponSet(this.playingState);
+                    renderStatsHUD(this.ctx, this.canvas, hubPlayer, 0, {
+                        delveFloor: this.playingState.delveFloor,
+                        recallChannelProgress: this.playingState.recallChannelProgress,
+                        toolbeltSlots: this.playingState.toolbeltSlots,
+                        weaponDurabilityHud: {
+                            mainhandKey: hubWeaponHud.mainhandKey,
+                            mainhandDurability: hubWeaponHud.mainhandDurability,
+                            offhandKey: hubWeaponHud.offhandKey,
+                            offhandDurability: hubWeaponHud.offhandDurability
+                        }
+                    });
                     if (this.playingState.boardOpen) {
                         const levelNames: Record<number, string> = this.config.levels
                             ? Object.fromEntries(
@@ -1839,7 +1867,18 @@ class Game {
                     if (inLevelContext) {
                         const playerEntity = this.entities.get('player');
                         try {
-                            renderStatsHUD(this.ctx, this.canvas, playerEntity, currentLevel, { delveFloor: this.playingState.delveFloor, recallChannelProgress: this.playingState.recallChannelProgress, toolbeltSlots: this.playingState.toolbeltSlots });
+                            const levelWeaponHud = getActiveWeaponSet(this.playingState);
+                            renderStatsHUD(this.ctx, this.canvas, playerEntity, currentLevel, {
+                                delveFloor: this.playingState.delveFloor,
+                                recallChannelProgress: this.playingState.recallChannelProgress,
+                                toolbeltSlots: this.playingState.toolbeltSlots,
+                                weaponDurabilityHud: {
+                                    mainhandKey: levelWeaponHud.mainhandKey,
+                                    mainhandDurability: levelWeaponHud.mainhandDurability,
+                                    offhandKey: levelWeaponHud.offhandKey,
+                                    offhandDurability: levelWeaponHud.offhandDurability
+                                }
+                            });
                         } catch (hudError) {
                             console.error('Stats HUD render error:', hudError);
                         }

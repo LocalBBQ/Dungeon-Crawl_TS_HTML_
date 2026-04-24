@@ -83,7 +83,7 @@ export type PotionConsumable = { type: 'potion'; count: number };
 /** Stackable gold (stored in inventory). */
 export type GoldConsumable = { type: 'gold'; count: number };
 
-/** Stackable page (crafting ingredient for enchant scrolls). */
+/** Stackable Enchantment Page (craft 4 into an Enchant Scroll for random enchants at the reroll station). */
 export type PageConsumable = { type: 'page'; count: number };
 
 /** Stackable enchant scroll (use at reroll station to fill/reroll effect slots). */
@@ -205,6 +205,12 @@ export interface PlayingStateShape {
   gold?: number;
   lastHitEnemyId: string | null;
   playerInGatherableRange: boolean;
+  /** True when the player is within campfire rest range of any firepit obstacle. */
+  playerNearCampfire: boolean;
+  /** True while rest toggle is on and still in range — movement/combat blocked; health regen. */
+  restingAtCampfire: boolean;
+  /** Tap F near a firepit to toggle resting (cleared when leaving range or menus). */
+  campfireRestToggledOn: boolean;
   equippedMainhandKey: string;
   equippedOffhandKey: string;
   /** Current durability for equipped mainhand (0..MAX_WEAPON_DURABILITY). One hit = -1. */
@@ -556,6 +562,9 @@ const defaultPlayingState = (
     killsThisLife: 0,
     lastHitEnemyId: null,
     playerInGatherableRange: false,
+    playerNearCampfire: false,
+    restingAtCampfire: false,
+    campfireRestToggledOn: false,
     equippedMainhandKey: set1.mainhand,
     equippedOffhandKey: set1.offhand,
     equippedMainhandDurability: MAX_WEAPON_DURABILITY,
@@ -657,6 +666,9 @@ export class PlayingState implements PlayingStateShape {
   killsThisLife = 0;
   lastHitEnemyId: string | null = null;
   playerInGatherableRange = false;
+  playerNearCampfire = false;
+  restingAtCampfire = false;
+  campfireRestToggledOn = false;
   equippedMainhandKey: string;
   equippedOffhandKey: string;
   equippedMainhandDurability = MAX_WEAPON_DURABILITY;

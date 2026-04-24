@@ -118,20 +118,24 @@ export class ObstacleLayerRenderer {
                 ctx.lineWidth = Math.max(1, 1.5 / zoom);
                 ctx.stroke();
             }
-            const flicker = 0.85 + 0.15 * Math.sin(t * 2.1) * Math.sin(t * 1.7);
-            const flicker2 = 0.9 + 0.1 * Math.sin(t * 2.5);
-            ctx.fillStyle = `rgba(255, 100, 30, ${0.35 * flicker})`;
-            ctx.beginPath();
-            ctx.ellipse(cx, cy - h * 0.02, w * 0.28, h * 0.22, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = `rgba(255, 160, 50, ${0.6 * flicker2})`;
-            ctx.beginPath();
-            ctx.ellipse(cx, cy - h * 0.05, w * 0.18, h * 0.15, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = `rgba(255, 220, 120, ${0.85 * flicker})`;
-            ctx.beginPath();
-            ctx.ellipse(cx, cy - h * 0.06, w * 0.1, h * 0.08, 0, 0, Math.PI * 2);
-            ctx.fill();
+            const rem = (obstacle as { campfireHealRemaining?: number }).campfireHealRemaining;
+            const showFlame = typeof rem !== 'number' || rem > 0;
+            if (showFlame) {
+                const flicker = 0.85 + 0.15 * Math.sin(t * 2.1) * Math.sin(t * 1.7);
+                const flicker2 = 0.9 + 0.1 * Math.sin(t * 2.5);
+                ctx.fillStyle = `rgba(255, 100, 30, ${0.35 * flicker})`;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - h * 0.02, w * 0.28, h * 0.22, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = `rgba(255, 160, 50, ${0.6 * flicker2})`;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - h * 0.05, w * 0.18, h * 0.15, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = `rgba(255, 220, 120, ${0.85 * flicker})`;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - h * 0.06, w * 0.1, h * 0.08, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
             return;
         }
 

@@ -895,6 +895,34 @@ export function removePotionFromToolbeltToInventory(ps: PlayingStateShape, toolb
 }
 
 /**
+ * Move one potion from a toolbelt slot into a specific bag slot (empty or existing potion stack only).
+ * Returns false if the bag slot holds a non-potion item.
+ */
+export function moveOnePotionFromToolbeltToInventorySlot(
+  ps: PlayingStateShape,
+  toolbeltIndex: number,
+  inventoryIndex: number
+): boolean {
+  if (toolbeltIndex < 0 || toolbeltIndex >= TOOLBELT_SLOT_COUNT || !ps.toolbeltSlots) return false;
+  const tb = ps.toolbeltSlots[toolbeltIndex];
+  if (!tb || tb.type !== 'potion' || tb.count < 1) return false;
+  if (inventoryIndex < 0 || inventoryIndex >= INVENTORY_SLOT_COUNT || !ps.inventorySlots || ps.inventorySlots.length !== INVENTORY_SLOT_COUNT) return false;
+  const target = ps.inventorySlots[inventoryIndex];
+  if (target != null && !isPotionSlot(target)) return false;
+  if (target == null) {
+    ps.inventorySlots[inventoryIndex] = { type: 'potion', count: 1 };
+  } else {
+    (ps.inventorySlots[inventoryIndex] as PotionConsumable).count += 1;
+  }
+  if (tb.count === 1) {
+    ps.toolbeltSlots[toolbeltIndex] = null;
+  } else {
+    ps.toolbeltSlots[toolbeltIndex] = { type: 'potion', count: tb.count - 1 };
+  }
+  return true;
+}
+
+/**
  * Use one whetstone from the given inventory slot on a weapon. Target can be equipped mainhand/offhand (repairs both hands) or an inventory weapon slot.
  * Repairs by 35% of max durability per target. One whetstone used. Returns true if used.
  */

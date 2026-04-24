@@ -307,14 +307,14 @@ export class HUDController {
         if (!combat || !combat.isPlayer) return;
         (combat as Combat & { stopBlocking?(): void }).stopBlocking?.();
         const active = getActiveWeaponSet(ps);
-        const mainhand = getEffectiveWeapon(
-            active.mainhandKey && active.mainhandKey !== 'none' ? active.mainhandKey : undefined,
-            active.mainhandEffectIds
-        );
-        const offhand = getEffectiveWeapon(
-            active.offhandKey && active.offhandKey !== 'none' ? active.offhandKey : undefined,
-            active.offhandEffectIds
-        );
+        const mainKey = active.mainhandKey && active.mainhandKey !== 'none' ? active.mainhandKey : undefined;
+        const offKey = active.offhandKey && active.offhandKey !== 'none' ? active.offhandKey : undefined;
+        const mainhand = getEffectiveWeapon(mainKey, active.mainhandEffectIds, {
+            rarity: mainKey ? (active.mainhandRarity ?? 'common') : undefined
+        });
+        const offhand = getEffectiveWeapon(offKey, active.offhandEffectIds, {
+            rarity: offKey ? (active.offhandRarity ?? 'common') : undefined
+        });
         (combat as Combat & { setWeapons(m: unknown, o?: unknown): void }).setWeapons(mainhand, offhand);
     }
 

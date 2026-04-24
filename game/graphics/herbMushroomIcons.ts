@@ -162,7 +162,7 @@ export function drawHoneyIcon(ctx: CanvasRenderingContext2D, cx: number, cy: num
     ctx.restore();
 }
 
-/** Page icon: parchment sheet with text lines (crafting ingredient for enchant scrolls). */
+/** Enchantment Page icon: parchment with faint arcane accent (inventory / world pickup). */
 export function drawPageIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
     ctx.save();
     const s = size;
@@ -181,12 +181,12 @@ export function drawPageIcon(ctx: CanvasRenderingContext2D, cx: number, cy: numb
     ctx.lineWidth = lw;
     ctx.fillRect(left, top, w, h);
     ctx.strokeRect(left, top, w, h);
-    // Inner margin line (optional)
+    // Inner margin line
     ctx.strokeStyle = 'rgba(168, 152, 120, 0.5)';
     ctx.lineWidth = Math.max(1, s / 24);
     const margin = s * 0.08;
     ctx.strokeRect(left + margin, top + margin, w - margin * 2, h - margin * 2);
-    // Text lines (3 lines of parchment)
+    // Text lines
     ctx.strokeStyle = '#b0a088';
     ctx.lineWidth = Math.max(1, s / 28);
     const lineGap = h * 0.22;
@@ -199,6 +199,21 @@ export function drawPageIcon(ctx: CanvasRenderingContext2D, cx: number, cy: numb
         ctx.lineTo(left + w - pad, y);
         ctx.stroke();
     }
+    // Subtle arcane corner sigil (teal / gold)
+    const gx = left + w - margin * 1.2;
+    const gy = top + margin * 1.4;
+    ctx.strokeStyle = 'rgba(80, 140, 150, 0.85)';
+    ctx.lineWidth = Math.max(1, s / 22);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(gx - s * 0.12, gy);
+    ctx.lineTo(gx, gy - s * 0.1);
+    ctx.lineTo(gx + s * 0.06, gy + s * 0.02);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(180, 150, 70, 0.75)';
+    ctx.beginPath();
+    ctx.arc(gx - s * 0.04, gy + s * 0.06, s * 0.05, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
 }
 
