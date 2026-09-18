@@ -27,6 +27,7 @@ export interface SettingsLike {
   showEnemyStaminaBars?: boolean;
   showPlayerHealthBarAlways?: boolean;
   showEnemyHealthBars?: boolean;
+  render3D?: boolean;
 }
 
 const MENU_SCREENS: ScreenName[] = ['title', 'classSelect', 'saveSelect', 'death', 'pause', 'settings', 'settings-controls', 'help'];

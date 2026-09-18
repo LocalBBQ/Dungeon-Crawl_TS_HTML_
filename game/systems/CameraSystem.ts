@@ -9,6 +9,18 @@ interface TransformLike {
   y: number;
 }
 
+/**
+ * Replaces the flat screen/world mapping while a non-orthographic renderer is driving the view.
+ * The 3D renderer installs one so mouse aiming still resolves to the point under the cursor on the
+ * ground plane, and world positions still project to the right pixels.
+ */
+export interface CameraProjector {
+  screenToWorld(screenX: number, screenY: number): { x: number; y: number };
+  worldToScreen(worldX: number, worldY: number): { x: number; y: number };
+  /** Rotation of the view around the vertical axis. 0 means screen-up is world -y, as in 2D. */
+  readonly yaw: number;
+}
+
 export class CameraSystem {
   x: number;
   y: number;
@@ -26,6 +38,8 @@ export class CameraSystem {
   shakeOffsetX: number;
   shakeOffsetY: number;
   systems: SystemManager | null;
+  /** Set while a 3D renderer is active; null keeps the plain 2D mapping. */
+  projector: CameraProjector | null = null;
   private config: GameConfigShape = GameConfig;
 
   constructor(worldWidth: number, worldHeight: number) {
@@ -45,6 +59,14 @@ export class CameraSystem {
     this.shakeOffsetX = 0;
     this.shakeOffsetY = 0;
     this.systems = null;
+  }
+
+  /**
+   * How far the view is rotated from the flat 2D orientation. Directional input is screen-relative,
+   * so gameplay turns its axes by this before treating them as world directions.
+   */
+  get viewYaw(): number {
+    return this.projector?.yaw ?? 0;
   }
 
   addShake(intensity: number): void {
@@ -105,16 +127,22 @@ export class CameraSystem {
   }
 
   screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+    if (this.projector) return this.projector.screenToWorld(screenX, screenY);
     return { x: screenX / this.zoom + this.x, y: screenY / this.zoom + this.y };
   }
 
   worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
+    if (this.projector) return this.projector.worldToScreen(worldX, worldY);
     return {
       x: (worldX - this.x) * this.zoom + this.shakeOffsetX,
       y: (worldY - this.y) * this.zoom + this.shakeOffsetY,
     };
   }
 
+  // The single-axis helpers below stay on the flat mapping even with a projector installed: a
+  // projected camera cannot resolve one axis without the other. Callers that must be correct under
+  // a projector use screenToWorld/worldToScreen instead, and the 2D draws that rely on these are
+  // skipped while the 3D renderer owns the world.
   toWorldX(screenX: number): number {
     return screenX / this.zoom + this.x;
   }

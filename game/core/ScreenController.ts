@@ -170,7 +170,8 @@ export class ScreenController {
             }
         } else if (sm.isScreen('settings')) {
             const item = sm.getSettingsItemAt(x, y, ctx.settings);
-            if (item === 'music') { ctx.settings.musicEnabled = !ctx.settings.musicEnabled; handled = true; }
+            if (item === 'render3D') { ctx.settings.render3D = !ctx.settings.render3D; handled = true; }
+            else if (item === 'music') { ctx.settings.musicEnabled = !ctx.settings.musicEnabled; handled = true; }
             else if (item === 'sfx') { ctx.settings.sfxEnabled = !ctx.settings.sfxEnabled; handled = true; }
             else if (item === 'minimap') { ctx.settings.showMinimap = !ctx.settings.showMinimap; handled = true; }
             else if (item === 'characterSprites') { ctx.settings.useCharacterSprites = !ctx.settings.useCharacterSprites; handled = true; }

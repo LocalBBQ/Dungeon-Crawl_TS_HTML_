@@ -110,7 +110,7 @@ export class PlayerInputController {
     }
 
     bindHealControls() {
-        const inputSystem = this.systems.get('input');
+        const inputSystem = this.systems.getTyped().input;
 
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
             const isHealKey = key === 'q' || key === 'Q';
@@ -455,7 +455,7 @@ export class PlayerInputController {
     }
 
     bindProjectileControls() {
-        const inputSystem = this.systems.get('input');
+        const inputSystem = this.systems.getTyped().input;
         const cameraSystem = this.systems.get('camera');
 
         // Handle R key: weapon set swap, or crossbow reload/perfect, or generic projectile
@@ -533,7 +533,7 @@ export class PlayerInputController {
     }
 
     bindDodgeControls() {
-        const inputSystem = this.systems.get('input');
+        const inputSystem = this.systems.getTyped().input;
 
         // Handle dodge roll (Space key)
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
@@ -561,14 +561,8 @@ export class PlayerInputController {
             
             if (movement && stamina && stamina.currentStamina >= GameConfig.player.dodge.staminaCost) {
                 // Get current movement direction
-                let dodgeX = 0;
-                let dodgeY = 0;
-                
-                if (inputSystem.isKeyPressed('w')) dodgeY -= 1;
-                if (inputSystem.isKeyPressed('s')) dodgeY += 1;
-                if (inputSystem.isKeyPressed('a')) dodgeX -= 1;
-                if (inputSystem.isKeyPressed('d')) dodgeX += 1;
-                
+                const { x: dodgeX, y: dodgeY } = inputSystem.getMoveAxis();
+
                 // Perform dodge and consume stamina
                 if (movement.performDodge?.(dodgeX, dodgeY)) {
                     stamina.currentStamina -= GameConfig.player.dodge.staminaCost;
@@ -579,7 +573,7 @@ export class PlayerInputController {
     }
 
     bindSprintControls() {
-        const inputSystem = this.systems.get('input');
+        const inputSystem = this.systems.getTyped().input;
 
         // Handle sprint (Shift key down)
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key) => {
@@ -603,13 +597,7 @@ export class PlayerInputController {
                 movement.setSprinting?.(true);
                 
                 // If already moving with WASD, update velocity with sprint speed
-                let moveX = 0;
-                let moveY = 0;
-                if (inputSystem.isKeyPressed('w')) moveY -= 1;
-                if (inputSystem.isKeyPressed('s')) moveY += 1;
-                if (inputSystem.isKeyPressed('a')) moveX -= 1;
-                if (inputSystem.isKeyPressed('d')) moveX += 1;
-                
+                const { x: moveX, y: moveY } = inputSystem.getMoveAxis();
                 if (moveX !== 0 || moveY !== 0) {
                     movement.setVelocity(moveX, moveY);
                 }
@@ -636,13 +624,7 @@ export class PlayerInputController {
                 movement.setSprinting?.(false);
                 
                 // If still moving with WASD, update velocity back to normal speed
-                let moveX = 0;
-                let moveY = 0;
-                if (inputSystem.isKeyPressed('w')) moveY -= 1;
-                if (inputSystem.isKeyPressed('s')) moveY += 1;
-                if (inputSystem.isKeyPressed('a')) moveX -= 1;
-                if (inputSystem.isKeyPressed('d')) moveX += 1;
-                
+                const { x: moveX, y: moveY } = inputSystem.getMoveAxis();
                 if (moveX !== 0 || moveY !== 0) {
                     movement.setVelocity(moveX, moveY);
                 }
@@ -655,7 +637,7 @@ export class PlayerInputController {
     }
 
     bindMovementControls() {
-        const inputSystem = this.systems.get('input');
+        const inputSystem = this.systems.getTyped().input;
 
         // Handle WASD movement
         this.eventBus.on(EventTypes.INPUT_KEYDOWN, (key: unknown) => {
@@ -685,13 +667,7 @@ export class PlayerInputController {
                 movement.clearAttackTarget?.(); // Clear attack target when manually moving
                 
                 // Set velocity based on keys
-                let moveX = 0;
-                let moveY = 0;
-                if (inputSystem.isKeyPressed('w')) moveY -= 1;
-                if (inputSystem.isKeyPressed('s')) moveY += 1;
-                if (inputSystem.isKeyPressed('a')) moveX -= 1;
-                if (inputSystem.isKeyPressed('d')) moveX += 1;
-                
+                const { x: moveX, y: moveY } = inputSystem.getMoveAxis();
                 if (moveX !== 0 || moveY !== 0) {
                     movement.setVelocity(moveX, moveY);
                 }
@@ -723,21 +699,36 @@ export class PlayerInputController {
                 }
                 if (this.game.restingAtCampfire) return;
                 // Check if no movement keys are pressed
-                if (!inputSystem.isKeyPressed('w') && !inputSystem.isKeyPressed('s') &&
-                    !inputSystem.isKeyPressed('a') && !inputSystem.isKeyPressed('d')) {
+                const { x: moveX, y: moveY } = inputSystem.getMoveAxis();
+                if (moveX === 0 && moveY === 0) {
                     movement.stop();
                 } else {
-                    // Recalculate velocity
-                    let moveX = 0;
-                    let moveY = 0;
-                    if (inputSystem.isKeyPressed('w')) moveY -= 1;
-                    if (inputSystem.isKeyPressed('s')) moveY += 1;
-                    if (inputSystem.isKeyPressed('a')) moveX -= 1;
-                    if (inputSystem.isKeyPressed('d')) moveX += 1;
                     movement.setVelocity(moveX, moveY);
                 }
             }
         });
+    }
+
+    /**
+     * Re-apply the held movement keys. They are screen-relative, so a player who keeps walking while
+     * orbiting the camera would otherwise carry on in the old world direction until the next keypress.
+     */
+    reapplyMovementInput(): void {
+        const inputSystem = this.systems.getTyped().input;
+        const player = this.player;
+        if (!inputSystem || !player) return;
+        if (this.game.restingAtCampfire) return;
+        if (this.game.strategyCraftingOpen || this.game.chestOpen || this.game.boardOpen || this.game.shopOpen) return;
+
+        const statusEffects = player.getComponent(StatusEffects);
+        if (statusEffects && statusEffects.isStunned) return;
+
+        const movement = player.getComponent(Movement);
+        if (!movement || movement.isKnockedBack || movement.hasPath()) return;
+
+        const { x, y } = inputSystem.getMoveAxis();
+        if (x === 0 && y === 0) return;
+        movement.setVelocity(x, y);
     }
 }
 

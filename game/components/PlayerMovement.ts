@@ -13,6 +13,8 @@ import { Stamina } from './Stamina.js';
 
 interface InputSystemLike {
   isKeyPressed(key: string): boolean;
+  /** WASD as a world direction, already turned to match the camera's orientation. */
+  getMoveAxis(): { x: number; y: number };
   mouseX: number;
   mouseY: number;
 }
@@ -20,6 +22,7 @@ interface InputSystemLike {
 interface CameraSystemLike {
   toWorldX(x: number): number;
   toWorldY(y: number): number;
+  screenToWorld?(x: number, y: number): { x: number; y: number };
 }
 
 export class PlayerMovement extends Movement {
@@ -111,25 +114,7 @@ export class PlayerMovement extends Movement {
         const isThrust = combat?.isPlayer && (combat as Combat & { currentAttackIsThrust?: boolean })
           .currentAttackIsThrust;
         if (isThrust && systems) {
-          const inputSystem = systems.get?.('input') as InputSystemLike | undefined;
-          if (inputSystem) {
-            let moveX = 0, moveY = 0;
-            if (inputSystem.isKeyPressed('w')) moveY -= 1;
-            if (inputSystem.isKeyPressed('s')) moveY += 1;
-            if (inputSystem.isKeyPressed('a')) moveX -= 1;
-            if (inputSystem.isKeyPressed('d')) moveX += 1;
-            if (moveX !== 0 || moveY !== 0) {
-              const normalized = Utils.normalize(moveX, moveY);
-              this.velocityX = normalized.x * this.speed;
-              this.velocityY = normalized.y * this.speed;
-            } else {
-              this.velocityX = 0;
-              this.velocityY = 0;
-            }
-          } else {
-            this.velocityX = 0;
-            this.velocityY = 0;
-          }
+          this.resumeHeldMovement(systems);
         } else {
           this.velocityX = 0;
           this.velocityY = 0;
@@ -148,25 +133,7 @@ export class PlayerMovement extends Movement {
         this.isDodging = false;
         this.dodgeTimer = 0;
         if (health) health.isInvincible = false;
-        const inputSystem = systems?.get?.('input') as InputSystemLike | undefined;
-        if (inputSystem) {
-          let moveX = 0, moveY = 0;
-          if (inputSystem.isKeyPressed('w')) moveY -= 1;
-          if (inputSystem.isKeyPressed('s')) moveY += 1;
-          if (inputSystem.isKeyPressed('a')) moveX -= 1;
-          if (inputSystem.isKeyPressed('d')) moveX += 1;
-          if (moveX !== 0 || moveY !== 0) {
-            const normalized = Utils.normalize(moveX, moveY);
-            this.velocityX = normalized.x * this.speed;
-            this.velocityY = normalized.y * this.speed;
-          } else {
-            this.velocityX = 0;
-            this.velocityY = 0;
-          }
-        } else {
-          this.velocityX = 0;
-          this.velocityY = 0;
-        }
+        this.resumeHeldMovement(systems);
       }
       this.applyMovement(deltaTime, systems);
       this.updateFacingAngle(deltaTime, systems);
@@ -181,25 +148,7 @@ export class PlayerMovement extends Movement {
           this.isKnockedBack = false;
           this.knockbackVelocityX = 0;
           this.knockbackVelocityY = 0;
-          const inputSystem = systems?.get?.('input') as InputSystemLike | undefined;
-          if (inputSystem) {
-            let moveX = 0, moveY = 0;
-            if (inputSystem.isKeyPressed('w')) moveY -= 1;
-            if (inputSystem.isKeyPressed('s')) moveY += 1;
-            if (inputSystem.isKeyPressed('a')) moveX -= 1;
-            if (inputSystem.isKeyPressed('d')) moveX += 1;
-            if (moveX !== 0 || moveY !== 0) {
-              const normalized = Utils.normalize(moveX, moveY);
-              this.velocityX = normalized.x * this.speed;
-              this.velocityY = normalized.y * this.speed;
-            } else {
-              this.velocityX = 0;
-              this.velocityY = 0;
-            }
-          } else {
-            this.velocityX = 0;
-            this.velocityY = 0;
-          }
+          this.resumeHeldMovement(systems);
         }
       } else {
         const playingState = systems?.get?.('playingState') as { restingAtCampfire?: boolean } | undefined;
@@ -257,6 +206,20 @@ export class PlayerMovement extends Movement {
     }
   }
 
+  /** Pick movement back up from whatever keys are still held once a dodge, dash or knockback ends. */
+  private resumeHeldMovement(systems?: SystemsMap): void {
+    const inputSystem = systems?.get?.('input') as InputSystemLike | undefined;
+    const move = inputSystem?.getMoveAxis();
+    if (!move || (move.x === 0 && move.y === 0)) {
+      this.velocityX = 0;
+      this.velocityY = 0;
+      return;
+    }
+    const normalized = Utils.normalize(move.x, move.y);
+    this.velocityX = normalized.x * this.speed;
+    this.velocityY = normalized.y * this.speed;
+  }
+
   override updateMovement(deltaTime: number, systems?: SystemsMap): void {
     if (this.isDodging || this.isAttackDashing || this.isKnockedBack) return;
     super.updateMovement(deltaTime, systems);
@@ -270,9 +233,11 @@ export class PlayerMovement extends Movement {
       const cameraSystem = systems.get?.('camera') as CameraSystemLike | undefined;
       const transform = this.entity!.getComponent(Transform);
       if (inputSystem && cameraSystem && transform) {
-        const mouseWorldX = cameraSystem.toWorldX(inputSystem.mouseX);
-        const mouseWorldY = cameraSystem.toWorldY(inputSystem.mouseY);
-        this.facingAngle = Utils.angleTo(transform.x, transform.y, mouseWorldX, mouseWorldY);
+        // screenToWorld resolves both axes together, which a projected 3D camera requires.
+        const mouseWorld = cameraSystem.screenToWorld
+          ? cameraSystem.screenToWorld(inputSystem.mouseX, inputSystem.mouseY)
+          : { x: cameraSystem.toWorldX(inputSystem.mouseX), y: cameraSystem.toWorldY(inputSystem.mouseY) };
+        this.facingAngle = Utils.angleTo(transform.x, transform.y, mouseWorld.x, mouseWorld.y);
       }
     }
   }

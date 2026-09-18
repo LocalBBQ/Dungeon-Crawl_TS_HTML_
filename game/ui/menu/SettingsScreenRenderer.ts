@@ -7,21 +7,23 @@ function getSettingsLayout(canvas: HTMLCanvasElement, settings: SettingsLike) {
     const cx = width / 2;
     const rowHeight = 32;
     const rowWidth = 360;
-    const startY = height / 2 - 60;
+    const startY = height / 2 - 80;
 
-    const rows: { key: string; label: string; value?: boolean; type: string; x: number; y: number }[] = [
-        { key: 'music', label: 'Music', value: settings.musicEnabled, type: 'toggle', x: cx - rowWidth / 2, y: startY + 0 * 40 },
-        { key: 'sfx', label: 'Sound Effects', value: settings.sfxEnabled, type: 'toggle', x: cx - rowWidth / 2, y: startY + 1 * 40 },
-        { key: 'minimap', label: 'Minimap', value: settings.showMinimap, type: 'toggle', x: cx - rowWidth / 2, y: startY + 2 * 40 },
-        { key: 'characterSprites', label: 'Character Sprites', value: settings.useCharacterSprites, type: 'toggle', x: cx - rowWidth / 2, y: startY + 3 * 40 },
-        { key: 'environmentSprites', label: 'Environment Sprites', value: settings.useEnvironmentSprites, type: 'toggle', x: cx - rowWidth / 2, y: startY + 4 * 40 },
-        { key: 'playerHitboxIndicators', label: 'Player Hitbox Indicators', value: settings.showPlayerHitboxIndicators, type: 'toggle', x: cx - rowWidth / 2, y: startY + 5 * 40 },
-        { key: 'enemyHitboxIndicators', label: 'Enemy Hitbox Indicators', value: settings.showEnemyHitboxIndicators, type: 'toggle', x: cx - rowWidth / 2, y: startY + 6 * 40 },
-        { key: 'enemyStaminaBars', label: 'Enemy Stamina Bars', value: settings.showEnemyStaminaBars, type: 'toggle', x: cx - rowWidth / 2, y: startY + 7 * 40 },
-        { key: 'playerHealthBarAlways', label: 'Player Health Bar Always', value: settings.showPlayerHealthBarAlways, type: 'toggle', x: cx - rowWidth / 2, y: startY + 8 * 40 },
-        { key: 'enemyHealthBars', label: 'Enemy Health Bars', value: settings.showEnemyHealthBars, type: 'toggle', x: cx - rowWidth / 2, y: startY + 9 * 40 },
-        { key: 'controls', label: 'Controls', type: 'link', x: cx - rowWidth / 2, y: startY + 10 * 40 }
+    const entries: { key: string; label: string; value?: boolean; type: string }[] = [
+        { key: 'render3D', label: '3D World', value: settings.render3D, type: 'toggle' },
+        { key: 'music', label: 'Music', value: settings.musicEnabled, type: 'toggle' },
+        { key: 'sfx', label: 'Sound Effects', value: settings.sfxEnabled, type: 'toggle' },
+        { key: 'minimap', label: 'Minimap', value: settings.showMinimap, type: 'toggle' },
+        { key: 'characterSprites', label: 'Character Sprites', value: settings.useCharacterSprites, type: 'toggle' },
+        { key: 'environmentSprites', label: 'Environment Sprites', value: settings.useEnvironmentSprites, type: 'toggle' },
+        { key: 'playerHitboxIndicators', label: 'Player Hitbox Indicators', value: settings.showPlayerHitboxIndicators, type: 'toggle' },
+        { key: 'enemyHitboxIndicators', label: 'Enemy Hitbox Indicators', value: settings.showEnemyHitboxIndicators, type: 'toggle' },
+        { key: 'enemyStaminaBars', label: 'Enemy Stamina Bars', value: settings.showEnemyStaminaBars, type: 'toggle' },
+        { key: 'playerHealthBarAlways', label: 'Player Health Bar Always', value: settings.showPlayerHealthBarAlways, type: 'toggle' },
+        { key: 'enemyHealthBars', label: 'Enemy Health Bars', value: settings.showEnemyHealthBars, type: 'toggle' },
+        { key: 'controls', label: 'Controls', type: 'link' }
     ];
+    const rows = entries.map((entry, index) => ({ ...entry, x: cx - rowWidth / 2, y: startY + index * 40 }));
 
     const lastRow = rows[rows.length - 1];
     const backButton = { key: 'back', label: 'Back', x: cx - 80, y: lastRow.y + 60, width: 160, height: 40 };

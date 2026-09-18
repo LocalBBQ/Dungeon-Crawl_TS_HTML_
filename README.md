@@ -64,6 +64,7 @@ To host on **GitHub Pages**, deploy the contents of `dist/` (for example with a 
 - **Space** — dodge  
 - **Left click** — attack  
 - **Right click** — block  
+- **Middle click + drag** — rotate the camera (3D only); middle click alone recentres it  
 - **R** — shoot  
 - **E** — portal / interact  
 - **Tab** — inventory  
