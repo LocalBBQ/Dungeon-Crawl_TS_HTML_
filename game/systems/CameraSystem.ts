@@ -17,6 +17,8 @@ interface TransformLike {
 export interface CameraProjector {
   screenToWorld(screenX: number, screenY: number): { x: number; y: number };
   worldToScreen(worldX: number, worldY: number): { x: number; y: number };
+  /** Rotation of the view around the vertical axis. 0 means screen-up is world -y, as in 2D. */
+  readonly yaw: number;
 }
 
 export class CameraSystem {
@@ -57,6 +59,14 @@ export class CameraSystem {
     this.shakeOffsetX = 0;
     this.shakeOffsetY = 0;
     this.systems = null;
+  }
+
+  /**
+   * How far the view is rotated from the flat 2D orientation. Directional input is screen-relative,
+   * so gameplay turns its axes by this before treating them as world directions.
+   */
+  get viewYaw(): number {
+    return this.projector?.yaw ?? 0;
   }
 
   addShake(intensity: number): void {

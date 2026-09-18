@@ -13,6 +13,7 @@ const LINES = [
     'Space — Dodge',
     'Left click — Attack',
     'Right click — Block',
+    'Middle click drag — Rotate camera (3D only) · Middle click — Recentre it',
     'Q — Heal (tap to drink, then regen)',
     'Shift + Left click — Dash attack',
     'E — Portal (tap E at portal to channel; next area or return to Sanctuary)',

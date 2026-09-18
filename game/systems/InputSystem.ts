@@ -13,7 +13,14 @@ export class InputSystem {
   mouseClicked: boolean;
   rightMouseDown: boolean;
   rightMouseClicked: boolean;
+  middleMouseDown: boolean;
   wheelDelta: number;
+  /** Middle-drag movement in canvas pixels, accumulated until the camera consumes it. */
+  private orbitDragX = 0;
+  private orbitDragY = 0;
+  /** Distance travelled during the current middle-press, used to tell a click from a drag. */
+  private middleDragDistance = 0;
+  private orbitResetRequested = false;
   systems: SystemManager | null;
   chargeStartTime: number;
   isCharging: boolean;
@@ -29,6 +36,7 @@ export class InputSystem {
     this.mouseClicked = false;
     this.rightMouseDown = false;
     this.rightMouseClicked = false;
+    this.middleMouseDown = false;
     this.wheelDelta = 0;
     this.systems = null;
     this.chargeStartTime = 0;
@@ -84,13 +92,32 @@ export class InputSystem {
 
     this.canvas.addEventListener('mousemove', (e: MouseEvent) => {
       const rect = this.canvas.getBoundingClientRect();
-      this.mouseX = e.clientX - rect.left;
-      this.mouseY = e.clientY - rect.top;
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (this.middleMouseDown) {
+        const dx = x - this.mouseX;
+        const dy = y - this.mouseY;
+        this.orbitDragX += dx;
+        this.orbitDragY += dy;
+        this.middleDragDistance += Math.hypot(dx, dy);
+      }
+      this.mouseX = x;
+      this.mouseY = y;
     });
 
     this.canvas.addEventListener('contextmenu', (e: MouseEvent) => e.preventDefault());
+    // Middle click otherwise starts the browser's autoscroll, which steals the drag.
+    this.canvas.addEventListener('auxclick', (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    });
 
     this.canvas.addEventListener('mousedown', (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        this.middleMouseDown = true;
+        this.middleDragDistance = 0;
+        return;
+      }
       if (e.button === 0) {
         this.mouseDown = true;
         this.mouseClicked = true;
@@ -122,6 +149,12 @@ export class InputSystem {
     });
 
     window.addEventListener('mouseup', (e: MouseEvent) => {
+      // Bound to the window so a drag that ends off the canvas still releases.
+      if (e.button === 1) {
+        // A middle press that barely moved was a click, which recentres the camera.
+        if (this.middleMouseDown && this.middleDragDistance < 4) this.orbitResetRequested = true;
+        this.middleMouseDown = false;
+      }
       if (e.button === 0 && this.isCharging) {
         this._emitLeftMouseUp(e.shiftKey);
       }
@@ -135,6 +168,43 @@ export class InputSystem {
 
   isKeyPressed(key: string): boolean {
     return !!this.keys[key.toLowerCase()];
+  }
+
+  /**
+   * WASD as a world-space direction. The keys are screen-relative, so when the 3D camera has been
+   * orbited the raw axes are turned by the view's yaw before gameplay treats them as world offsets.
+   * Not normalized: callers combine it with other directions before deciding on a speed.
+   */
+  getMoveAxis(): { x: number; y: number } {
+    let x = 0;
+    let y = 0;
+    if (this.isKeyPressed('w')) y -= 1;
+    if (this.isKeyPressed('s')) y += 1;
+    if (this.isKeyPressed('a')) x -= 1;
+    if (this.isKeyPressed('d')) x += 1;
+    if (x === 0 && y === 0) return { x, y };
+
+    const camera = this.systems?.get('camera') as { viewYaw?: number } | null | undefined;
+    const yaw = camera?.viewYaw ?? 0;
+    if (yaw === 0) return { x, y };
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
+    return { x: x * cos + y * sin, y: y * cos - x * sin };
+  }
+
+  /** Middle-drag accumulated since the last call, in canvas pixels. */
+  consumeOrbitDrag(): { x: number; y: number } {
+    const drag = { x: this.orbitDragX, y: this.orbitDragY };
+    this.orbitDragX = 0;
+    this.orbitDragY = 0;
+    return drag;
+  }
+
+  /** True once after a middle click, meaning the camera should return to its default framing. */
+  consumeOrbitReset(): boolean {
+    const requested = this.orbitResetRequested;
+    this.orbitResetRequested = false;
+    return requested;
   }
 
   /**
@@ -160,6 +230,11 @@ export class InputSystem {
     this.mouseDown = false;
     this.isCharging = false;
     this.rightMouseDown = false;
+    this.middleMouseDown = false;
+    this.orbitDragX = 0;
+    this.orbitDragY = 0;
+    this.middleDragDistance = 0;
+    this.orbitResetRequested = false;
   }
 
   clearClick(): void {

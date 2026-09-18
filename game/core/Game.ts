@@ -1371,6 +1371,7 @@ class Game {
     }
 
     update(deltaTime: number) {
+        this.updateCameraOrbit();
         if (this.screenManager.currentScreen === 'hub') {
             if (this.playingState.shopOpen) {
                 const inputSystem = this.systemsTyped.input as { getWheelDelta?(): number } | undefined;
@@ -1624,6 +1625,24 @@ class Game {
         cameraSystem.projector = active ? this.renderer3D!.cameraRig : null;
         this.renderer3D?.setVisible(active);
         return active;
+    }
+
+    /** Middle-drag swings the 3D camera around the player; a middle click puts it back where it was. */
+    private updateCameraOrbit(): void {
+        const inputSystem = this.systemsTyped.input;
+        if (!inputSystem) return;
+        // Consume both either way, so neither can pile up while the world is drawn in 2D.
+        const drag = inputSystem.consumeOrbitDrag();
+        const reset = inputSystem.consumeOrbitReset();
+
+        const rig = this.renderer3D?.cameraRig;
+        if (!rig || this.settings.render3D !== true) return;
+        if (reset) rig.resetOrbit();
+        else if (drag.x !== 0 || drag.y !== 0) rig.orbit(drag.x, drag.y);
+        else return;
+
+        // WASD is screen-relative, so a player already walking needs their heading turned with the view.
+        this.playerInputController?.reapplyMovementInput();
     }
 
     /** Drop per-level 3D objects so a regenerated world does not inherit the previous one's meshes. */

@@ -16,11 +16,17 @@ export interface Camera2DState {
 
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
+const DEFAULT_PITCH = THREE.MathUtils.degToRad(54);
+const MIN_PITCH = THREE.MathUtils.degToRad(18);
+const MAX_PITCH = THREE.MathUtils.degToRad(88);
+/** Radians of rotation per pixel of middle-drag; a full turn takes roughly one screen width. */
+const ORBIT_SENSITIVITY = 0.005;
+
 export class CameraRig3D {
     readonly camera: THREE.PerspectiveCamera;
 
     /** Tilt away from straight-down, in radians measured from the ground plane. */
-    pitch = THREE.MathUtils.degToRad(54);
+    pitch = DEFAULT_PITCH;
     /** Rotation of the view around the vertical axis. 0 keeps 2D screen-up pointing at -y in world space. */
     yaw = 0;
 
@@ -38,6 +44,21 @@ export class CameraRig3D {
     /** World-space point the camera is aimed at (the 2D view centre, on the ground plane). */
     getTarget(): THREE.Vector3 {
         return this.target;
+    }
+
+    /**
+     * Swing the camera around its target by a middle-drag, measured in canvas pixels. Dragging right
+     * walks the camera around to the right; dragging down lifts it towards a top-down view.
+     */
+    orbit(deltaX: number, deltaY: number): void {
+        this.yaw = (this.yaw + deltaX * ORBIT_SENSITIVITY) % (Math.PI * 2);
+        this.pitch = THREE.MathUtils.clamp(this.pitch + deltaY * ORBIT_SENSITIVITY, MIN_PITCH, MAX_PITCH);
+    }
+
+    /** Return to the framing that matches the 2D camera. */
+    resetOrbit(): void {
+        this.yaw = 0;
+        this.pitch = DEFAULT_PITCH;
     }
 
     /**
@@ -66,9 +87,10 @@ export class CameraRig3D {
 
         const distance = this.distanceForDepth(this.viewportHeight / zoom);
         const horizontal = Math.cos(this.pitch) * distance;
-        // Sit "above and behind" the target: behind is -z so that world +y runs down the screen.
+        // The camera sits opposite the direction it looks, so at yaw 0 it must be at *greater* z than
+        // the target for world +y to run down the screen and world +x to run right, as it does in 2D.
         const offsetX = Math.sin(this.yaw) * horizontal;
-        const offsetZ = -Math.cos(this.yaw) * horizontal;
+        const offsetZ = Math.cos(this.yaw) * horizontal;
 
         // Camera shake is a screen-space nudge in 2D; convert it to world units so it reads the same.
         const shakeX = (camera2D.shakeOffsetX ?? 0) / zoom;

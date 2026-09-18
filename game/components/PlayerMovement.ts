@@ -13,6 +13,8 @@ import { Stamina } from './Stamina.js';
 
 interface InputSystemLike {
   isKeyPressed(key: string): boolean;
+  /** WASD as a world direction, already turned to match the camera's orientation. */
+  getMoveAxis(): { x: number; y: number };
   mouseX: number;
   mouseY: number;
 }
@@ -112,25 +114,7 @@ export class PlayerMovement extends Movement {
         const isThrust = combat?.isPlayer && (combat as Combat & { currentAttackIsThrust?: boolean })
           .currentAttackIsThrust;
         if (isThrust && systems) {
-          const inputSystem = systems.get?.('input') as InputSystemLike | undefined;
-          if (inputSystem) {
-            let moveX = 0, moveY = 0;
-            if (inputSystem.isKeyPressed('w')) moveY -= 1;
-            if (inputSystem.isKeyPressed('s')) moveY += 1;
-            if (inputSystem.isKeyPressed('a')) moveX -= 1;
-            if (inputSystem.isKeyPressed('d')) moveX += 1;
-            if (moveX !== 0 || moveY !== 0) {
-              const normalized = Utils.normalize(moveX, moveY);
-              this.velocityX = normalized.x * this.speed;
-              this.velocityY = normalized.y * this.speed;
-            } else {
-              this.velocityX = 0;
-              this.velocityY = 0;
-            }
-          } else {
-            this.velocityX = 0;
-            this.velocityY = 0;
-          }
+          this.resumeHeldMovement(systems);
         } else {
           this.velocityX = 0;
           this.velocityY = 0;
@@ -149,25 +133,7 @@ export class PlayerMovement extends Movement {
         this.isDodging = false;
         this.dodgeTimer = 0;
         if (health) health.isInvincible = false;
-        const inputSystem = systems?.get?.('input') as InputSystemLike | undefined;
-        if (inputSystem) {
-          let moveX = 0, moveY = 0;
-          if (inputSystem.isKeyPressed('w')) moveY -= 1;
-          if (inputSystem.isKeyPressed('s')) moveY += 1;
-          if (inputSystem.isKeyPressed('a')) moveX -= 1;
-          if (inputSystem.isKeyPressed('d')) moveX += 1;
-          if (moveX !== 0 || moveY !== 0) {
-            const normalized = Utils.normalize(moveX, moveY);
-            this.velocityX = normalized.x * this.speed;
-            this.velocityY = normalized.y * this.speed;
-          } else {
-            this.velocityX = 0;
-            this.velocityY = 0;
-          }
-        } else {
-          this.velocityX = 0;
-          this.velocityY = 0;
-        }
+        this.resumeHeldMovement(systems);
       }
       this.applyMovement(deltaTime, systems);
       this.updateFacingAngle(deltaTime, systems);
@@ -182,25 +148,7 @@ export class PlayerMovement extends Movement {
           this.isKnockedBack = false;
           this.knockbackVelocityX = 0;
           this.knockbackVelocityY = 0;
-          const inputSystem = systems?.get?.('input') as InputSystemLike | undefined;
-          if (inputSystem) {
-            let moveX = 0, moveY = 0;
-            if (inputSystem.isKeyPressed('w')) moveY -= 1;
-            if (inputSystem.isKeyPressed('s')) moveY += 1;
-            if (inputSystem.isKeyPressed('a')) moveX -= 1;
-            if (inputSystem.isKeyPressed('d')) moveX += 1;
-            if (moveX !== 0 || moveY !== 0) {
-              const normalized = Utils.normalize(moveX, moveY);
-              this.velocityX = normalized.x * this.speed;
-              this.velocityY = normalized.y * this.speed;
-            } else {
-              this.velocityX = 0;
-              this.velocityY = 0;
-            }
-          } else {
-            this.velocityX = 0;
-            this.velocityY = 0;
-          }
+          this.resumeHeldMovement(systems);
         }
       } else {
         const playingState = systems?.get?.('playingState') as { restingAtCampfire?: boolean } | undefined;
@@ -256,6 +204,20 @@ export class PlayerMovement extends Movement {
       this.applyMovement(deltaTime, systems);
       this.updateFacingAngle(deltaTime, systems);
     }
+  }
+
+  /** Pick movement back up from whatever keys are still held once a dodge, dash or knockback ends. */
+  private resumeHeldMovement(systems?: SystemsMap): void {
+    const inputSystem = systems?.get?.('input') as InputSystemLike | undefined;
+    const move = inputSystem?.getMoveAxis();
+    if (!move || (move.x === 0 && move.y === 0)) {
+      this.velocityX = 0;
+      this.velocityY = 0;
+      return;
+    }
+    const normalized = Utils.normalize(move.x, move.y);
+    this.velocityX = normalized.x * this.speed;
+    this.velocityY = normalized.y * this.speed;
   }
 
   override updateMovement(deltaTime: number, systems?: SystemsMap): void {

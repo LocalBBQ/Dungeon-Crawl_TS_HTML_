@@ -109,13 +109,22 @@ export class Renderer3D {
 
         this.cameraRig.sync(camera2D, width, height);
 
-        // The 2D camera's visible rectangle, which is what obstacle culling should follow.
+        // The 2D camera's visible rectangle, which is what obstacle culling should follow. Once the
+        // camera is orbited that rectangle is no longer axis-aligned, so fall back to bounding it by
+        // its own half-diagonal rather than letting objects pop out at the corners.
         const zoom = camera2D.zoom > 0 ? camera2D.zoom : 1;
+        const centerX = camera2D.x + width / (2 * zoom);
+        const centerY = camera2D.y + height / (2 * zoom);
+        let reachX = width / (2 * zoom);
+        let reachY = height / (2 * zoom);
+        if (this.cameraRig.yaw !== 0) {
+            reachX = reachY = Math.hypot(reachX, reachY);
+        }
         this.view = {
-            minX: camera2D.x,
-            minY: camera2D.y,
-            maxX: camera2D.x + width / zoom,
-            maxY: camera2D.y + height / zoom,
+            minX: centerX - reachX,
+            minY: centerY - reachY,
+            maxX: centerX + reachX,
+            maxY: centerY + reachY,
         };
 
         this.interactables.begin();
