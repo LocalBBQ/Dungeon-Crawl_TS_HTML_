@@ -101,6 +101,7 @@ import { hitTestMinimapZoomButtons, MINIMAP_ZOOM_MIN, MINIMAP_ZOOM_MAX, MINIMAP_
 import { SoundManager, SOUND_IDS } from '../audio/SoundManager.js';
 import { moveToRerollSlot, moveFromRerollSlotTo, addWeaponToInventory, addWhetstoneToInventory, addPageToInventory, useWhetstoneOnWeapon, findFirstPotionToolbeltIndex, usePotionFromToolbelt, findFirstPotionSlotIndex, usePotionFromInventory } from '../state/InventoryActions.js';
 import type { TooltipHover } from '../types/tooltip.js';
+import { Renderer3D } from '../../game3d/Renderer3D.js';
 
 export type { TooltipHover };
 
@@ -118,6 +119,8 @@ class Game {
     screenController!: ScreenController;
     playerInputController!: PlayerInputController;
     soundManager!: SoundManager;
+    /** Created the first time the 3D setting is on, then kept across toggles so context setup happens once. */
+    renderer3D: Renderer3D | null = null;
     running = false;
     lastTime = 0;
     _currentWorldWidth = 0;
@@ -173,7 +176,8 @@ class Game {
                 showEnemyHitboxIndicators: true,   // Enemy cones, wind-up, attack indicator, lunge telegraph
                 showEnemyStaminaBars: false,      // Enemy stamina bars (e.g. goblins)
                 showPlayerHealthBarAlways: true,  // Floating health (and stamina) bar above player
-                showEnemyHealthBars: true         // Floating health bars above all enemies
+                showEnemyHealthBars: true,        // Floating health bars above all enemies
+                render3D: true                    // Draw the world with the three.js renderer (UI stays 2D)
             };
             
             // Initialize screen manager
@@ -1059,6 +1063,7 @@ class Game {
         if (!obstacleManager) return;
 
         obstacleManager.clearWorld();
+        this.notifyLevelChanged();
 
         if (level === 0) {
             const hubLevel = this.config.levels && this.config.levels[0];
@@ -1589,6 +1594,74 @@ class Game {
         return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1);
     }
 
+    /**
+     * Attach or detach the three.js renderer so it matches the current setting, and report whether the
+     * world is being drawn in 3D this frame. Called every frame so the settings toggle applies at once.
+     * A renderer that fails to come up (no WebGL) turns the setting off rather than retrying forever.
+     */
+    private syncRenderMode(): boolean {
+        const renderSystem = this.systemsTyped.render;
+        const cameraSystem = this.systemsTyped.camera;
+        if (!renderSystem || !cameraSystem) return false;
+
+        const wanted = this.settings.render3D === true;
+        if (wanted && !this.renderer3D) {
+            try {
+                const sprites = this.systemsTyped.sprites;
+                this.renderer3D = new Renderer3D({
+                    overlayCanvas: this.canvas,
+                    getGroundTexture: (id) => sprites?.getGroundTexture?.(id) ?? null
+                });
+            } catch (error) {
+                console.error('3D renderer could not start; continuing in 2D:', error);
+                this.settings.render3D = false;
+                return false;
+            }
+        }
+
+        const active = wanted && this.renderer3D !== null;
+        renderSystem.renderer3D = active ? this.renderer3D : null;
+        cameraSystem.projector = active ? this.renderer3D!.cameraRig : null;
+        this.renderer3D?.setVisible(active);
+        return active;
+    }
+
+    /** Drop per-level 3D objects so a regenerated world does not inherit the previous one's meshes. */
+    notifyLevelChanged(): void {
+        this.renderer3D?.onLevelChanged();
+    }
+
+    /**
+     * The gather ring and the gather/campfire prompts are screen-space 2D draws positioned with the
+     * flat camera mapping, so in 3D they become one world-anchored billboard above the player instead.
+     */
+    private renderGatherablePrompts(cameraSystem: CameraSystem, is3D: boolean): void {
+        const gatherables = this.systemsTyped.gatherables;
+        if (!gatherables) return;
+        const player = this.entities.get('player');
+
+        if (!is3D) {
+            if (player) {
+                gatherables.renderGatherRing(this.ctx, cameraSystem, player);
+                gatherables.renderInteractPrompt(this.ctx, cameraSystem, player);
+            }
+            return;
+        }
+
+        const transform = player?.getComponent(Transform);
+        if (!this.renderer3D || !transform) return;
+        const lines: string[] = [];
+        if (!gatherables.gathering && gatherables.playerNearGatherable) {
+            lines.push(gatherables.gatherInteractPromptLabel);
+        }
+        if (!gatherables.gathering && this.playingState.playerNearCampfire) {
+            lines.push(this.playingState.restingAtCampfire ? 'Resting — F to stop' : 'F — Rest by the fire');
+        }
+        const progress = gatherables.gathering ? Math.min(1, gatherables.gatherProgress) : 0;
+        if (lines.length === 0 && progress <= 0) return;
+        this.renderer3D.queuePrompt('prompt:gather', transform, lines, progress);
+    }
+
     /** Draw title, death, or class-select screen (menu screens). Call from render() when on one of these. */
     renderMenuScreen() {
         if (!this.screenManager || !this.ctx || !this.canvas) return;
@@ -1612,6 +1685,8 @@ class Game {
         try {
             if (this.screenManager?.isScreen('title') || this.screenManager?.isScreen('death') || this.screenManager?.isScreen('classSelect') || this.screenManager?.isScreen('saveSelect')) {
                 this.hudController?.setOverlayScreenActive(true);
+                // Menus own the whole screen, so the world layer steps aside.
+                this.renderer3D?.setVisible(false);
                 this.renderMenuScreen();
                 return;
             }
@@ -1625,6 +1700,8 @@ class Game {
                 console.error('Missing render or camera system');
                 return;
             }
+
+            const is3D = this.syncRenderMode();
 
             // Ensure in-game overlay (and thus canvas-drawn HUD) stays visible whenever we're in hub or playing
             if (this.screenManager.isScreen('hub') || this.screenManager.isScreen('playing')) {
@@ -1655,7 +1732,7 @@ class Game {
                         renderSystem.renderRerollStation(this.playingState.rerollStation, cameraSystem, this.playingState.playerNearRerollStation, { skipInteractionPrompt: true });
                     }
                     if (this.playingState.craftingStation) {
-                        renderSystem.renderRerollStation(this.playingState.craftingStation, cameraSystem, this.playingState.playerNearCraftingStation, { skipInteractionPrompt: true });
+                        renderSystem.renderRerollStation(this.playingState.craftingStation, cameraSystem, this.playingState.playerNearCraftingStation, { skipInteractionPrompt: true, variant: 'crafting' });
                     }
                     if (this.playingState.activeQuest && hubConfig.questPortal) {
                         const questPortal = {
@@ -1669,15 +1746,9 @@ class Game {
                     const hubEntities = this.entities.getAll();
                     renderSystem.renderEntities(hubEntities, cameraSystem, obstacleManager, 0);
                     renderSystem.renderOverlay(this.ctx, cameraSystem);
-                    const gatherableManager = this.systemsTyped.gatherables;
-                    if (gatherableManager) {
-                        gatherableManager.render(this.ctx, cameraSystem);
-                        const hubPlayerForGather = this.entities.get('player');
-                        if (hubPlayerForGather) {
-                            gatherableManager.renderGatherRing(this.ctx, cameraSystem, hubPlayerForGather);
-                            gatherableManager.renderInteractPrompt(this.ctx, cameraSystem, hubPlayerForGather);
-                        }
-                    }
+                    renderSystem.renderWorldManagers(this.systemsTyped.gatherables ?? null, null);
+                    if (!is3D) this.systemsTyped.gatherables?.render(this.ctx, cameraSystem);
+                    this.renderGatherablePrompts(cameraSystem, is3D);
                     if (this.playingState.board && this.playingState.playerNearBoard) {
                         renderSystem.renderBoardInteractionPrompt(this.playingState.board, cameraSystem, true);
                     }
@@ -1693,7 +1764,8 @@ class Game {
                     if (this.playingState.craftingStation && this.playingState.playerNearCraftingStation) {
                         renderSystem.renderRerollStation(this.playingState.craftingStation, cameraSystem, true, {
                             interactionPromptOnly: true,
-                            interactionPromptText: 'Press E to craft'
+                            interactionPromptText: 'Press E to craft',
+                            variant: 'crafting'
                         });
                     }
                     if (this.playingState.activeQuest && hubConfig.questPortal && this.playingState.playerNearQuestPortal) {
@@ -1707,6 +1779,7 @@ class Game {
                     }
                 } finally {
                     // Always reset context and draw UI so minimap/level select work even if entity render threw
+                    renderSystem.present();
                     this.ctx.globalAlpha = 1;
                     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
                     if (this.settings.showMinimap) {
@@ -1790,18 +1863,16 @@ class Game {
                 if (this.playingState.recallPortal?.spawned) {
                     renderSystem.renderRecallPortal(this.playingState.recallPortal, cameraSystem, this.playingState.playerNearRecallPortal, this.playingState.recallPortalChannelProgress, undefined, true);
                 }
-                const gatherableManager = this.systemsTyped.gatherables;
-                if (gatherableManager) {
-                    gatherableManager.render(this.ctx, cameraSystem);
-                }
+                const hazardManager = this.systemsTyped.hazards;
+                renderSystem.renderWorldManagers(this.systemsTyped.gatherables ?? null, hazardManager ?? null);
+                if (!is3D) this.systemsTyped.gatherables?.render(this.ctx, cameraSystem);
                 const entities = this.entities.getAll();
                 if (entities.length === 0) {
                     console.warn('No entities to render');
                 }
                 renderSystem.renderEntities(entities, cameraSystem, obstacleManager, currentLevel);
                 renderSystem.renderOverlay(this.ctx, cameraSystem);
-                const hazardManager = this.systemsTyped.hazards;
-                if (hazardManager && hazardManager.renderFlamePillars) {
+                if (!is3D && hazardManager && hazardManager.renderFlamePillars) {
                     hazardManager.renderFlamePillars(this.ctx, cameraSystem);
                 }
                 if (this.playingState.portal && this.playingState.playerNearPortal) {
@@ -1818,15 +1889,10 @@ class Game {
                 if (this.playingState.playerNearSceneExit && this.playingState.sceneExitRect) {
                     renderSystem.renderSceneExitPrompt(this.playingState.sceneExitRect, cameraSystem);
                 }
-                if (gatherableManager) {
-                    const playerEntity = this.entities.get('player');
-                    if (playerEntity) {
-                        gatherableManager.renderGatherRing(this.ctx, cameraSystem, playerEntity);
-                        gatherableManager.renderInteractPrompt(this.ctx, cameraSystem, playerEntity);
-                    }
-                }
+                this.renderGatherablePrompts(cameraSystem, is3D);
             } finally {
                 // Always reset context and draw UI so minimap/pause work even if entity render threw
+                renderSystem.present();
                 this.ctx.globalAlpha = 1;
                 this.ctx.setTransform(1, 0, 0, 1, 0, 0);
                 try {

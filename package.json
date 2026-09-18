@@ -26,11 +26,13 @@
   "homepage": "https://github.com/LocalBBQ/TopDownARPG-HTML-CSS-JS#readme",
   "devDependencies": {
     "@types/howler": "^2.2.12",
+    "@types/three": "^0.169.0",
     "typescript": "^5.9.3",
     "vite": "^5.4.0",
     "vitest": "^2.1.0"
   },
   "dependencies": {
-    "howler": "^2.2.4"
+    "howler": "^2.2.4",
+    "three": "^0.169.0"
   }
 }

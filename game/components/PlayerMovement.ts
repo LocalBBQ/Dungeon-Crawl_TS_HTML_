@@ -20,6 +20,7 @@ interface InputSystemLike {
 interface CameraSystemLike {
   toWorldX(x: number): number;
   toWorldY(y: number): number;
+  screenToWorld?(x: number, y: number): { x: number; y: number };
 }
 
 export class PlayerMovement extends Movement {
@@ -270,9 +271,11 @@ export class PlayerMovement extends Movement {
       const cameraSystem = systems.get?.('camera') as CameraSystemLike | undefined;
       const transform = this.entity!.getComponent(Transform);
       if (inputSystem && cameraSystem && transform) {
-        const mouseWorldX = cameraSystem.toWorldX(inputSystem.mouseX);
-        const mouseWorldY = cameraSystem.toWorldY(inputSystem.mouseY);
-        this.facingAngle = Utils.angleTo(transform.x, transform.y, mouseWorldX, mouseWorldY);
+        // screenToWorld resolves both axes together, which a projected 3D camera requires.
+        const mouseWorld = cameraSystem.screenToWorld
+          ? cameraSystem.screenToWorld(inputSystem.mouseX, inputSystem.mouseY)
+          : { x: cameraSystem.toWorldX(inputSystem.mouseX), y: cameraSystem.toWorldY(inputSystem.mouseY) };
+        this.facingAngle = Utils.angleTo(transform.x, transform.y, mouseWorld.x, mouseWorld.y);
       }
     }
   }

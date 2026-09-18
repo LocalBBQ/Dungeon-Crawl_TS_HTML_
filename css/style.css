@@ -30,6 +30,21 @@ body {
     z-index: 2;
 }
 
+/* WebGL world, drawn behind #gameCanvas. The 2D canvas then only carries UI and stays transparent. */
+#gameCanvas3D {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+body.render-3d #gameCanvas {
+    background: transparent;
+}
+
 /* Empty placeholder; stats HUD is drawn on the game canvas. Panels (inventory, chest, strategy) sit above canvas. */
 #ui-overlay {
     position: absolute;
