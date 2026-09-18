@@ -156,9 +156,12 @@ export class TerrainRenderer3D {
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     }
 
-    /** Oversized plane just below the playfield so the horizon reads as more terrain, not void. */
+    /**
+     * Oversized plane just below the playfield so the horizon reads as more terrain, not void. It has
+     * to stay ahead of the widest shot the camera can take, which is a near-overhead orbit.
+     */
     private buildSkirt(worldWidth: number, worldHeight: number, ground: GroundTheme): THREE.Mesh {
-        const size = Math.max(worldWidth, worldHeight) * 4;
+        const size = Math.max(worldWidth, worldHeight) * 16;
         const geometry = sharedGeometry('terrainSkirt', () => {
             const plane = new THREE.PlaneGeometry(1, 1);
             plane.rotateX(-Math.PI / 2);

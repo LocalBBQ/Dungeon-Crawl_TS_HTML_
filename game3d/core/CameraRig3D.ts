@@ -68,10 +68,12 @@ export class CameraRig3D {
     private distanceForDepth(worldDepth: number): number {
         const halfFov = THREE.MathUtils.degToRad(this.camera.fov) / 2;
         const p = this.pitch;
-        // Guard the grazing case where the top of the frustum approaches the horizon.
-        const near = Math.max(p - halfFov, THREE.MathUtils.degToRad(6));
-        const far = Math.min(p + halfFov, Math.PI / 2);
-        const spread = 1 / Math.tan(near) - 1 / Math.tan(far);
+        // Ground reach of a frustum edge is height * cot(its angle below horizontal). Only the top edge
+        // needs guarding, against grazing the horizon; past vertical the bottom edge's cotangent goes
+        // negative on its own, which correctly widens the strip rather than pinning it at the nadir.
+        const top = Math.max(p - halfFov, THREE.MathUtils.degToRad(6));
+        const bottom = p + halfFov;
+        const spread = 1 / Math.tan(top) - 1 / Math.tan(bottom);
         if (spread <= 1e-4) return worldDepth;
         return worldDepth / (Math.sin(p) * spread);
     }
