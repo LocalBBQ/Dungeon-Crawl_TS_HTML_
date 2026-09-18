@@ -6,6 +6,7 @@
 // 3D camera. Vertices are rewritten in place each frame to avoid churning geometry.
 import * as THREE from 'three';
 import { ScenePool } from '../core/ScenePool.js';
+import { parseColor } from '../core/MaterialLibrary.js';
 
 /** Arc resolution. Fixed so the vertex buffer can be reused every frame. */
 const SEGMENTS = 48;
@@ -60,18 +61,6 @@ function createArcMesh(): DecalMesh {
     return mesh;
 }
 
-function parseCss(value: string): { color: THREE.Color; alpha: number } {
-    const rgba = value.match(/^rgba?\(([^)]+)\)$/i);
-    if (rgba) {
-        const parts = rgba[1].split(',').map((part) => parseFloat(part.trim()));
-        return {
-            color: new THREE.Color((parts[0] || 0) / 255, (parts[1] || 0) / 255, (parts[2] || 0) / 255),
-            alpha: parts.length > 3 ? parts[3] : 1,
-        };
-    }
-    return { color: new THREE.Color(value), alpha: 1 };
-}
-
 export class DecalRenderer3D {
     private readonly group = new THREE.Group();
     private readonly pool: ScenePool<DecalMesh>;
@@ -111,7 +100,7 @@ export class DecalRenderer3D {
         const attribute = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
         attribute.needsUpdate = true;
 
-        const { color, alpha } = parseCss(spec.fill);
+        const { color, alpha } = parseColor(spec.fill);
         const material = mesh.material as THREE.MeshBasicMaterial;
         material.color.copy(color);
         material.opacity = alpha;

@@ -5,7 +5,7 @@
 // here as per-tile vertex colours on a tile grid, so the ground keeps its exact mottling while gaining
 // real lighting. A larger skirt plane sits underneath so the tilted camera never sees past the edge.
 import * as THREE from 'three';
-import { surface, sharedGeometry } from '../core/MaterialLibrary.js';
+import { colorFromBytes, surface, sharedGeometry } from '../core/MaterialLibrary.js';
 import type { GroundTheme } from './Atmosphere3D.js';
 
 /** Matches the tile hash in WorldLayerRenderer so tinting lines up with the 2D view. */
@@ -82,9 +82,6 @@ export class TerrainRenderer3D {
         const nonIndexed = geometry.toNonIndexed();
         geometry.dispose();
 
-        this.paintTileColors(nonIndexed, cols, rows, ground);
-
-        const texture = textureId ? this.getGroundTexture(textureId) : null;
         const material = new THREE.MeshStandardMaterial({
             vertexColors: true,
             roughness: 0.96,
@@ -92,8 +89,10 @@ export class TerrainRenderer3D {
             color: 0xffffff,
         });
 
-        if (texture && texture.complete && texture.naturalWidth > 0) {
-            const map = new THREE.Texture(texture);
+        const texture = textureId ? this.getGroundTexture(textureId) : null;
+        const textured = !!texture && texture.complete && texture.naturalWidth > 0;
+        if (textured) {
+            const map = new THREE.Texture(texture!);
             map.wrapS = THREE.RepeatWrapping;
             map.wrapT = THREE.RepeatWrapping;
             map.repeat.set(cols, rows);
@@ -103,9 +102,11 @@ export class TerrainRenderer3D {
             map.anisotropy = 8;
             map.needsUpdate = true;
             material.map = map;
-            // The texture already carries the base hue, so let vertex colours act as gentle shading.
-            material.color.setScalar(1.6);
         }
+
+        // Tinting keys off the texture that actually made it onto the material: a theme can name one
+        // that never loaded or is turned off, and those tiles must fall back to the flat 2D colour.
+        this.paintTileColors(nonIndexed, cols, rows, tileSize, ground, textured);
 
         const mesh = new THREE.Mesh(nonIndexed, material);
         mesh.receiveShadow = true;
@@ -113,11 +114,17 @@ export class TerrainRenderer3D {
         return mesh;
     }
 
-    private paintTileColors(geometry: THREE.BufferGeometry, cols: number, rows: number, ground: GroundTheme): void {
+    private paintTileColors(
+        geometry: THREE.BufferGeometry,
+        cols: number,
+        rows: number,
+        tileSize: number,
+        ground: GroundTheme,
+        textured: boolean
+    ): void {
         const position = geometry.getAttribute('position');
         const colors = new Float32Array(position.count * 3);
         const patch = ground.patch && ground.patch.chance > 0 ? ground.patch : null;
-        const hasTexture = !!ground.texture;
         const color = new THREE.Color();
 
         // PlaneGeometry emits two triangles (six vertices) per cell in row-major order.
@@ -127,17 +134,14 @@ export class TerrainRenderer3D {
                 const isPatch = patch ? (tileHash(col, row) % 1000) / 1000 < patch.chance : false;
                 const base = isPatch && patch ? patch : ground;
                 const variation = base.variation ?? ground.variation ?? 15;
-                // The 2D renderer offsets by world position; tile indices give the same three-step cycle.
-                const step = Math.floor((col * 50 + row * 50) % 3) * variation;
-                if (hasTexture) {
-                    // Modulate a textured tile rather than replacing its colour.
-                    const shadeValue = 0.78 + (step / Math.max(1, variation * 3)) * 0.22;
-                    color.setScalar(shadeValue);
+                // The 2D renderer offsets by world position, so tile indices scale back up by tileSize.
+                const step = Math.floor((col * tileSize + row * tileSize) % 3) * variation;
+                if (textured) {
+                    // 2D draws the texture untinted; white leaves it to the lighting alone.
+                    color.setScalar(1);
                 } else {
-                    color.setRGB(
-                        Math.min(255, (base.r ?? 30) + step) / 255,
-                        Math.min(255, (base.g ?? 50) + step) / 255,
-                        Math.min(255, (base.b ?? 30) + step) / 255
+                    color.copy(
+                        colorFromBytes((base.r ?? 30) + step, (base.g ?? 50) + step, (base.b ?? 30) + step)
                     );
                 }
                 const start = (row * cols + col) * verticesPerTile;
@@ -163,10 +167,10 @@ export class TerrainRenderer3D {
         const mesh = new THREE.Mesh(
             geometry,
             surface({
-                color: new THREE.Color(
-                    ((ground.r ?? 30) / 255) * 0.72,
-                    ((ground.g ?? 50) / 255) * 0.72,
-                    ((ground.b ?? 30) / 255) * 0.72
+                color: colorFromBytes(
+                    (ground.r ?? 30) * 0.72,
+                    (ground.g ?? 50) * 0.72,
+                    (ground.b ?? 30) * 0.72
                 ).getHex(),
                 roughness: 1,
                 flatShading: false,

@@ -4,7 +4,7 @@
 // values are reinterpreted here as a directional key light, ambient fill, fog and backdrop colour so a
 // level reads with the same palette and mood once it is lit in 3D.
 import * as THREE from 'three';
-import { parseColor } from '../core/MaterialLibrary.js';
+import { colorFromBytes, parseColor } from '../core/MaterialLibrary.js';
 
 export interface GroundTheme {
     r?: number;
@@ -41,7 +41,7 @@ export interface AtmosphereProfile {
 function groundColor(theme: LevelTheme | null | undefined): THREE.Color {
     const ground = theme?.ground;
     if (!ground || ground.r == null) return new THREE.Color(0x2e3a26);
-    return new THREE.Color((ground.r ?? 0) / 255, (ground.g ?? 0) / 255, (ground.b ?? 0) / 255);
+    return colorFromBytes(ground.r ?? 0, ground.g ?? 0, ground.b ?? 0);
 }
 
 /** Levels played underground or at night get a tighter, darker lighting rig. */

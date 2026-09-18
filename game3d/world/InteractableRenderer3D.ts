@@ -157,7 +157,9 @@ export class InteractableRenderer3D {
 
             // Domed lid with gold banding, echoing the 2D gold trim.
             const lid = new THREE.Mesh(geometries.cylinder(), surface({ color: 0x5c3d1e, roughness: 0.85 }));
-            lid.scale.set(w, d, h * 0.55);
+            // Scale is local, so the roll swaps which axes the length and the two radii end up on:
+            // local Y becomes the chest's width, local X its height and local Z its depth.
+            lid.scale.set(h * 0.55, w, d);
             lid.rotation.z = Math.PI / 2;
             lid.position.y = h * 0.65;
             lid.castShadow = true;

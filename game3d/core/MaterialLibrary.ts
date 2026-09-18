@@ -106,18 +106,29 @@ export const geometries = {
     quad: () => sharedGeometry('quad', () => new THREE.PlaneGeometry(1, 1)),
 };
 
+/**
+ * Build a colour from the 0-255 channels the 2D renderers work in. Those are sRGB bytes, so they must
+ * be tagged as such: read as linear they come out far too dark once the renderer converts for output.
+ */
+export function colorFromBytes(r: number, g: number, b: number): THREE.Color {
+    return new THREE.Color().setRGB(
+        Math.min(1, Math.max(0, r / 255)),
+        Math.min(1, Math.max(0, g / 255)),
+        Math.min(1, Math.max(0, b / 255)),
+        THREE.SRGBColorSpace
+    );
+}
+
 /** Parse the CSS colours used throughout the 2D renderers into a three colour plus alpha. */
 export function parseColor(value: string | undefined, fallback = 0xffffff): { color: THREE.Color; alpha: number } {
     if (!value) return { color: new THREE.Color(fallback), alpha: 1 };
     const rgba = value.match(/^rgba?\(([^)]+)\)$/i);
     if (rgba) {
         const parts = rgba[1].split(',').map((part) => parseFloat(part.trim()));
-        const color = new THREE.Color(
-            Math.min(1, (parts[0] || 0) / 255),
-            Math.min(1, (parts[1] || 0) / 255),
-            Math.min(1, (parts[2] || 0) / 255)
-        );
-        return { color, alpha: parts.length > 3 ? parts[3] : 1 };
+        return {
+            color: colorFromBytes(parts[0] || 0, parts[1] || 0, parts[2] || 0),
+            alpha: parts.length > 3 ? parts[3] : 1,
+        };
     }
     try {
         return { color: new THREE.Color(value), alpha: 1 };

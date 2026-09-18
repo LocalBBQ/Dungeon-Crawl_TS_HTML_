@@ -306,13 +306,11 @@ export class CharacterRig {
 
         if (p.features.ribs) {
             const boneMat = surface({ color: 0xd8d2c0, roughness: 0.65 });
+            // Thin horizontal bands stacked up the torso, which is what reads as a ribcage at this scale.
             for (let i = 0; i < 3; i++) {
-                const rib = part(geometries.cylinder(), boneMat,
+                this.extras.add(part(geometries.cylinder(), boneMat,
                     [0, torsoHeight * (0.45 + i * 0.16) + this.hips.position.y, 0],
-                    [shoulderWidth * 0.82, limb * 0.35, shoulderWidth * 0.6]);
-                rib.rotation.x = Math.PI / 2;
-                rib.rotation.z = Math.PI / 2;
-                this.extras.add(rib);
+                    [shoulderWidth * 0.82, limb * 0.09, shoulderWidth * 0.6]));
             }
         }
 
